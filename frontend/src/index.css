@@ -47,13 +47,13 @@
   --secondary: #f5f1e8;
   --muted: #f5f1e8;
   --muted-foreground: #6b665f;
-  --accent: #edf5ee;
-  --accent-foreground: #3f5a44;
+  --accent: #d8eadb;
+  --accent-foreground: #344f39;
   --destructive: #a8493a;
   --border: #e7e0d3;
   --ring: #5e7d63;
   --sidebar: #f5f1e8;
-  --sidebar-accent: #edf5ee;
+  --sidebar-accent: #d8eadb;
   --shadow-card: 0 1px 2px rgba(45, 42, 38, 0.04);
   --shadow-raised: 0 4px 16px rgba(45, 42, 38, 0.06);
 }
@@ -121,34 +121,52 @@
 @layer components {
   .page-frame {
     width: auto;
-    margin: 1.5rem 4rem;
+    padding: 1.25rem 1rem 1.5rem;
   }
 
   .page-frame-readable {
     width: auto;
-    margin: 1.5rem 4rem;
+    padding: 1.25rem 1rem 1.5rem;
   }
 
   .page-frame-wide {
     width: auto;
-    margin: 1.5rem 4rem;
+    padding: 1.25rem 1rem 1.5rem;
   }
 
   .editor-frame {
     width: auto;
-    margin: 1.5rem 4rem;
+    padding: 1.5rem 1rem;
   }
 
   .panel-frame {
     width: auto;
-    margin: 1rem 4rem;
+    padding: 1rem;
   }
 
   @media (min-width: 768px) {
     .page-frame,
     .page-frame-readable,
-    .page-frame-wide {
-      margin-block: 2rem;
+    .page-frame-wide,
+    .editor-frame {
+      padding: 1.25rem 1.5rem 2rem;
+    }
+
+    .panel-frame {
+      padding-inline: 1.5rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .page-frame,
+    .page-frame-readable,
+    .page-frame-wide,
+    .editor-frame {
+      padding-inline: 2rem;
+    }
+
+    .panel-frame {
+      padding-inline: 2rem;
     }
   }
 }

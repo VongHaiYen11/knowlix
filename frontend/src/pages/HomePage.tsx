@@ -11,8 +11,8 @@ export function HomePage() {
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
 
   return (
-    <div className="page-frame">
-      <PageHeader title="Welcome back to your library" eyebrow={`${greeting}, Eleanor`} />
+    <div className="page-frame pt-6 md:pt-8">
+      <PageHeader title="Welcome Back!" description="Pick up where you left off, search your knowledge, or ask a grounded question across your library." eyebrow={`${greeting}, Eleanor`} />
       <HomeSearch />
       {status === 'loading' ? (
         <div className="mt-14 grid gap-4 md:grid-cols-2"><Skeleton count={4} className="h-48" /></div>

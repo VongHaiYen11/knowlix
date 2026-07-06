@@ -1,5 +1,6 @@
-import { Clock, Sparkles } from 'lucide-react'
+import { Clock, Pencil, Sparkles } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { sourceTypeIcon, statusIcon } from './SourceIcon'
@@ -23,6 +24,7 @@ export function SourceList({ sources }: { sources: Source[] }) {
                   <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{source.type}</span>
                   <span className="text-muted-foreground/40">·</span>
                   <Badge tone="accent"><Sparkles className="h-2.5 w-2.5" />{source.category}</Badge>
+                  <Button variant="outline" size="sm" className="ml-auto" icon={<Pencil className="h-3.5 w-3.5" />}>Edit</Button>
                 </div>
                 <p className="mt-1 font-serif text-lg leading-snug tracking-tight">{source.title}</p>
                 <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{source.excerpt}</p>

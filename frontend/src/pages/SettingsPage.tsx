@@ -1,4 +1,4 @@
-import { Boxes, Check, DownloadCloud, HardDrive, Monitor, Moon, Palette, ShieldCheck, Sparkles, Sun } from 'lucide-react'
+import { Boxes, Check, DownloadCloud, HardDrive, Moon, Palette, ShieldCheck, Sparkles, Sun } from 'lucide-react'
 import { useState } from 'react'
 import { PageHeader } from '@/components/common/PageHeader'
 import { Button } from '@/components/ui/Button'
@@ -51,7 +51,7 @@ function Segmented({ value, options, onChange }: { value: string; options: strin
   return <div className="inline-flex rounded-lg border border-border bg-card p-0.5">{options.map((option) => <button key={option} onClick={() => onChange(option)} className={cn('rounded-md px-3 py-1.5 text-xs transition', value === option ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>{option}</button>)}</div>
 }
 
-function IconSegmented({ value, onChange }: { value: string; onChange: (value: 'light' | 'dark' | 'system') => void }) {
-  const options = [{ key: 'light', label: 'Light', icon: Sun }, { key: 'dark', label: 'Dark', icon: Moon }, { key: 'system', label: 'Auto', icon: Monitor }] as const
+function IconSegmented({ value, onChange }: { value: string; onChange: (value: 'light' | 'dark') => void }) {
+  const options = [{ key: 'light', label: 'Light', icon: Sun }, { key: 'dark', label: 'Dark', icon: Moon }] as const
   return <div className="inline-flex rounded-lg border border-border bg-card p-0.5">{options.map(({ key, label, icon: Icon }) => <button key={key} onClick={() => onChange(key)} className={cn('inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition', value === key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}><Icon className="h-3.5 w-3.5" strokeWidth={1.75} />{label}</button>)}</div>
 }

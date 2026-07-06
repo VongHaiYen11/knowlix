@@ -4,6 +4,7 @@ import { NavLink, useLocation } from 'react-router'
 import { APP_NAME, USER_INITIALS, USER_NAME } from '@/constants/app'
 import { ROUTES } from '@/constants/routes'
 import { Button } from '@/components/ui/Button'
+import { ThemeToggle } from '@/components/layout/ThemeToggle'
 import { ShellControlsProvider } from './ShellControlsContext'
 import { cn } from '@/utils/cn'
 
@@ -37,6 +38,7 @@ function SidebarContent({ collapsed = false, onCollapseToggle, onNavigate }: { c
             {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
           </Button>
         )}
+        <ThemeToggle />
       </div>
       <nav className="flex-1 px-3" aria-label="Primary navigation">
         <ul className="space-y-0.5">
@@ -93,11 +95,16 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-background">
-      <aside className={cn('sticky top-0 hidden h-screen shrink-0 border-r border-border bg-sidebar transition-[width] duration-200 md:block', sidebarCollapsed ? 'w-16' : 'w-64')}>
-        <SidebarContent collapsed={sidebarCollapsed} onCollapseToggle={() => setSidebarCollapsed((value) => !value)} />
+      <aside className={cn('sticky top-0 hidden h-screen shrink-0 border-r border-border bg-sidebar transition-[width] duration-200 md:block md:w-16', sidebarCollapsed ? 'xl:w-16' : 'xl:w-64')}>
+        <div className="h-full xl:hidden">
+          <SidebarContent collapsed onCollapseToggle={() => setMobileOpen(true)} />
+        </div>
+        <div className="hidden h-full xl:block">
+          <SidebarContent collapsed={sidebarCollapsed} onCollapseToggle={() => setSidebarCollapsed((value) => !value)} />
+        </div>
       </aside>
       {mobileOpen && (
-        <div className="fixed inset-0 z-50 md:hidden">
+        <div className="fixed inset-0 z-50 xl:hidden">
           <button className="absolute inset-0 w-full bg-foreground/20" aria-label="Close navigation" onClick={() => setMobileOpen(false)} />
           <div className="absolute left-0 top-0 h-full w-64 border-r border-border bg-sidebar shadow-xl">
             <Button variant="ghost" size="icon" onClick={() => setMobileOpen(false)} className="absolute right-3 top-6" aria-label="Close navigation">

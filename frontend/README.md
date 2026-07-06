@@ -1,55 +1,107 @@
-# Knowlix Frontend
+# Knowlix — Frontend
 
-React + Tailwind CSS rebuild of the Knowlix knowledge app. Client-side routing uses React Router v7. This project intentionally does not include backend, server, API, or database code. Runtime data is stored in IndexedDB behind repository and service abstractions.
+Local-first knowledge workspace for saving sources, turning them into structured knowledge, asking grounded research questions, and editing notes.
 
-## Run
+## Features
+
+- Home dashboard with semantic search entry points and reading suggestions.
+- Library for source-of-truth items and generated knowledge pages.
+- Research workspace with scoped knowledge filters, collapsible evidence panel, chat history, and editable chat names.
+- Knowledge article pages with explanations, examples, references, related pages, math rendering, and Mermaid diagram support.
+- Note editor with markdown preview, math, Mermaid, and formatting controls.
+- Journal, graph, settings, responsive layouts, and light/dark theme support.
+
+## Tech Stack
+
+- **Framework:** React 19
+- **Language:** TypeScript
+- **Routing:** React Router 7
+- **Styling:** Tailwind CSS 4 with CSS variables and theme tokens
+- **Icons:** lucide-react
+- **Content rendering:** react-markdown, remark-gfm, remark-math, rehype-katex, KaTeX, Mermaid
+- **State/data:** React hooks, localStorage for UI/chat state, IndexedDB repository layer for app data
+- **Build tool:** Vite
+- **Testing:** No test runner is configured yet
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js >= 18
+- npm
+
+### Installation
 
 ```bash
+git clone <your-repo-url>
+cd knowlix/frontend
 npm install
-npm run dev
-npm run build
 ```
 
-## Structure
+### Environment Variables
+
+No environment variables are required for the current local-first frontend.
+
+If backend APIs are added later, create `.env.local` with values only:
+
+```bash
+VITE_API_BASE_URL=http://localhost:3000
+```
+
+For backend/API expectations, see [be-description.md](./be-description.md).
+
+### Run Locally
+
+```bash
+npm run dev
+```
+
+The app runs at `http://localhost:5173`.
+
+## Project Structure
 
 ```text
 src/
-  components/
-    ui/          reusable primitives such as Button, Card, Badge, Tabs, Dropdown
-    common/      router, page header, section heading
-    layout/      app shell and theme controls
-  features/      page-specific sections split by domain
-  hooks/         async state, theme, library, research, editor hooks
-  pages/         route-level components only
-  repositories/  IndexedDB implementation
-  services/      business logic and future API boundary
-  types/         shared TypeScript interfaces
-  constants/     routes, app constants, seed data
-  theme/         colors, typography, spacing, radius, shadows, breakpoints
-  utils/         small framework-agnostic helpers
+├── components/      # Reusable UI, shared layout, and common page pieces
+├── constants/       # Routes, app constants, and seed data
+├── features/        # Domain-specific UI sections
+├── hooks/           # Async, library, research, editor, and theme hooks
+├── pages/           # Route-level views
+├── repositories/    # IndexedDB client and repository interfaces
+├── services/        # Business logic and future API boundary
+├── theme/           # Color, spacing, typography, radius, and shadow tokens
+├── types/           # Shared TypeScript interfaces
+├── utils/           # Framework-agnostic helpers
+├── App.tsx          # Route table
+└── main.tsx         # App entry point
 ```
 
-## Adding Pages
+## Scripts
 
-Add a route component in `src/pages`, split large sections into `src/features/<domain>`, then register the URL in the React Router route table in `src/App.tsx` and `src/constants/routes.ts`. Dynamic route params should be read with typed `useParams`, as shown by the knowledge `:slug` and note `:id` routes.
+| Command | Description |
+|---|---|
+| `npm run dev` | Start the Vite dev server on `127.0.0.1` |
+| `npm run build` | Type-check and create a production build |
+| `npm run preview` | Preview the production build locally |
+| `npm run lint` | Run ESLint |
 
-## Adding Components
+## Design / Style Guide
 
-Reusable UI patterns belong in `src/components/ui`. Shared layout or app-level pieces belong in `src/components/common` or `src/components/layout`. Feature-specific components stay under `src/features/<domain>`.
+- Theme tokens live in `src/theme`.
+- Runtime CSS variables live in `src/index.css`.
+- Reusable primitives belong in `src/components/ui`.
+- Shared page/layout pieces belong in `src/components/common` and `src/components/layout`.
+- Feature-only UI belongs under `src/features/<domain>`.
 
-## Theme Changes
+## Data Model
 
-Edit the token modules in `src/theme`. Runtime CSS variables are declared in `src/index.css` so Tailwind utility classes resolve through centralized values.
-
-## IndexedDB Organization
-
-The data path is:
+The frontend is local-first. The main data path is:
 
 ```text
 UI -> hook -> service -> repository -> IndexedDB
 ```
 
-Stores are declared in `src/repositories/indexedDbClient.ts`:
+IndexedDB stores are declared in `src/repositories/indexedDbClient.ts`:
 
 - `knowledge`
 - `sources`
@@ -60,14 +112,12 @@ Stores are declared in `src/repositories/indexedDbClient.ts`:
 
 The first app load seeds IndexedDB from `src/constants/sampleData.ts`.
 
-## Replacing IndexedDB With Backend APIs
+Research chat threads and theme preference are persisted with `localStorage`.
 
-Keep UI and hooks unchanged. Implement a new repository with the same `LibraryRepository` interface in `src/repositories/libraryRepository.ts`, then inject it into `LibraryService`.
+## Related
 
-Recommended migration path:
+This package is the frontend for Knowlix. It currently ships without backend, server, API, or database code. See [be-description.md](./be-description.md) for the backend contract and migration notes.
 
-1. Create `apiLibraryRepository`.
-2. Keep method return types identical.
-3. Move request/response mapping into the repository.
-4. Keep filtering/search behavior in the backend when real endpoints exist.
-5. Leave pages and feature components untouched.
+## License
+
+No license is declared.

@@ -10,12 +10,15 @@ interface DropdownProps {
   onToggle: (value: string) => void
   prefix?: string
   badge?: ReactNode
+  className?: string
+  triggerClassName?: string
+  showSelectedCount?: boolean
 }
 
-export function Dropdown({ icon: Icon, label, options, selected, onToggle, prefix = '', badge }: DropdownProps) {
+export function Dropdown({ icon: Icon, label, options, selected, onToggle, prefix = '', badge, className, triggerClassName, showSelectedCount = true }: DropdownProps) {
   const [open, setOpen] = useState(false)
   return (
-    <div className="relative">
+    <div className={cn('relative', className)}>
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
@@ -23,11 +26,12 @@ export function Dropdown({ icon: Icon, label, options, selected, onToggle, prefi
         className={cn(
           'inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition',
           selected.length ? 'border-primary/40 bg-accent text-accent-foreground' : 'border-border bg-card text-muted-foreground hover:text-foreground',
+          triggerClassName,
         )}
       >
         {Icon && <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />}
-        {label}
-        {selected.length > 0 && <span className="rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">{selected.length}</span>}
+        <span className="min-w-0 flex-1 text-left">{label}</span>
+        {showSelectedCount && selected.length > 0 && <span className="rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">{selected.length}</span>}
         <ChevronDown className="h-3 w-3" />
       </button>
       {open && (

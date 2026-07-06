@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import { Menu } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { ThemeToggle } from '@/components/layout/ThemeToggle'
 import { useShellControls } from '@/components/layout/ShellControlsContext'
 import { cn } from '@/utils/cn'
 
@@ -17,7 +16,7 @@ export function PageHeader({ title, description, eyebrow, action, className }: P
   const shellControls = useShellControls()
 
   return (
-    <header className={cn('mb-10 flex items-start justify-between gap-4', className)}>
+    <header className={cn('mb-10 flex items-center justify-between gap-4', className)}>
       <div className="flex min-w-0 items-start gap-3">
         {shellControls && (
           <Button variant="ghost" size="icon" onClick={shellControls.openMobileNavigation} className="mt-1 shrink-0 md:hidden" aria-label="Open navigation">
@@ -30,10 +29,7 @@ export function PageHeader({ title, description, eyebrow, action, className }: P
           {description && <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">{description}</p>}
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
-        {action}
-        <ThemeToggle />
-      </div>
+      {action && <div className="flex shrink-0 items-center gap-2">{action}</div>}
     </header>
   )
 }

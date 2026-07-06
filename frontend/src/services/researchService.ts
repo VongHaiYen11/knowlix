@@ -13,6 +13,15 @@ export interface ResearchScope {
   dateRange: string
 }
 
+export interface ResearchThread {
+  id: string
+  title: string
+  messages: ResearchMessage[]
+  scope: ResearchScope
+  createdAt: string
+  updatedAt: string
+}
+
 export class ResearchService {
   async getScopedKnowledge(scope: ResearchScope): Promise<KnowledgeEntry[]> {
     const knowledge = await libraryService.getKnowledge()

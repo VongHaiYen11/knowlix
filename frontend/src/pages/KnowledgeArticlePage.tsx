@@ -1,4 +1,4 @@
-import { ArrowLeft, Clock, Download, FilePlus2, FileStack, History, Link2, Pencil, RefreshCw, Sparkles } from 'lucide-react'
+import { ArrowLeft, Clock, Download, FileStack, History, Link2, Pencil, RefreshCw, Sparkles } from 'lucide-react'
 import { Link } from 'react-router'
 import { PageHeader } from '@/components/common/PageHeader'
 import { ArticleSection, TimelineList } from '@/features/article/ArticleBlocks'
@@ -12,11 +12,9 @@ import { useKnowledgeArticle } from '@/hooks/useLibrary'
 
 const actions = [
   { label: 'Edit', icon: Pencil, primary: true },
-  { label: 'Add Source', icon: FilePlus2 },
   { label: 'View Sources', icon: FileStack },
   { label: 'Regenerate', icon: RefreshCw },
   { label: 'Export', icon: Download },
-  { label: 'Related', icon: Link2 },
 ]
 
 export function KnowledgeArticlePage({ slug }: { slug: string }) {
