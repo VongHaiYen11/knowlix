@@ -1,5 +1,6 @@
 import { Lightbulb, Link2, Plus, Sparkles } from 'lucide-react'
 import { PageHeader } from '@/components/common/PageHeader'
+import { PageShell } from '@/components/common/PageShell'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -8,7 +9,7 @@ import { useJournal } from '@/hooks/useLibrary'
 export function JournalPage() {
   const { data, status } = useJournal()
   return (
-    <div className="page-frame-readable">
+    <PageShell variant="readable">
       <PageHeader title="Journal" description="A quiet daily record. Your assistant reads each day and gathers its learnings and connections." action={<Button icon={<Plus className="h-4 w-4" />}>New entry</Button>} />
       {status === 'loading' ? <Skeleton count={2} className="h-72" /> : (
         <div className="space-y-10">
@@ -30,6 +31,6 @@ export function JournalPage() {
           ))}
         </div>
       )}
-    </div>
+    </PageShell>
   )
 }

@@ -1,6 +1,7 @@
 import { Boxes, Check, DownloadCloud, HardDrive, Moon, Palette, ShieldCheck, Sparkles, Sun } from 'lucide-react'
 import { useState } from 'react'
 import { PageHeader } from '@/components/common/PageHeader'
+import { PageShell } from '@/components/common/PageShell'
 import { Button } from '@/components/ui/Button'
 import { Toggle } from '@/components/ui/Toggle'
 import { useThemeContext } from '@/components/layout/ThemeProvider'
@@ -15,7 +16,7 @@ export function SettingsPage() {
   const { theme, setTheme } = useThemeContext()
 
   return (
-    <div className="page-frame-readable">
+    <PageShell variant="readable">
       <PageHeader title="Settings" description="Your knowledge stays yours. Everything here is private by default." />
       <div className="space-y-10">
         <SettingsGroup icon={HardDrive} title="Storage">
@@ -43,7 +44,7 @@ export function SettingsPage() {
           <SettingsRow label="On-device processing" hint="Your notes are never used to train external models."><span className="inline-flex items-center gap-1.5 text-sm text-primary"><ShieldCheck className="h-4 w-4" />Guaranteed</span></SettingsRow>
         </SettingsGroup>
       </div>
-    </div>
+    </PageShell>
   )
 }
 

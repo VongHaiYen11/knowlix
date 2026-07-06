@@ -119,19 +119,23 @@
 }
 
 @layer components {
-  .page-frame {
+  .page-frame,
+  .page-frame-readable,
+  .page-frame-wide {
     width: auto;
     padding: 1.25rem 1rem 1.5rem;
   }
 
   .page-frame-readable {
-    width: auto;
-    padding: 1.25rem 1rem 1.5rem;
+    max-width: none;
   }
 
   .page-frame-wide {
-    width: auto;
-    padding: 1.25rem 1rem 1.5rem;
+    max-width: none;
+  }
+
+  .page-shell-section {
+    padding: 1.25rem 1rem;
   }
 
   .editor-frame {
@@ -152,6 +156,10 @@
       padding: 1.25rem 1.5rem 2rem;
     }
 
+    .page-shell-section {
+      padding: 1.25rem 1.5rem;
+    }
+
     .panel-frame {
       padding-inline: 1.5rem;
     }
@@ -162,6 +170,10 @@
     .page-frame-readable,
     .page-frame-wide,
     .editor-frame {
+      padding-inline: 2rem;
+    }
+
+    .page-shell-section {
       padding-inline: 2rem;
     }
 

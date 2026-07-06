@@ -34,10 +34,10 @@ export function ResearchPage() {
     <div className={!historyOpen && scopeOpen ? 'grid h-screen min-h-0 grid-cols-[minmax(0,1fr)_56px] xl:grid-cols-[minmax(0,1fr)_340px]' : !historyOpen ? 'grid h-screen min-h-0 grid-cols-[minmax(0,1fr)_56px]' : 'grid h-screen min-h-0'}>
       <div className="flex min-h-0 min-w-0 flex-col border-r border-border">
         <div className="border-b border-border">
-          <div className="px-4 py-5 md:px-6 lg:px-8">
+          <div className="page-shell-section">
             <PageHeader
               title="Research"
-              description="Ask questions across your Knowledge. Every answer is grounded only in the pages you have built."
+              description="Chat with your knowledge, get grounded answers, and continue conversations anytime."
               className="mb-0"
               action={<div className="flex items-center gap-2">
                 <Button variant='outline' icon={<History className="h-4 w-4" />} onClick={() => setHistoryOpen((value) => !value)}>{historyOpen ? 'Current chat' : 'History'}</Button>
@@ -48,7 +48,7 @@ export function ResearchPage() {
         </div>
         {!historyOpen ? (
           <div className="flex min-h-0 flex-1 flex-col">
-            <div className="shrink-0 px-4 py-4 md:px-6 lg:px-8">
+            <div className="page-shell-section shrink-0">
               <div className="flex items-center justify-between gap-4 rounded-2xl bg-primary px-4 py-3 text-primary-foreground elevated">
                 <div className="flex min-w-0 flex-1 items-center gap-2">
                   <button
@@ -82,7 +82,7 @@ export function ResearchPage() {
             <Conversation messages={research.messages} input={research.input} onInput={research.setInput} onSend={research.send} />
           </div>
         ) : (
-          <div className="min-h-0 flex-1 overflow-hidden px-4 py-5 md:px-6 lg:px-8">
+          <div className="page-shell-section min-h-0 flex-1 overflow-hidden">
             <ResearchHistoryPanel
               threads={research.threads}
               activeThreadId={research.activeThread?.id}

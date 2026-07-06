@@ -16,7 +16,7 @@ export function PageHeader({ title, description, eyebrow, action, className }: P
   const shellControls = useShellControls()
 
   return (
-    <header className={cn('mb-10 flex items-center justify-between gap-4', className)}>
+    <header className={cn('mb-10 flex items-start justify-between gap-4', className)}>
       <div className="flex min-w-0 items-start gap-3">
         {shellControls && (
           <Button variant="ghost" size="icon" onClick={shellControls.openMobileNavigation} className="mt-1 shrink-0 md:hidden" aria-label="Open navigation">

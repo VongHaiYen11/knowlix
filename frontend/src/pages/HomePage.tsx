@@ -1,4 +1,5 @@
 import { PageHeader } from '@/components/common/PageHeader'
+import { PageShell } from '@/components/common/PageShell'
 import { ContinueReading } from '@/features/home/ContinueReading'
 import { AssistantSuggestions, JournalAndGraph, RecentNotes } from '@/features/home/HomeSections'
 import { HomeSearch } from '@/features/home/HomeSearch'
@@ -11,7 +12,7 @@ export function HomePage() {
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
 
   return (
-    <div className="page-frame pt-6 md:pt-8">
+    <PageShell>
       <PageHeader title="Welcome Back!" description="Pick up where you left off, search your knowledge, or ask a grounded question across your library." eyebrow={`${greeting}, Eleanor`} />
       <HomeSearch />
       {status === 'loading' ? (
@@ -26,6 +27,6 @@ export function HomePage() {
           <JournalAndGraph journal={data.journal} />
         </>
       )}
-    </div>
+    </PageShell>
   )
 }

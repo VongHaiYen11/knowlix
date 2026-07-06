@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { PageHeader } from '@/components/common/PageHeader'
+import { PageShell } from '@/components/common/PageShell'
 import { SearchInput } from '@/components/ui/SearchInput'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { TabPanel, Tabs } from '@/components/ui/Tabs'
@@ -25,7 +26,7 @@ export function LibraryPage() {
   const knowledge = useLibraryKnowledge(knowledgeFilters)
 
   return (
-    <div className="page-frame">
+    <PageShell>
       <PageHeader title="Library" description="The center of everything you keep. Raw sources become living knowledge." />
       <SearchInput value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search your library by meaning or words..." aria-label="Search your library" />
       <div className="mt-6">
@@ -42,6 +43,6 @@ export function LibraryPage() {
           {knowledge.status === 'loading' ? <Skeleton count={4} className="h-56" /> : <KnowledgeGrid knowledge={knowledge.data} />}
         </TabPanel>
       )}
-    </div>
+    </PageShell>
   )
 }

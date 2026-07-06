@@ -1,6 +1,7 @@
 import { ArrowLeft, Clock, Download, FileStack, History, Link2, Pencil, RefreshCw, Sparkles } from 'lucide-react'
 import { Link } from 'react-router'
 import { PageHeader } from '@/components/common/PageHeader'
+import { PageShell } from '@/components/common/PageShell'
 import { ArticleSection, TimelineList } from '@/features/article/ArticleBlocks'
 import { sourceTypeIcon } from '@/features/library/SourceIcon'
 import { Badge } from '@/components/ui/Badge'
@@ -19,11 +20,11 @@ const actions = [
 
 export function KnowledgeArticlePage({ slug }: { slug: string }) {
   const { data: entry, status } = useKnowledgeArticle(slug)
-  if (status === 'loading') return <div className="page-frame-wide"><Card className="h-96 animate-pulse" /></div>
-  if (!entry) return <div className="page-frame-readable"><EmptyState title="Page not found" message="This knowledge page is not in your local library." /></div>
+  if (status === 'loading') return <PageShell variant="wide"><Card className="h-96 animate-pulse" /></PageShell>
+  if (!entry) return <PageShell variant="readable"><EmptyState title="Page not found" message="This knowledge page is not in your local library." /></PageShell>
 
   return (
-    <div className="page-frame-wide">
+    <PageShell variant="wide">
       <Link to={ROUTES.library} className="mb-8 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition hover:text-foreground">
         <ArrowLeft className="h-4 w-4" />Library
       </Link>
@@ -62,6 +63,6 @@ export function KnowledgeArticlePage({ slug }: { slug: string }) {
           </div>
         </aside>
       </div>
-    </div>
+    </PageShell>
   )
 }
