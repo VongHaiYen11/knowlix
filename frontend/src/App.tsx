@@ -11,6 +11,8 @@ const GraphPage = lazy(() => import('@/pages/GraphPage').then((module) => ({ def
 const JournalPage = lazy(() => import('@/pages/JournalPage').then((module) => ({ default: module.JournalPage })))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage').then((module) => ({ default: module.SettingsPage })))
 const KnowledgeArticlePage = lazy(() => import('@/pages/KnowledgeArticlePage').then((module) => ({ default: module.KnowledgeArticlePage })))
+const SourceArticlePage = lazy(() => import('@/pages/SourceArticlePage').then((module) => ({ default: module.SourceArticlePage })))
+const LibraryContentEditorPage = lazy(() => import('@/pages/LibraryContentEditorPage').then((module) => ({ default: module.LibraryContentEditorPage })))
 const NoteEditorPage = lazy(() => import('@/pages/NoteEditorPage').then((module) => ({ default: module.NoteEditorPage })))
 
 function ShellRoute() {
@@ -28,6 +30,21 @@ function KnowledgeRoute() {
   return slug ? <KnowledgeArticlePage slug={slug} /> : <Navigate to={ROUTES.library} replace />
 }
 
+function KnowledgeEditRoute() {
+  const { slug } = useParams<'slug'>()
+  return slug ? <LibraryContentEditorPage id={slug} kind="knowledge" /> : <Navigate to={ROUTES.library} replace />
+}
+
+function SourceRoute() {
+  const { id } = useParams<'id'>()
+  return id ? <SourceArticlePage id={id} /> : <Navigate to={ROUTES.library} replace />
+}
+
+function SourceEditRoute() {
+  const { id } = useParams<'id'>()
+  return id ? <LibraryContentEditorPage id={id} kind="source" /> : <Navigate to={ROUTES.library} replace />
+}
+
 function NoteRoute() {
   const { id } = useParams<'id'>()
   return id ? <NoteEditorPage noteId={id} /> : <Navigate to={ROUTES.library} replace />
@@ -40,6 +57,9 @@ export function App() {
         <Route index element={<HomePage />} />
         <Route path="library" element={<LibraryPage />} />
         <Route path="library/knowledge/:slug" element={<KnowledgeRoute />} />
+        <Route path="library/knowledge/:slug/edit" element={<KnowledgeEditRoute />} />
+        <Route path="library/source/:id" element={<SourceRoute />} />
+        <Route path="library/source/:id/edit" element={<SourceEditRoute />} />
         <Route path="library/note/:id" element={<NoteRoute />} />
         <Route path="research" element={<ResearchPage />} />
         <Route path="graph" element={<GraphPage />} />

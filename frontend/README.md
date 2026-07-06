@@ -5,10 +5,11 @@ Local-first knowledge workspace for saving sources, turning them into structured
 ## Features
 
 - Home dashboard with semantic search entry points and reading suggestions.
-- Library for source-of-truth items and generated knowledge pages.
+- Library for source-of-truth items and generated knowledge pages, with scalable filter and sort tools.
 - Research workspace with scoped knowledge filters, collapsible evidence panel, chat history, and editable chat names.
-- Knowledge article pages with explanations, examples, references, related pages, math rendering, and Mermaid diagram support.
-- Note editor with markdown preview, math, Mermaid, and formatting controls.
+- Source-of-truth viewer pages with editable content, source metadata, and user-managed tags.
+- Knowledge article pages with explanations, examples, references, related pages, edit mode, math rendering, and Mermaid diagram support.
+- Markdown editor with resizable split preview, math, Mermaid, tables, links, lists, and heading controls.
 - Journal, graph, settings, responsive layouts, and light/dark theme support.
 
 ## Tech Stack
@@ -113,6 +114,22 @@ IndexedDB stores are declared in `src/repositories/indexedDbClient.ts`:
 The first app load seeds IndexedDB from `src/constants/sampleData.ts`.
 
 Research chat threads and theme preference are persisted with `localStorage`.
+
+## Current Routes
+
+| Route | Description |
+|---|---|
+| `/` | Home dashboard |
+| `/library` | Source of Truth and Knowledge library |
+| `/library/source/:id` | Source viewer |
+| `/library/source/:id/edit` | Source markdown editor |
+| `/library/knowledge/:slug` | Knowledge article viewer |
+| `/library/knowledge/:slug/edit` | Knowledge markdown editor |
+| `/library/note/:id` | Note editor, including `new` |
+| `/research` | Research chat workspace |
+| `/graph` | Knowledge graph |
+| `/journal` | Journal |
+| `/settings` | Settings |
 
 ## Related
 

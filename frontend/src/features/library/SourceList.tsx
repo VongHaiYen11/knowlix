@@ -1,12 +1,15 @@
-import { Clock, Pencil, Sparkles } from 'lucide-react'
+import { ArrowRight, Clock, Pencil, Sparkles } from 'lucide-react'
+import { useNavigate } from 'react-router'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { ROUTES } from '@/constants/routes'
 import { sourceTypeIcon, statusIcon } from './SourceIcon'
 import type { Source } from '@/types/knowledge'
 
 export function SourceList({ sources }: { sources: Source[] }) {
+  const navigate = useNavigate()
   if (sources.length === 0) return <EmptyState message="Nothing matches yet. Try a different phrasing, or capture something new." />
   return (
     <ul className="space-y-3">
@@ -15,7 +18,7 @@ export function SourceList({ sources }: { sources: Source[] }) {
         const StatusIcon = statusIcon[source.status].icon
         return (
           <li key={source.id}>
-            <Card className="group flex items-start gap-4 p-5 transition hover:border-ring/40">
+            <Card className="group flex cursor-pointer items-start gap-4 p-5 transition hover:border-ring/40" onClick={() => navigate(ROUTES.source(source.id))}>
               <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-muted-foreground">
                 <Icon className="h-4 w-4" strokeWidth={1.75} />
               </span>
@@ -24,7 +27,7 @@ export function SourceList({ sources }: { sources: Source[] }) {
                   <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{source.type}</span>
                   <span className="text-muted-foreground/40">·</span>
                   <Badge tone="accent"><Sparkles className="h-2.5 w-2.5" />{source.category}</Badge>
-                  <Button variant="outline" size="sm" className="ml-auto" icon={<Pencil className="h-3.5 w-3.5" />}>Edit</Button>
+                  <Button variant="outline" size="sm" className="ml-auto" icon={<Pencil className="h-3.5 w-3.5" />} onClick={(event) => { event.stopPropagation(); navigate(ROUTES.sourceEdit(source.id)) }}>Edit</Button>
                 </div>
                 <p className="mt-1 font-serif text-lg leading-snug tracking-tight">{source.title}</p>
                 <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{source.excerpt}</p>
@@ -35,6 +38,7 @@ export function SourceList({ sources }: { sources: Source[] }) {
                     <StatusIcon className="h-3.5 w-3.5" />
                     <span className="text-muted-foreground">{source.status}</span>
                   </span>
+                  <ArrowRight className="h-4 w-4 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-primary" />
                 </div>
               </div>
             </Card>

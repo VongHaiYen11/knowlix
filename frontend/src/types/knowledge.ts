@@ -10,6 +10,7 @@ export interface KnowledgeSource {
 export interface KnowledgeEntry {
   slug: string
   title: string
+  content?: string
   overview: string
   category: string
   tags: string[]
@@ -29,6 +30,7 @@ export interface Source {
   id: string
   type: SourceType
   title: string
+  content?: string
   tags: string[]
   category: string
   created: string

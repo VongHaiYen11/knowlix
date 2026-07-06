@@ -23,6 +23,11 @@ export function useKnowledgeArticle(slug: string) {
   return useAsync(loader, undefined)
 }
 
+export function useSourceArticle(id: string) {
+  const loader = useCallback(() => libraryService.getSourceById(id), [id])
+  return useAsync(loader, undefined)
+}
+
 export function useJournal() {
   const loader = useCallback(() => libraryService.getJournal(), [])
   return useAsync(loader, [])
