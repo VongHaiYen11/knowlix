@@ -1,4 +1,4 @@
-import { ArrowRight, Maximize2, Search, Sparkles, ZoomIn, ZoomOut } from 'lucide-react'
+import { ArrowRight, Layers, Maximize2, Search, Sparkles, Tag, ZoomIn, ZoomOut } from 'lucide-react'
 import { useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { PageHeader } from '@/components/common/PageHeader'
@@ -46,6 +46,7 @@ export function GraphCanvas({ nodes, links, knowledge, tags, categories }: Graph
 
   const focusedEntry = focus ? knowledge.find((entry) => entry.slug === focus) : null
   const toggle = (list: string[], value: string, set: (value: string[]) => void) => set(list.includes(value) ? list.filter((item) => item !== value) : [...list, value])
+  const hasFilters = query || tagFilter.length || categoryFilter.length
 
   return (
     <div className="flex h-screen min-h-0 flex-col">
@@ -56,13 +57,31 @@ export function GraphCanvas({ nodes, links, knowledge, tags, categories }: Graph
             description={`The shape of your knowledge - ${nodes.length} pages, ${links.length} links`}
             className="mb-4"
           />
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5">
-              <Search className="h-4 w-4 text-muted-foreground" />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a page..." aria-label="Search graph" className="w-48 bg-transparent text-sm focus:outline-none" />
-            </div>
-            <Dropdown label="Tags" options={tags} selected={tagFilter} onToggle={(value) => toggle(tagFilter, value, setTagFilter)} prefix="#" />
-            <Dropdown label="Categories" options={categories} selected={categoryFilter} onToggle={(value) => toggle(categoryFilter, value, setCategoryFilter)} />
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex min-w-64 flex-1 items-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm transition focus-within:border-ring/40">
+              <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search graph pages"
+                aria-label="Search graph"
+                className="min-w-0 flex-1 bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none"
+              />
+            </label>
+            <Dropdown icon={Tag} label="Tags" options={tags} selected={tagFilter} onToggle={(value) => toggle(tagFilter, value, setTagFilter)} prefix="#" />
+            <Dropdown icon={Layers} label="Categories" options={categories} selected={categoryFilter} onToggle={(value) => toggle(categoryFilter, value, setCategoryFilter)} />
+            {hasFilters && (
+              <button
+                onClick={() => {
+                  setQuery('')
+                  setTagFilter([])
+                  setCategoryFilter([])
+                }}
+                className="h-8 px-2 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+              >
+                Clear
+              </button>
+            )}
           </div>
         </div>
       </div>
