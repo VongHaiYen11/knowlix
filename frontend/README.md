@@ -1,6 +1,23 @@
-# Knowlix — Frontend
+<div align="center">
 
-Local-first knowledge workspace for saving sources, turning them into structured knowledge, asking grounded research questions, and editing notes.
+# 🧠 Knowlix — Frontend
+
+**Local-first research and personal knowledge workspace**
+
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=061a23)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-5.4-646CFF?logo=vite&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4.2-38BDF8?logo=tailwindcss&logoColor=white)
+![React Router](https://img.shields.io/badge/React_Router-7-CA4245?logo=reactrouter&logoColor=white)
+![IndexedDB](https://img.shields.io/badge/Storage-IndexedDB-5E7D63)
+![Local First](https://img.shields.io/badge/Data-local--first-D8EADB)
+![Markdown](https://img.shields.io/badge/Markdown-Math_+_Mermaid-2D2A26?logo=markdown&logoColor=white)
+
+</div>
+
+Knowlix is a local-first personal knowledge management frontend for capturing source material, organizing it into a searchable library, transforming sources into structured knowledge pages, and asking grounded research questions across a private knowledge base.
+
+It is designed for readers, researchers, students, writers, and knowledge workers who want one workspace for notes, PDFs, articles, bookmarks, files, voice captures, and generated knowledge summaries. The application includes a source-of-truth library, editable knowledge article viewers, markdown editing with live preview, math and Mermaid rendering, scoped research chat with evidence controls, chat history, journal views, and an interactive knowledge graph. Data is stored locally with IndexedDB and localStorage, making the current frontend usable without a backend service.
 
 ## Features
 
