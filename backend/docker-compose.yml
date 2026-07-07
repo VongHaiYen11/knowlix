@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: knowlix-postgres
+    environment:
+      POSTGRES_USER: knowlix
+      POSTGRES_PASSWORD: knowlix
+      POSTGRES_DB: knowlix
+    ports:
+      - "5432:5432"
+    volumes:
+      - knowlix-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U knowlix -d knowlix"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  knowlix-postgres-data:

@@ -1,4 +1,6 @@
 import { getAllFromStore, getFromStore, putInStore, STORE_NAMES } from '@/repositories/indexedDbClient'
+import { apiLibraryRepository } from '@/repositories/apiLibraryRepository'
+import { isApiRepositoryEnabled } from '@/repositories/apiClient'
 import type { GraphLink, GraphNode, JournalDay, KnowledgeEntry, NoteItem, Source } from '@/types/knowledge'
 
 export interface LibraryRepository {
@@ -33,3 +35,5 @@ export const indexedDbLibraryRepository: LibraryRepository = {
     return stored.map(({ source, target }) => ({ source, target }))
   },
 }
+
+export const libraryRepository: LibraryRepository = isApiRepositoryEnabled ? apiLibraryRepository : indexedDbLibraryRepository

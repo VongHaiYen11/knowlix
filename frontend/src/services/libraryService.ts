@@ -1,5 +1,5 @@
 import { allCategories, allTags } from '@/constants/sampleData'
-import { indexedDbLibraryRepository, type LibraryRepository } from '@/repositories/libraryRepository'
+import { libraryRepository, type LibraryRepository } from '@/repositories/libraryRepository'
 import type { GraphLink, GraphNode, JournalDay, KnowledgeEntry, NoteItem, Source, SourceType } from '@/types/knowledge'
 
 export interface LibraryFilters {
@@ -34,7 +34,7 @@ function plainExcerpt(content: string): string {
 }
 
 export class LibraryService {
-  constructor(private readonly repository: LibraryRepository = indexedDbLibraryRepository) {}
+  constructor(private readonly repository: LibraryRepository = libraryRepository) {}
 
   async getHomeData(): Promise<{ knowledge: KnowledgeEntry[]; notes: NoteItem[]; journal: JournalDay[] }> {
     const [knowledge, notes, journal] = await Promise.all([
