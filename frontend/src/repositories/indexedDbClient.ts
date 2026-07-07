@@ -117,3 +117,14 @@ export async function putInStore<K extends keyof StoreMap>(storeName: K, value: 
     tx.onerror = () => reject(tx.error ?? new Error(`Could not save ${storeName}`))
   })
 }
+
+export async function deleteFromStore(storeName: StoreName, key: string): Promise<void> {
+  await seedDatabase()
+  const db = await openDatabase()
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite')
+    tx.objectStore(storeName).delete(key)
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error ?? new Error(`Could not delete key from ${storeName}`))
+  })
+}

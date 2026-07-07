@@ -37,6 +37,7 @@ export interface Source {
   status: ProcessingStatus
   meta: string
   excerpt: string
+  fileId?: string
 }
 
 export interface NoteItem {

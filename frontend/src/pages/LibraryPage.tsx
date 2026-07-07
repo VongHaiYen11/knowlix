@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { type ChangeEvent, useMemo, useState } from 'react'
 import { Plus, Upload } from 'lucide-react'
 import { Link } from 'react-router'
 import { PageHeader } from '@/components/common/PageHeader'
@@ -12,6 +12,7 @@ import { KnowledgeGrid } from '@/features/library/KnowledgeGrid'
 import { SourceList } from '@/features/library/SourceList'
 import { ROUTES } from '@/constants/routes'
 import { useLibraryKnowledge, useLibrarySources, useTaxonomy } from '@/hooks/useLibrary'
+import { libraryService } from '@/services/libraryService'
 import type { SourceType } from '@/types/knowledge'
 
 type LibraryTab = 'sources' | 'knowledge'
@@ -30,6 +31,26 @@ export function LibraryPage() {
   const knowledgeFilters = useMemo(() => ({ query, category, tag, sort }), [category, query, sort, tag])
   const sources = useLibrarySources(sourceFilters)
   const knowledge = useLibraryKnowledge(knowledgeFilters)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+
+  async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? [])
+    event.target.value = ''
+    if (!files.length) return
+
+    setUploading(true)
+    setUploadError(null)
+    try {
+      await libraryService.uploadSources(files)
+      await Promise.all([sources.reload(), knowledge.reload()])
+      setTab('sources')
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : 'Upload failed')
+    } finally {
+      setUploading(false)
+    }
+  }
 
   return (
     <PageShell>
@@ -48,6 +69,9 @@ export function LibraryPage() {
             sort={sort}
             categories={taxonomy.categories}
             tags={taxonomy.tags}
+            uploading={uploading}
+            uploadError={uploadError}
+            onUpload={handleUpload}
             onSourceType={(value) => setSourceType(value as SourceType | 'All')}
             onCategory={setCategory}
             onTag={setTag}
@@ -65,6 +89,9 @@ export function LibraryPage() {
             sort={sort}
             categories={taxonomy.categories}
             tags={taxonomy.tags}
+            uploading={uploading}
+            uploadError={uploadError}
+            onUpload={handleUpload}
             onSourceType={(value) => setSourceType(value as SourceType | 'All')}
             onCategory={setCategory}
             onTag={setTag}
@@ -92,6 +119,9 @@ function LibraryControls({
   sort,
   categories,
   tags,
+  uploading,
+  uploadError,
+  onUpload,
   onSourceType,
   onCategory,
   onTag,
@@ -104,6 +134,9 @@ function LibraryControls({
   sort: keyof typeof sortLabels
   categories: string[]
   tags: string[]
+  uploading: boolean
+  uploadError: string | null
+  onUpload: (event: ChangeEvent<HTMLInputElement>) => void
   onSourceType: (value: string) => void
   onCategory: (value: string) => void
   onTag: (value: string) => void
@@ -116,10 +149,11 @@ function LibraryControls({
           <Link to={ROUTES.note('new')} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3.5 text-sm text-primary-foreground transition hover:opacity-90">
             <Plus className="h-4 w-4" />New Note
           </Link>
-          <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-border bg-card px-3.5 text-sm text-foreground transition hover:border-ring/40">
-            <Upload className="h-4 w-4" strokeWidth={1.75} />Upload
-            <input type="file" multiple className="hidden" aria-label="Upload source files" />
+          <label className={`inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-3.5 text-sm text-foreground transition hover:border-ring/40 ${uploading ? 'cursor-wait opacity-70' : 'cursor-pointer'}`}>
+            <Upload className="h-4 w-4" strokeWidth={1.75} />{uploading ? 'Ingesting...' : 'Upload'}
+            <input type="file" multiple className="hidden" aria-label="Upload source files" disabled={uploading} onChange={onUpload} />
           </label>
+          {uploadError ? <span className="text-xs text-destructive">{uploadError}</span> : null}
           <Dropdown label="Type" options={sourceTypes} selected={[sourceType]} onToggle={onSourceType} showSelectedCount={false} />
         </>
       ) : (

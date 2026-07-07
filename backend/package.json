@@ -7,9 +7,11 @@
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
     "build": "tsc",
-    "db:migrate": "tsx src/db/migrate.ts"
+    "db:migrate": "tsx src/db/migrate.ts",
+    "wiki:ingest": "tsx ../scripts/gemini-ingest.ts"
   },
   "dependencies": {
+    "@google/genai": "^1.9.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",

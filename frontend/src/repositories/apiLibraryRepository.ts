@@ -35,6 +35,7 @@ export const apiLibraryRepository: LibraryRepository = {
     }
     await apiClient.post<Source>('/api/v1/sources', source)
   },
+  deleteSource: (id) => apiClient.delete<void>(`/api/v1/sources/${encodeURIComponent(id)}`),
   getNotes: () => getAllPages<NoteItem>('/api/v1/notes'),
   getNoteById: async (id) => {
     try {

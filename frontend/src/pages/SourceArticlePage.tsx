@@ -1,6 +1,6 @@
-import { ArrowLeft, Clock, Pencil, Plus, Sparkles, Tag } from 'lucide-react'
+import { ArrowLeft, Clock, Pencil, Plus, Sparkles, Tag, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { PageHeader } from '@/components/common/PageHeader'
 import { PageShell } from '@/components/common/PageShell'
 import { Badge } from '@/components/ui/Badge'
@@ -17,12 +17,29 @@ import { libraryService } from '@/services/libraryService'
 export function SourceArticlePage({ id }: { id: string }) {
   const sourceState = useSourceArticle(id)
   const taxonomy = useTaxonomy()
+  const navigate = useNavigate()
   const [newTag, setNewTag] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [viewMode, setViewMode] = useState<'original' | 'summary'>('original')
   const source = sourceState.data
 
   useEffect(() => {
     setNewTag('')
   }, [id])
+
+  async function handleDelete() {
+    if (!window.confirm("Bạn có chắc chắn muốn xóa Source of Truth này? Thao tác này cũng sẽ xóa toàn bộ các trang tri thức (knowledge) liên quan và liên kết đồ thị của chúng.")) return
+    setDeleting(true)
+    try {
+      await libraryService.deleteSource(id)
+      navigate(ROUTES.library)
+    } catch (err) {
+      console.error(err)
+      alert(err instanceof Error ? err.message : 'Xóa thất bại')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   if (sourceState.status === 'loading') return <PageShell variant="wide"><Card className="h-96 animate-pulse" /></PageShell>
   if (!source) return <PageShell variant="readable"><EmptyState title="Source not found" message="This source is not in your local library." /></PageShell>
@@ -71,14 +88,51 @@ export function SourceArticlePage({ id }: { id: string }) {
           <div className="mt-4 flex flex-wrap gap-1.5">{source.tags.map((tag) => <Badge key={tag}>#{tag}</Badge>)}</div>
           <p className="mt-6 border-l-2 border-primary/40 pl-5 font-serif text-xl italic leading-relaxed text-muted-foreground">{source.excerpt}</p>
           <div className="mt-10">
-            <MarkdownPreview content={content} />
+            {viewMode === 'original' && source.fileId ? (
+              <iframe
+                src={`${import.meta.env.VITE_API_URL}/api/v1/files/${source.fileId}?token=${import.meta.env.VITE_API_TOKEN ?? 'dev-token'}`}
+                className="w-full h-[88vh] border border-border rounded-xl bg-card shadow-sm"
+                title={source.title}
+              />
+            ) : (
+              <MarkdownPreview content={source.content || 'No summary available.'} />
+            )}
           </div>
         </article>
         <aside className="lg:sticky lg:top-24 lg:h-fit">
           <div className="space-y-6">
-            <Link to={ROUTES.sourceEdit(source.id)} className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm text-primary-foreground transition hover:opacity-90">
-              <Pencil className="h-4 w-4" />Edit
-            </Link>
+            {source.fileId && (
+              <Button
+                variant="outline"
+                className="h-10 w-full justify-center gap-2"
+                icon={<Sparkles className="h-4 w-4 text-amber-500" />}
+                onClick={() => setViewMode(prev => prev === 'original' ? 'summary' : 'original')}
+              >
+                {viewMode === 'original' ? 'Summary' : 'Original File'}
+              </Button>
+            )}
+            {source.type === 'PDF' ? (
+              <Button
+                disabled
+                className="h-10 w-full justify-center gap-2 bg-primary text-primary-foreground opacity-45 cursor-not-allowed"
+                icon={<Pencil className="h-4 w-4" />}
+              >
+                Edit
+              </Button>
+            ) : (
+              <Link to={ROUTES.sourceEdit(source.id)} className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm text-primary-foreground transition hover:opacity-90">
+                <Pencil className="h-4 w-4" />Edit
+              </Link>
+            )}
+            <Button
+              variant="outline"
+              className="h-10 w-full justify-center gap-2 text-destructive border-destructive/40 hover:border-destructive hover:bg-destructive/5"
+              icon={<Trash2 className="h-4 w-4" />}
+              disabled={deleting}
+              onClick={handleDelete}
+            >
+              {deleting ? 'Deleting...' : 'Delete'}
+            </Button>
             <Card className="p-4">
               <h2 className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground"><Tag className="h-3.5 w-3.5" />Tags</h2>
               <Dropdown label="Assign tags" options={taxonomy.tags} selected={source.tags} onToggle={toggleTag} prefix="#" triggerClassName="w-full justify-between" />

@@ -1,4 +1,5 @@
 import { allCategories, allTags } from '@/constants/sampleData'
+import { apiClient, isApiRepositoryEnabled } from '@/repositories/apiClient'
 import { libraryRepository, type LibraryRepository } from '@/repositories/libraryRepository'
 import type { GraphLink, GraphNode, JournalDay, KnowledgeEntry, NoteItem, Source, SourceType } from '@/types/knowledge'
 
@@ -173,6 +174,24 @@ ${entry.explanation.join('\n\n')}
 
   getTaxonomy(): { tags: string[]; categories: string[] } {
     return { tags: allTags, categories: allCategories }
+  }
+
+  async uploadSources(files: File[]): Promise<void> {
+    if (!isApiRepositoryEnabled) {
+      throw new Error('Upload requires API mode. Set VITE_API_URL in frontend/.env.local.')
+    }
+
+    await Promise.all(
+      files.map((file) => {
+        const formData = new FormData()
+        formData.append('file', file)
+        return apiClient.postForm('/api/v1/sources/upload', formData)
+      }),
+    )
+  }
+
+  deleteSource(id: string): Promise<void> {
+    return this.repository.deleteSource(id)
   }
 }
 

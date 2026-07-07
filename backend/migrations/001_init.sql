@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS uploaded_files (
   name TEXT NOT NULL,
   mime_type TEXT NOT NULL,
   size_bytes INTEGER NOT NULL CHECK (size_bytes >= 0),
+  raw_path TEXT,
+  ingest_status TEXT NOT NULL DEFAULT 'pending' CHECK (ingest_status IN ('pending', 'completed', 'skipped', 'failed')),
+  ingest_outputs JSONB NOT NULL DEFAULT '[]',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

@@ -29,3 +29,8 @@ pnpm-debug.log*
 coverage/
 .nyc_output/
 
+# User uploads and generated files
+raw/
+wiki/
+outputs/
+
