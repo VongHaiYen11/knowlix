@@ -259,18 +259,3 @@ Returns:
 ```
 
 The report is also written to `outputs/lint-YYYY-MM-DD.md`.
-
-## Manual Ingest CLI
-
-```bash
-cd backend
-npm run wiki:ingest -- ../raw/papers/example.md
-```
-
-Or ingest supported files under `raw/`:
-
-```bash
-npm run wiki:ingest
-```
-
-Supported raw text formats are `.md`, `.txt`, `.json`, and `.csv`.

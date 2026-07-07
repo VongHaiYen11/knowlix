@@ -1,9 +1,10 @@
-import { ArrowRight, Clock, Pencil, Sparkles } from 'lucide-react'
+import { ArrowRight, Clock, Pencil, Sparkles, Upload } from 'lucide-react'
 import { useNavigate } from 'react-router'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
+import boredGreenImage from '@/assets/bored_green.png'
 import { ROUTES } from '@/constants/routes'
 import { sourceTypeIcon, statusIcon } from './SourceIcon'
 import type { Source } from '@/types/knowledge'
@@ -11,7 +12,17 @@ import { cn } from '@/utils/cn'
 
 export function SourceList({ sources }: { sources: Source[] }) {
   const navigate = useNavigate()
-  if (sources.length === 0) return <EmptyState message="Nothing matches yet. Try a different phrasing, or capture something new." />
+  if (sources.length === 0) {
+    return (
+      <EmptyState
+        image
+        imageSrc={boredGreenImage}
+        icon={Upload}
+        title="No sources here yet"
+        message="Upload a file or create a note to give your library something to work with."
+      />
+    )
+  }
   return (
     <ul className="space-y-3">
       {sources.map((source) => {

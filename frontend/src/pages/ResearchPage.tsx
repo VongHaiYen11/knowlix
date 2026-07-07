@@ -68,7 +68,7 @@ export function ResearchPage() {
                     onChange={(event) => research.renameThread(event.target.value)}
                     onFocus={() => setRenaming(true)}
                     onBlur={() => setRenaming(false)}
-                    placeholder="Untitled research"
+                    placeholder="Untitled"
                     readOnly={!renaming}
                     className="min-w-0 flex-1 bg-transparent font-serif text-2xl leading-snug tracking-tight text-primary-foreground placeholder:text-primary-foreground/60 focus:outline-none"
                   />

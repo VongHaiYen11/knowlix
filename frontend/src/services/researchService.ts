@@ -20,6 +20,7 @@ export interface ResearchThread {
   scope: ResearchScope
   createdAt: string
   updatedAt: string
+  titleManuallyEdited?: boolean
 }
 
 export class ResearchService {

@@ -10,33 +10,47 @@ const seedMessages: ResearchMessage[] = [
   { id: 'seed-a', role: 'assistant', content: 'Across your knowledge pages, three ideas form a coherent picture: memory decays, retrieval strengthens it, and spaced repetition operationalizes both.' },
 ]
 
-const createThread = (title = 'Untitled research'): ResearchThread => {
+const createThread = (title = 'Untitled'): ResearchThread => {
   const now = new Date().toISOString()
   return {
     id: `thread-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     title,
-    messages: seedMessages,
+    messages: [],
     scope: defaultScope,
     createdAt: now,
     updatedAt: now,
+    titleManuallyEdited: false,
   }
+}
+
+function isLegacySeedThread(thread: ResearchThread) {
+  return thread.title === 'Memory research'
+    && thread.messages.length === seedMessages.length
+    && thread.messages.every((message, index) => message.role === seedMessages[index].role && message.content === seedMessages[index].content)
+}
+
+function titleFromQuestion(question: string) {
+  return question.trim().split(/\s+/).slice(0, 3).join(' ') || 'Untitled'
 }
 
 const loadThreads = (): ResearchThread[] => {
   try {
     const stored = localStorage.getItem(storageKey)
-    if (!stored) return [createThread('Memory research')]
+    if (!stored) return [createThread()]
     const parsed = JSON.parse(stored) as ResearchThread[]
-    if (!Array.isArray(parsed) || !parsed.length) return [createThread('Memory research')]
-    return parsed.map((thread) => ({
+    if (!Array.isArray(parsed) || !parsed.length) return [createThread()]
+    const threads = parsed.filter((thread) => !isLegacySeedThread(thread)).map((thread) => ({
       ...thread,
+      title: thread.title === 'Untitled research' ? 'Untitled' : thread.title,
+      titleManuallyEdited: thread.titleManuallyEdited ?? !['Untitled', 'Untitled research'].includes(thread.title),
       scope: {
         ...thread.scope,
         dateRange: thread.scope.dateRange === 'Any time' ? defaultDateRange : thread.scope.dateRange,
       },
     }))
+    return threads.length ? threads : [createThread()]
   } catch {
-    return [createThread('Memory research')]
+    return [createThread()]
   }
 }
 
@@ -46,7 +60,7 @@ export function useResearch(initialQuestion: string) {
   const [input, setInput] = useState(initialQuestion)
   const [scopedKnowledge, setScopedKnowledge] = useState<KnowledgeEntry[]>([])
   const activeThread = threads.find((thread) => thread.id === activeThreadId) ?? threads[0]
-  const messages = activeThread?.messages ?? seedMessages
+  const messages = activeThread?.messages ?? []
   const scope = activeThread?.scope ?? defaultScope
 
   useEffect(() => {
@@ -72,7 +86,7 @@ export function useResearch(initialQuestion: string) {
     
     updateActiveThread((thread) => ({
       ...thread,
-      title: thread.title === 'Untitled research' ? question.slice(0, 56) : thread.title,
+      title: !thread.titleManuallyEdited && thread.title === 'Untitled' ? titleFromQuestion(question) : thread.title,
       messages: [
         ...thread.messages,
         { id: userMsgId, role: 'user', content: question },
@@ -177,7 +191,7 @@ export function useResearch(initialQuestion: string) {
   }, [updateActiveThread])
 
   const renameThread = useCallback((title: string) => {
-    updateActiveThread((thread) => ({ ...thread, title }))
+    updateActiveThread((thread) => ({ ...thread, title, titleManuallyEdited: true }))
   }, [updateActiveThread])
 
   const selectThread = useCallback((id: string) => {

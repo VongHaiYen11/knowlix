@@ -102,7 +102,7 @@ export function ResearchHistoryPanel({ threads, activeThreadId, tags, categories
                       <span className="text-xs text-muted-foreground">{thread.messages.length} messages</span>
                       <Badge tone="accent" className="ml-auto">{thread.scope.dateRange}</Badge>
                     </div>
-                    <h2 className="font-serif text-2xl leading-snug tracking-tight">{thread.title || 'Untitled research'}</h2>
+                    <h2 className="font-serif text-2xl leading-snug tracking-tight">{thread.title || 'Untitled'}</h2>
                     <p className="mt-2 line-clamp-3 flex-1 text-sm leading-relaxed text-muted-foreground">
                       {thread.messages.find((message) => message.role === 'assistant')?.content ?? 'No assistant response yet.'}
                     </p>

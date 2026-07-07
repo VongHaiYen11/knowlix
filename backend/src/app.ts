@@ -14,6 +14,7 @@ import { journalRouter } from './modules/journal/journal.routes.js'
 import { graphRouter } from './modules/graph/graph.routes.js'
 import { researchRouter } from './modules/research/research.routes.js'
 import { maintenanceRouter } from './modules/maintenance/maintenance.routes.js'
+import { inspirationRouter } from './modules/inspiration/inspiration.routes.js'
 
 export const app = express()
 
@@ -33,6 +34,7 @@ app.use('/api/v1/journal', journalRouter)
 app.use('/api/v1/graph', graphRouter)
 app.use('/api/v1/research', researchRouter)
 app.use('/api/v1/maintenance', maintenanceRouter)
+app.use('/api/v1/inspiration', inspirationRouter)
 
 app.use(notFoundMiddleware)
 app.use(multerErrorMiddleware)

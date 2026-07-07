@@ -1,9 +1,11 @@
-import { Lightbulb, Link2, Plus, Sparkles } from 'lucide-react'
+import { CalendarDays, Lightbulb, Link2, Plus, Sparkles } from 'lucide-react'
 import { PageHeader } from '@/components/common/PageHeader'
 import { PageShell } from '@/components/common/PageShell'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { Skeleton } from '@/components/ui/Skeleton'
+import sleepImage from '@/assets/sleep.png'
 import { useJournal } from '@/hooks/useLibrary'
 
 export function JournalPage() {
@@ -11,7 +13,16 @@ export function JournalPage() {
   return (
     <PageShell variant="readable">
       <PageHeader title="Journal" description="A quiet daily record. Your assistant reads each day and gathers its learnings and connections." action={<Button icon={<Plus className="h-4 w-4" />}>New entry</Button>} />
-      {status === 'loading' ? <Skeleton count={2} className="h-72" /> : (
+      {status === 'loading' ? <Skeleton count={2} className="h-72" /> : data.length === 0 ? (
+        <EmptyState
+          image
+          imageSrc={sleepImage}
+          icon={CalendarDays}
+          title="Nothing in the journal yet"
+          message="Your day has a clean little page waiting. Add one note, reflection, or tiny win when you are ready."
+          className="py-12"
+        />
+      ) : (
         <div className="space-y-10">
           {data.map((day) => (
             <article key={day.date}>

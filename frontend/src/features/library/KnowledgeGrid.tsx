@@ -3,11 +3,22 @@ import { Link } from 'react-router'
 import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
+import boredImage from '@/assets/bored.png'
 import { ROUTES } from '@/constants/routes'
 import type { KnowledgeEntry } from '@/types/knowledge'
 
 export function KnowledgeGrid({ knowledge }: { knowledge: KnowledgeEntry[] }) {
-  if (knowledge.length === 0) return <EmptyState message="No knowledge pages match these filters. Broaden them to search more widely." />
+  if (knowledge.length === 0) {
+    return (
+      <EmptyState
+        image
+        imageSrc={boredImage}
+        icon={Sparkles}
+        title="No knowledge pages yet"
+        message="Once your sources are processed, the useful ideas will show up here as readable pages."
+      />
+    )
+  }
   return (
     <>
       <div className="grid gap-4 md:grid-cols-2">

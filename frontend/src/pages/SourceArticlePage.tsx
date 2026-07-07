@@ -10,6 +10,7 @@ import { Dropdown } from '@/components/ui/Dropdown'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { MarkdownPreview } from '@/features/editor/MarkdownPreview'
 import { sourceTypeIcon, statusIcon } from '@/features/library/SourceIcon'
+import boredGreenImage from '@/assets/bored_green.png'
 import { ROUTES } from '@/constants/routes'
 import { useSourceArticle, useTaxonomy } from '@/hooks/useLibrary'
 import { apiUrl } from '@/repositories/apiClient'
@@ -43,7 +44,7 @@ export function SourceArticlePage({ id }: { id: string }) {
   }
 
   if (sourceState.status === 'loading') return <PageShell variant="wide"><Card className="h-96 animate-pulse" /></PageShell>
-  if (!source) return <PageShell variant="readable"><EmptyState title="Source not found" message="This source is not in your local library." /></PageShell>
+  if (!source) return <PageShell variant="readable"><EmptyState image imageSrc={boredGreenImage} icon={Sparkles} title="Source not found" message="This source is not in your local library." /></PageShell>
 
   const Icon = sourceTypeIcon[source.type]
   const StatusIcon = statusIcon[source.status].icon

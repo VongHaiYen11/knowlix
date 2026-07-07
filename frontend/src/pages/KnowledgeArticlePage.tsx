@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
+import boredImage from '@/assets/bored.png'
 import { ROUTES } from '@/constants/routes'
 import { useKnowledgeArticle } from '@/hooks/useLibrary'
 
@@ -21,7 +22,7 @@ const actions = [
 export function KnowledgeArticlePage({ slug }: { slug: string }) {
   const { data: entry, status } = useKnowledgeArticle(slug)
   if (status === 'loading') return <PageShell variant="wide"><Card className="h-96 animate-pulse" /></PageShell>
-  if (!entry) return <PageShell variant="readable"><EmptyState title="Page not found" message="This knowledge page is not in your local library." /></PageShell>
+  if (!entry) return <PageShell variant="readable"><EmptyState image imageSrc={boredImage} icon={Sparkles} title="Page not found" message="This knowledge page is not in your local library." /></PageShell>
 
   return (
     <PageShell variant="wide">
