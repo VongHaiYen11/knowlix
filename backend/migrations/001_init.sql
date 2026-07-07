@@ -114,3 +114,29 @@ CREATE TABLE IF NOT EXISTS graph_links (
   target TEXT NOT NULL,
   UNIQUE (user_id, source, target)
 );
+
+CREATE TABLE IF NOT EXISTS research_threads (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL DEFAULT 'Untitled',
+  scope JSONB NOT NULL DEFAULT '{"tags":[],"categories":[],"dateRange":"Anytime"}',
+  title_manually_edited BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (user_id, id)
+);
+
+CREATE INDEX IF NOT EXISTS research_threads_user_updated_idx ON research_threads (user_id, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS research_messages (
+  thread_id TEXT NOT NULL REFERENCES research_threads(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+  id TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+  content TEXT NOT NULL DEFAULT '',
+  position INTEGER NOT NULL DEFAULT 0 CHECK (position >= 0),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (thread_id, id)
+);
+
+CREATE INDEX IF NOT EXISTS research_messages_thread_position_idx ON research_messages (thread_id, position);

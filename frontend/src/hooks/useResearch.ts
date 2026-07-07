@@ -69,13 +69,48 @@ export function useResearch(initialQuestion: string) {
   }, [threads])
 
   useEffect(() => {
+    let cancelled = false
+    async function loadServerThreads() {
+      try {
+        const remoteThreads = await researchService.getThreads()
+        if (cancelled) return
+        if (remoteThreads.length) {
+          setThreads(remoteThreads)
+          setActiveThreadId(remoteThreads[0].id)
+          localStorage.setItem(storageKey, JSON.stringify(remoteThreads))
+          return
+        }
+
+        const localThreads = loadThreads()
+        await Promise.all(localThreads.map((thread) => researchService.saveThread(thread)))
+        if (!cancelled) {
+          setThreads(localThreads)
+          setActiveThreadId(localThreads[0]?.id ?? '')
+        }
+      } catch (err) {
+        console.warn('[Research] Could not load DB-backed research threads, using local cache:', err)
+      }
+    }
+    void loadServerThreads()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
     void researchService.getScopedKnowledge(scope).then(setScopedKnowledge)
   }, [scope])
 
-  const updateActiveThread = useCallback((updater: (thread: ResearchThread) => ResearchThread) => {
+  const updateActiveThread = useCallback((updater: (thread: ResearchThread) => ResearchThread, persist = true) => {
+    let nextThread: ResearchThread | undefined
     setThreads((current) => current.map((thread) => (
-      thread.id === activeThreadId ? { ...updater(thread), updatedAt: new Date().toISOString() } : thread
+      thread.id === activeThreadId ? (nextThread = { ...updater(thread), updatedAt: new Date().toISOString() }) : thread
     )))
+    if (persist && nextThread) {
+      void researchService.saveThread(nextThread).catch((err) => {
+        console.warn('[Research] Could not save research thread:', err)
+      })
+    }
   }, [activeThreadId])
 
   const send = useCallback(async () => {
@@ -137,46 +172,35 @@ export function useResearch(initialQuestion: string) {
                 const parsed = JSON.parse(data)
                 if (parsed.text) {
                   assistantText += parsed.text
-                  setThreads((current) => current.map((thread) => {
-                    if (thread.id !== activeThreadId) return thread
-                    return {
-                      ...thread,
-                      messages: thread.messages.map((msg) => 
-                        msg.id === assistantMsgId ? { ...msg, content: assistantText } : msg
-                      ),
-                      updatedAt: new Date().toISOString(),
-                    }
-                  }))
+                  updateActiveThread((thread) => ({
+                    ...thread,
+                    messages: thread.messages.map((msg) =>
+                      msg.id === assistantMsgId ? { ...msg, content: assistantText } : msg
+                    ),
+                  }), false)
                 }
               } catch {
                 assistantText += data
-                setThreads((current) => current.map((thread) => {
-                  if (thread.id !== activeThreadId) return thread
-                  return {
-                    ...thread,
-                    messages: thread.messages.map((msg) => 
-                      msg.id === assistantMsgId ? { ...msg, content: assistantText } : msg
-                    ),
-                    updatedAt: new Date().toISOString(),
-                  }
-                }))
+                updateActiveThread((thread) => ({
+                  ...thread,
+                  messages: thread.messages.map((msg) =>
+                    msg.id === assistantMsgId ? { ...msg, content: assistantText } : msg
+                  ),
+                }), false)
               }
             }
           }
         }
       }
+      updateActiveThread((thread) => thread)
     } catch (err) {
       console.error('[Research] Ingest streaming error:', err)
       const errorMsg = err instanceof Error ? err.message : String(err)
-      setThreads((current) => current.map((thread) => {
-        if (thread.id !== activeThreadId) return thread
-        return {
-          ...thread,
-          messages: thread.messages.map((msg) => 
-            msg.id === assistantMsgId ? { ...msg, content: `Error: Failed to stream research answer. Details: ${errorMsg}` } : msg
-          ),
-          updatedAt: new Date().toISOString(),
-        }
+      updateActiveThread((thread) => ({
+        ...thread,
+        messages: thread.messages.map((msg) =>
+          msg.id === assistantMsgId ? { ...msg, content: `Error: Failed to stream research answer. Details: ${errorMsg}` } : msg
+        ),
       }))
     }
   }, [input, scope, activeThreadId, updateActiveThread])
@@ -186,6 +210,9 @@ export function useResearch(initialQuestion: string) {
     setThreads((current) => [thread, ...current])
     setActiveThreadId(thread.id)
     setInput('')
+    void researchService.saveThread(thread).catch((err) => {
+      console.warn('[Research] Could not save new research thread:', err)
+    })
   }, [])
 
   const setScope = useCallback((nextScope: ResearchScope) => {

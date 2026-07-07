@@ -1,4 +1,5 @@
 import { libraryService } from '@/services/libraryService'
+import { apiClient } from '@/repositories/apiClient'
 import type { KnowledgeEntry } from '@/types/knowledge'
 
 export interface ResearchMessage {
@@ -24,6 +25,18 @@ export interface ResearchThread {
 }
 
 export class ResearchService {
+  async getThreads(): Promise<ResearchThread[]> {
+    return apiClient.get<ResearchThread[]>('/api/v1/research/threads')
+  }
+
+  async saveThread(thread: ResearchThread): Promise<ResearchThread> {
+    return apiClient.post<ResearchThread>('/api/v1/research/threads', thread)
+  }
+
+  async deleteThread(id: string): Promise<void> {
+    return apiClient.delete<void>(`/api/v1/research/threads/${encodeURIComponent(id)}`)
+  }
+
   async getScopedKnowledge(scope: ResearchScope): Promise<KnowledgeEntry[]> {
     const knowledge = await libraryService.getKnowledge()
     return knowledge.filter((entry) => {

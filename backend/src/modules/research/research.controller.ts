@@ -4,6 +4,20 @@ import type { AuthedRequest } from '../../types/request.js'
 import { researchService } from './research.service.js'
 
 export const researchController = {
+  async threads(req: AuthedRequest, res: Response) {
+    res.json(await researchService.threads(req.user.id))
+  },
+
+  async saveThread(req: AuthedRequest, res: Response) {
+    const body = req.params.id ? { ...req.body, id: req.params.id } : req.body
+    res.json(await researchService.upsertThread(req.user.id, body))
+  },
+
+  async deleteThread(req: AuthedRequest, res: Response) {
+    await researchService.deleteThread(req.user.id, req.params.id)
+    res.status(204).send()
+  },
+
   async message(req: AuthedRequest, res: Response) {
     res.setHeader('Content-Type', 'text/event-stream')
     res.setHeader('Cache-Control', 'no-cache')

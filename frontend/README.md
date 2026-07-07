@@ -17,7 +17,7 @@
 
 Knowlix is a local-first personal knowledge management frontend for capturing source material, organizing it into a searchable library, transforming sources into structured knowledge pages, and asking grounded research questions across a private knowledge base.
 
-It is designed for readers, researchers, students, writers, and knowledge workers who want one workspace for notes, PDFs, articles, bookmarks, files, voice captures, and generated knowledge summaries. The application includes a source-of-truth library, editable knowledge article viewers, markdown editing with live preview, math and Mermaid rendering, scoped research chat with evidence controls, chat history, journal views, and an interactive knowledge graph. Data is stored locally with IndexedDB and localStorage, making the current frontend usable without a backend service.
+It is designed for readers, researchers, students, writers, and knowledge workers who want one workspace for notes, PDFs, articles, bookmarks, files, voice captures, and generated knowledge summaries. The application includes a source-of-truth library, editable knowledge article viewers, markdown editing with live preview, math and Mermaid rendering, scoped research chat with evidence controls, DB-backed chat history, journal views, and an interactive knowledge graph. The frontend can still use IndexedDB/localStorage as a resilience cache, but the current app is designed to work with the backend API.
 
 ## Features
 
@@ -37,7 +37,7 @@ It is designed for readers, researchers, students, writers, and knowledge worker
 - **Styling:** Tailwind CSS 4 with CSS variables and theme tokens
 - **Icons:** lucide-react
 - **Content rendering:** react-markdown, remark-gfm, remark-math, rehype-katex, KaTeX, Mermaid
-- **State/data:** React hooks, localStorage for UI/chat state, IndexedDB repository layer for app data
+- **State/data:** React hooks, backend API repositories, IndexedDB fallback data, localStorage for UI preferences
 - **Build tool:** Vite
 - **Testing:** No test runner is configured yet
 
@@ -58,12 +58,10 @@ npm install
 
 ### Environment Variables
 
-No environment variables are required for the current local-first frontend.
-
-If backend APIs are added later, create `.env.local` with values only:
+Create `.env.local` when the backend runs on a custom URL:
 
 ```bash
-VITE_API_BASE_URL=http://localhost:3000
+VITE_API_URL=http://127.0.0.1:4000
 ```
 
 For backend/API expectations, see [be-description.md](./be-description.md).
@@ -113,7 +111,13 @@ src/
 
 ## Data Model
 
-The frontend is local-first. The main data path is:
+The main app data path is API-backed when `VITE_API_URL` is available:
+
+```text
+UI -> hook -> service -> API repository -> backend -> PostgreSQL
+```
+
+Some repository code still supports the older local-first path:
 
 ```text
 UI -> hook -> service -> repository -> IndexedDB
@@ -130,7 +134,7 @@ IndexedDB stores are declared in `src/repositories/indexedDbClient.ts`:
 
 The first app load seeds IndexedDB from `src/constants/sampleData.ts`.
 
-Research chat threads and theme preference are persisted with `localStorage`.
+Research chat threads are stored in PostgreSQL through `/api/v1/research/threads`. The frontend keeps a local cache for resilience. Theme and model preference are persisted with `localStorage`.
 
 ## Current Routes
 
@@ -150,7 +154,7 @@ Research chat threads and theme preference are persisted with `localStorage`.
 
 ## Related
 
-This package is the frontend for Knowlix. It currently ships without backend, server, API, or database code. See [be-description.md](./be-description.md) for the backend contract and migration notes.
+This package is the frontend for Knowlix. The backend lives in `../backend`; see its README for the API, database schema, and ingestion pipeline.
 
 ## License
 

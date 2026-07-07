@@ -1,9 +1,37 @@
 import type { z } from 'zod'
 import { getGeminiClient } from '../../config/gemini.js'
-import type { researchSchema } from './research.schemas.js'
+import type { researchSchema, researchThreadSchema } from './research.schemas.js'
 import { researchRepository } from './research.repository.js'
 
+function threadRow(row: any) {
+  return {
+    id: row.id,
+    title: row.title,
+    messages: row.messages,
+    scope: {
+      tags: row.scope?.tags ?? [],
+      categories: row.scope?.categories ?? [],
+      dateRange: row.scope?.dateRange ?? 'Anytime',
+    },
+    createdAt: new Date(row.created_at).toISOString(),
+    updatedAt: new Date(row.updated_at).toISOString(),
+    titleManuallyEdited: row.title_manually_edited,
+  }
+}
+
 export const researchService = {
+  async threads(userId: string) {
+    const rows = await researchRepository.threads(userId)
+    return rows.map(threadRow)
+  },
+
+  async upsertThread(userId: string, body: z.infer<typeof researchThreadSchema>) {
+    const row = await researchRepository.upsertThread(userId, body)
+    return threadRow(row)
+  },
+
+  deleteThread: researchRepository.deleteThread,
+
   async streamAnswer(userId: string, body: z.infer<typeof researchSchema>, model: string) {
     const knowledge = await researchRepository.scopedKnowledge(userId, body.scope)
     const sourcesMap = new Map<string, { id: string; type: string; title: string }>()
