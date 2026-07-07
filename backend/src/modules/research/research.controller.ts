@@ -1,4 +1,5 @@
 import type { Response } from 'express'
+import { requestedModel } from '../../config/model.js'
 import type { AuthedRequest } from '../../types/request.js'
 import { researchService } from './research.service.js'
 
@@ -8,7 +9,7 @@ export const researchController = {
     res.setHeader('Cache-Control', 'no-cache')
     res.setHeader('Connection', 'keep-alive')
     try {
-      const responseStream = await researchService.streamAnswer(req.user.id, req.body)
+      const responseStream = await researchService.streamAnswer(req.user.id, req.body, requestedModel(req))
       for await (const chunk of responseStream) {
         const text = chunk.text
         if (text) res.write(`data: ${JSON.stringify({ text })}\n\n`)

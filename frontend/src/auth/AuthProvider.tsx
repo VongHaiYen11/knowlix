@@ -7,6 +7,7 @@ interface AuthContextValue {
   status: 'loading' | 'authenticated' | 'unauthenticated'
   login: (input: { email: string; password: string }) => Promise<void>
   signup: (input: { name: string; email: string; password: string }) => Promise<void>
+  updateMe: (input: { name?: string; email?: string; currentPassword?: string; newPassword?: string }) => Promise<void>
   logout: () => Promise<void>
   refresh: () => Promise<void>
 }
@@ -50,7 +51,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus('unauthenticated')
   }, [])
 
-  const value = useMemo(() => ({ user, status, login, signup, logout, refresh }), [user, status, login, signup, logout, refresh])
+  const updateMe = useCallback(async (input: { name?: string; email?: string; currentPassword?: string; newPassword?: string }) => {
+    const nextUser = await authService.updateMe(input)
+    setUser(nextUser)
+    setStatus('authenticated')
+  }, [])
+
+  const value = useMemo(() => ({ user, status, login, signup, updateMe, logout, refresh }), [user, status, login, signup, updateMe, logout, refresh])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

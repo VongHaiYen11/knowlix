@@ -1,98 +1,122 @@
-import { Boxes, Check, DownloadCloud, Hammer, HardDrive, Moon, Palette, ShieldCheck, Sparkles, Sun } from 'lucide-react'
-import { useState } from 'react'
+import { KeyRound, Moon, Palette, Sparkles, Sun, UserRound } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { useAuth } from '@/auth/useAuth'
 import { PageHeader } from '@/components/common/PageHeader'
 import { PageShell } from '@/components/common/PageShell'
-import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
-import { Toggle } from '@/components/ui/Toggle'
 import { useThemeContext } from '@/components/layout/ThemeProvider'
-import { MarkdownPreview } from '@/features/editor/MarkdownPreview'
-import { SettingsGroup, SettingsRow } from '@/features/settings/SettingsGroup'
+import { Button } from '@/components/ui/Button'
+import { SettingsFooter, SettingsGroup, SettingsRow } from '@/features/settings/SettingsGroup'
+import { getModelPreference, MODEL_OPTIONS, setModelPreference, type ModelPreference } from '@/utils/modelPreference'
 import { cn } from '@/utils/cn'
 
 export function SettingsPage() {
-  const [offline, setOffline] = useState(true)
-  const [autoOrganize, setAutoOrganize] = useState(true)
-  const [analytics, setAnalytics] = useState(false)
-  const [model, setModel] = useState('Balanced')
+  const { user, updateMe } = useAuth()
   const { theme, setTheme } = useThemeContext()
-  const [linting, setLinting] = useState(false)
-  const [lintReport, setLintReport] = useState<string | null>(null)
+  const [name, setName] = useState(user?.name ?? '')
+  const [email, setEmail] = useState(user?.email ?? '')
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [model, setModel] = useState<ModelPreference>(() => getModelPreference())
+  const [savingProfile, setSavingProfile] = useState(false)
+  const [savingPassword, setSavingPassword] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
-  async function runLint() {
-    setLinting(true)
-    setLintReport(null)
+  useEffect(() => {
+    setName(user?.name ?? '')
+    setEmail(user?.email ?? '')
+  }, [user])
+
+  async function saveProfile() {
+    setSavingProfile(true)
+    setNotice(null)
+    setError(null)
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:4000'}/api/v1/maintenance/lint`, {
-        method: 'POST',
-        credentials: 'include',
-      })
-      if (!response.ok) {
-        throw new Error(`API error: ${response.statusText}`)
-      }
-      const data = await response.json()
-      setLintReport(data.report)
+      await updateMe({ name: name.trim(), email: email.trim() })
+      setNotice('Profile updated.')
     } catch (err) {
-      console.error('[Settings] Lint error:', err)
-      alert(err instanceof Error ? err.message : 'Lint failed')
+      setError(err instanceof Error ? err.message : 'Could not update profile')
     } finally {
-      setLinting(false)
+      setSavingProfile(false)
     }
+  }
+
+  async function savePassword() {
+    setSavingPassword(true)
+    setNotice(null)
+    setError(null)
+    try {
+      await updateMe({ currentPassword, newPassword })
+      setCurrentPassword('')
+      setNewPassword('')
+      setNotice('Password updated.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update password')
+    } finally {
+      setSavingPassword(false)
+    }
+  }
+
+  function chooseModel(nextModel: ModelPreference) {
+    setModel(nextModel)
+    setModelPreference(nextModel)
+    setNotice('Model preference saved.')
+    setError(null)
   }
 
   return (
     <PageShell variant="readable">
-      <PageHeader title="Settings" description="Your knowledge stays yours. Everything here is private by default." />
-      <div className="space-y-10">
-        <SettingsGroup icon={HardDrive} title="Storage">
-          <SettingsRow label="Local-first storage" hint="Your library lives on your device and syncs only if you choose."><span className="text-sm text-muted-foreground">1,204 items · 84 MB</span></SettingsRow>
-          <SettingsRow label="Offline mode" hint="Keep working with no connection. Sync resumes automatically."><Toggle enabled={offline} onChange={setOffline} label="Offline mode" /></SettingsRow>
+      <PageHeader title="Settings" description="Manage your account, theme, and model preference." />
+      <div className="space-y-8">
+        {(notice || error) && (
+          <div className={cn('rounded-2xl border px-5 py-3 text-sm', error ? 'border-destructive/30 bg-destructive/5 text-destructive' : 'border-primary/20 bg-accent text-accent-foreground')}>
+            {error ?? notice}
+          </div>
+        )}
+
+        <SettingsGroup icon={UserRound} title="Account">
+          <SettingsRow label="Name" hint="Used for greetings and reports.">
+            <input value={name} onChange={(event) => setName(event.target.value)} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm focus:outline-none sm:w-72" />
+          </SettingsRow>
+          <SettingsRow label="Email" hint="Used to sign in to your private workspace.">
+            <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm focus:outline-none sm:w-72" />
+          </SettingsRow>
+          <SettingsFooter>
+            <Button size="sm" onClick={saveProfile} disabled={savingProfile || !name.trim() || !email.trim()}>{savingProfile ? 'Saving...' : 'Save changes'}</Button>
+          </SettingsFooter>
         </SettingsGroup>
-        <SettingsGroup icon={Sparkles} title="AI Model">
-          <SettingsRow label="Reasoning quality" hint="Higher quality thinks longer; faster is lighter on your device."><Segmented value={model} options={['Fast', 'Balanced', 'Deep']} onChange={setModel} /></SettingsRow>
-          <SettingsRow label="Auto-organize" hint="Let the assistant file, link, and de-duplicate captures for you."><Toggle enabled={autoOrganize} onChange={setAutoOrganize} label="Auto-organize" /></SettingsRow>
+
+        <SettingsGroup icon={KeyRound} title="Password">
+          <SettingsRow label="Current password" hint="Required before choosing a new password.">
+            <input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm focus:outline-none sm:w-72" autoComplete="current-password" />
+          </SettingsRow>
+          <SettingsRow label="New password" hint="Use at least 8 characters.">
+            <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm focus:outline-none sm:w-72" autoComplete="new-password" />
+          </SettingsRow>
+          <SettingsFooter>
+            <Button size="sm" onClick={savePassword} disabled={savingPassword || !currentPassword || newPassword.length < 8}>{savingPassword ? 'Saving...' : 'Update password'}</Button>
+          </SettingsFooter>
         </SettingsGroup>
-        <SettingsGroup icon={Boxes} title="Embeddings">
-          <SettingsRow label="Semantic index" hint="Powers meaning-based search across your whole library."><span className="inline-flex items-center gap-1.5 text-sm text-primary"><Check className="h-4 w-4" />Up to date</span></SettingsRow>
-          <SettingsRow label="Model" hint="Local embedding model, 384 dimensions."><span className="text-sm text-muted-foreground">paper-embed-mini</span></SettingsRow>
-        </SettingsGroup>
+
         <SettingsGroup icon={Palette} title="Appearance">
-          <SettingsRow label="Theme" hint="Warm paper by day, deep sage by night."><IconSegmented value={theme} onChange={setTheme} /></SettingsRow>
-          <SettingsRow label="Reading width" hint="Comfortable measure for long-form."><span className="text-sm text-muted-foreground">Comfortable</span></SettingsRow>
-        </SettingsGroup>
-        <SettingsGroup icon={DownloadCloud} title="Backup">
-          <SettingsRow label="Export library" hint="Download everything as Markdown and JSON. No lock-in."><Button variant="outline" size="sm">Export</Button></SettingsRow>
-          <SettingsRow label="Last backup" hint="Automatic local snapshots."><span className="text-sm text-muted-foreground">Today, 6:00 AM</span></SettingsRow>
-        </SettingsGroup>
-        <SettingsGroup icon={ShieldCheck} title="Privacy">
-          <SettingsRow label="Usage analytics" hint="Off by default. Nothing about your content is ever shared."><Toggle enabled={analytics} onChange={setAnalytics} label="Usage analytics" /></SettingsRow>
-          <SettingsRow label="On-device processing" hint="Your notes are never used to train external models."><span className="inline-flex items-center gap-1.5 text-sm text-primary"><ShieldCheck className="h-4 w-4" />Guaranteed</span></SettingsRow>
-        </SettingsGroup>
-        <SettingsGroup icon={Hammer} title="Maintenance">
-          <SettingsRow label="Lint Knowledge Base" hint="Run Gemini AI lint to detect orphaned pages, logical contradictions, or missing links.">
-            <Button variant="outline" size="sm" onClick={runLint} disabled={linting}>
-              {linting ? 'Linting...' : 'Run Lint'}
-            </Button>
+          <SettingsRow label="Theme" hint="Choose light or dark mode.">
+            <IconSegmented value={theme} onChange={setTheme} />
           </SettingsRow>
         </SettingsGroup>
-        {lintReport && (
-          <Card className="p-5 mt-4 border border-border">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-serif text-lg font-bold">Lint Maintenance Report</h3>
-              <Button variant="ghost" size="sm" onClick={() => setLintReport(null)}>Close</Button>
-            </div>
-            <div className="max-h-96 overflow-y-auto border border-border rounded-lg p-4 bg-secondary/20">
-              <MarkdownPreview content={lintReport} />
-            </div>
-          </Card>
-        )}
+
+        <SettingsGroup icon={Sparkles} title="Model">
+          <SettingsRow label="LLM model" hint="Used by research, inspiration, and maintenance requests.">
+            <select value={model} onChange={(event) => chooseModel(event.target.value as ModelPreference)} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:outline-none sm:w-72">
+              {MODEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+            </select>
+          </SettingsRow>
+          <SettingsRow label="Current model" hint={MODEL_OPTIONS.find((option) => option.value === model)?.hint ?? 'Selected model for LLM requests.'}>
+            <span className="text-sm text-muted-foreground">{model}</span>
+          </SettingsRow>
+        </SettingsGroup>
       </div>
     </PageShell>
   )
-}
-
-function Segmented({ value, options, onChange }: { value: string; options: string[]; onChange: (value: string) => void }) {
-  return <div className="inline-flex rounded-lg border border-border bg-card p-0.5">{options.map((option) => <button key={option} onClick={() => onChange(option)} className={cn('rounded-md px-3 py-1.5 text-xs transition', value === option ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground')}>{option}</button>)}</div>
 }
 
 function IconSegmented({ value, onChange }: { value: string; onChange: (value: 'light' | 'dark') => void }) {

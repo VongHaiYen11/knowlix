@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { researchService, type ResearchMessage, type ResearchScope, type ResearchThread } from '@/services/researchService'
 import type { KnowledgeEntry } from '@/types/knowledge'
+import { getModelPreference } from '@/utils/modelPreference'
 
 const storageKey = 'knowlix.researchThreads'
 const defaultDateRange = 'Anytime'
@@ -100,6 +101,7 @@ export function useResearch(initialQuestion: string) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'X-Knowlix-Model': getModelPreference(),
         },
         credentials: 'include',
         body: JSON.stringify({

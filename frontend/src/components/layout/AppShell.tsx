@@ -15,6 +15,7 @@ const navItems = [
   { label: 'Research', href: ROUTES.research, icon: Sparkles },
   { label: 'Graph', href: ROUTES.graph, icon: Share2 },
   { label: 'Journal', href: ROUTES.journal, icon: CalendarDays },
+  { label: 'Settings', href: ROUTES.settings, icon: Settings },
 ]
 
 function SidebarContent({ collapsed = false, onCollapseToggle, onNavigate }: { collapsed?: boolean; onCollapseToggle?: () => void; onNavigate?: () => void }) {
@@ -65,36 +66,33 @@ function SidebarContent({ collapsed = false, onCollapseToggle, onNavigate }: { c
         </ul>
       </nav>
       <div className="px-3 pb-5">
-        <NavLink
-          to={ROUTES.settings}
-          onClick={onNavigate}
-          title={collapsed ? 'Settings' : undefined}
-          aria-label={collapsed ? 'Settings' : undefined}
-          className={cn(
-            'flex items-center rounded-lg py-2 text-sm transition',
-            collapsed ? 'justify-center px-2' : 'gap-3 px-3',
-            pathname.startsWith(ROUTES.settings) ? 'bg-sidebar-accent text-accent-foreground' : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground',
-          )}
-        >
-          <Settings className="h-[18px] w-[18px]" strokeWidth={1.75} />
-          {!collapsed && <span>Settings</span>}
-        </NavLink>
-        <div className={cn('mt-3 flex items-center rounded-lg py-2.5', collapsed ? 'justify-center px-2' : 'gap-3 px-3')}>
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-sm text-accent-foreground">{user?.initials ?? 'U'}</span>
-          {!collapsed && <div className="min-w-0">
-            <p className="truncate text-sm text-foreground">{user?.name ?? 'User'}</p>
-            <p className="truncate text-xs text-muted-foreground">Private library</p>
-          </div>}
+        <div className={cn('flex items-center rounded-lg py-2.5', collapsed ? 'justify-center px-2' : 'gap-3 px-3')}>
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-sm text-accent-foreground">{user?.initials ?? 'U'}</span>
+          {!collapsed && <>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm text-foreground">{user?.name ?? 'User'}</p>
+              <p className="truncate text-xs text-muted-foreground">Private library</p>
+            </div>
+            <button
+              onClick={() => void logout()}
+              title="Logout"
+              aria-label="Logout"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-sidebar-accent/60 hover:text-foreground"
+            >
+              <LogOut className="h-[18px] w-[18px]" strokeWidth={1.75} />
+            </button>
+          </>}
         </div>
-        <button
-          onClick={() => void logout()}
-          title={collapsed ? 'Logout' : undefined}
-          aria-label={collapsed ? 'Logout' : undefined}
-          className={cn('mt-1 flex w-full items-center rounded-lg py-2 text-sm text-muted-foreground transition hover:bg-sidebar-accent/60 hover:text-foreground', collapsed ? 'justify-center px-2' : 'gap-3 px-3')}
-        >
-          <LogOut className="h-[18px] w-[18px]" strokeWidth={1.75} />
-          {!collapsed && <span>Logout</span>}
-        </button>
+        {collapsed && (
+          <button
+            onClick={() => void logout()}
+            title="Logout"
+            aria-label="Logout"
+            className="mt-1 flex w-full items-center justify-center rounded-lg px-2 py-2 text-sm text-muted-foreground transition hover:bg-sidebar-accent/60 hover:text-foreground"
+          >
+            <LogOut className="h-[18px] w-[18px]" strokeWidth={1.75} />
+          </button>
+        )}
       </div>
     </div>
   )

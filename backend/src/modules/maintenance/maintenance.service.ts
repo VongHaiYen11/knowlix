@@ -1,13 +1,12 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { env } from '../../config/env.js'
 import { getGeminiClient } from '../../config/gemini.js'
 import { todayLabel } from '../../utils/date.js'
 import { slugify } from '../../utils/text.js'
 import { maintenanceRepository } from './maintenance.repository.js'
 
 export const maintenanceService = {
-  async lint(user: { id: string; name: string }) {
+  async lint(user: { id: string; name: string }, model: string) {
     const knowledge = await maintenanceRepository.knowledge(user.id)
     const links = await maintenanceRepository.links(user.id)
     const incomingLinks = new Set<string>()
@@ -51,7 +50,7 @@ Return ONLY a valid JSON array of objects representing contradictions found. For
 ]
 If no contradictions are found, return an empty array []. Do not include markdown code fences, extra words, or annotations. Return plain JSON only.`
 
-    const response = await getGeminiClient().models.generateContent({ model: env.geminiModel, contents: prompt })
+    const response = await getGeminiClient().models.generateContent({ model, contents: prompt })
     let contradictions: Array<{ slugs: string[]; explanation: string }> = []
     try {
       const cleanText = response.text ? response.text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim() : '[]'

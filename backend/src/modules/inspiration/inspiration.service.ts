@@ -1,4 +1,3 @@
-import { env } from '../../config/env.js'
 import { getGeminiClient } from '../../config/gemini.js'
 
 const fallbackQuotes = [
@@ -20,7 +19,7 @@ function todayKey() {
 }
 
 export const inspirationService = {
-  async today(userId: string) {
+  async today(userId: string, model: string) {
     const date = todayKey()
     const prompt = `Write one warm, cute inspiration sentence for a personal knowledge workspace.
 Rules:
@@ -31,7 +30,7 @@ Rules:
 - Make it feel calm, curious, and encouraging.`
 
     try {
-      const response = await getGeminiClient().models.generateContent({ model: env.geminiModel, contents: prompt })
+      const response = await getGeminiClient().models.generateContent({ model, contents: prompt })
       const quote = response.text?.trim().replace(/^["']|["']$/g, '')
       return { date, quote: quote || fallbackQuote(userId, date) }
     } catch (error) {

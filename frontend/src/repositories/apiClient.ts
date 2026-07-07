@@ -1,3 +1,5 @@
+import { getModelPreference } from '@/utils/modelPreference'
+
 const apiBaseUrl = (import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:4000').replace(/\/$/, '')
 
 export const isApiRepositoryEnabled = Boolean(apiBaseUrl)
@@ -14,6 +16,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   const headers = new Headers(init.headers)
   if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json')
+  headers.set('X-Knowlix-Model', getModelPreference())
 
   const response = await fetch(`${apiBaseUrl}${path}`, { ...init, headers, credentials: 'include' })
   if (response.status === 204) return undefined as T

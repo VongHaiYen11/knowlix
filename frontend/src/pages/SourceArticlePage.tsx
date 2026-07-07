@@ -6,6 +6,7 @@ import { PageShell } from '@/components/common/PageShell'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Dropdown } from '@/components/ui/Dropdown'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { MarkdownPreview } from '@/features/editor/MarkdownPreview'
@@ -22,6 +23,8 @@ export function SourceArticlePage({ id }: { id: string }) {
   const navigate = useNavigate()
   const [newTag, setNewTag] = useState('')
   const [deleting, setDeleting] = useState(false)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'original' | 'summary'>('original')
   const source = sourceState.data
 
@@ -30,14 +33,14 @@ export function SourceArticlePage({ id }: { id: string }) {
   }, [id])
 
   async function handleDelete() {
-    if (!window.confirm("Bạn có chắc chắn muốn xóa Source of Truth này? Thao tác này cũng sẽ xóa toàn bộ các trang tri thức (knowledge) liên quan và liên kết đồ thị của chúng.")) return
     setDeleting(true)
+    setDeleteError(null)
     try {
       await libraryService.deleteSource(id)
       navigate(ROUTES.library)
     } catch (err) {
       console.error(err)
-      alert(err instanceof Error ? err.message : 'Xóa thất bại')
+      setDeleteError(err instanceof Error ? err.message : 'Delete failed')
     } finally {
       setDeleting(false)
     }
@@ -131,7 +134,10 @@ export function SourceArticlePage({ id }: { id: string }) {
               className="h-10 w-full justify-center gap-2 text-destructive border-destructive/40 hover:border-destructive hover:bg-destructive/5"
               icon={<Trash2 className="h-4 w-4" />}
               disabled={deleting}
-              onClick={handleDelete}
+              onClick={() => {
+                setDeleteError(null)
+                setConfirmDeleteOpen(true)
+              }}
             >
               {deleting ? 'Deleting...' : 'Delete'}
             </Button>
@@ -153,6 +159,19 @@ export function SourceArticlePage({ id }: { id: string }) {
           </div>
         </aside>
       </div>
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        title="Delete this source?"
+        message="This will also remove generated knowledge pages and graph links related to this source."
+        confirmLabel="Delete source"
+        error={deleteError}
+        loading={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => {
+          setConfirmDeleteOpen(false)
+          setDeleteError(null)
+        }}
+      />
     </PageShell>
   )
 }

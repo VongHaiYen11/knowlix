@@ -1,11 +1,10 @@
 import type { z } from 'zod'
-import { env } from '../../config/env.js'
 import { getGeminiClient } from '../../config/gemini.js'
 import type { researchSchema } from './research.schemas.js'
 import { researchRepository } from './research.repository.js'
 
 export const researchService = {
-  async streamAnswer(userId: string, body: z.infer<typeof researchSchema>) {
+  async streamAnswer(userId: string, body: z.infer<typeof researchSchema>, model: string) {
     const knowledge = await researchRepository.scopedKnowledge(userId, body.scope)
     const sourcesMap = new Map<string, { id: string; type: string; title: string }>()
     for (const row of knowledge) {
@@ -34,6 +33,6 @@ Rules for Citations:
 Question:
 ${body.question}`
 
-    return getGeminiClient().models.generateContentStream({ model: env.geminiModel, contents: prompt })
+    return getGeminiClient().models.generateContentStream({ model, contents: prompt })
   },
 }

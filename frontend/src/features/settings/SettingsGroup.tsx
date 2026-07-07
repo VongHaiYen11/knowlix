@@ -29,3 +29,7 @@ export function SettingsRow({ label, hint, children }: { label: string; hint: st
     </div>
   )
 }
+
+export function SettingsFooter({ children }: { children: ReactNode }) {
+  return <div className="flex justify-end px-6 py-4">{children}</div>
+}
