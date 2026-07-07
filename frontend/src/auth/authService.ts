@@ -1,0 +1,19 @@
+import { apiClient } from '@/repositories/apiClient'
+import type { AuthResponse, AuthUser } from './authTypes'
+
+export const authService = {
+  async me(): Promise<AuthUser> {
+    return apiClient.get<AuthUser>('/api/v1/me')
+  },
+  async login(input: { email: string; password: string }): Promise<AuthUser> {
+    const response = await apiClient.post<AuthResponse>('/api/v1/auth/login', input)
+    return response.user
+  },
+  async signup(input: { name: string; email: string; password: string }): Promise<AuthUser> {
+    const response = await apiClient.post<AuthResponse>('/api/v1/auth/signup', input)
+    return response.user
+  },
+  async logout(): Promise<void> {
+    await apiClient.post<{ ok: true }>('/api/v1/auth/logout', {})
+  },
+}

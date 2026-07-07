@@ -1,279 +1,276 @@
 # Knowlix Backend API
 
-The backend engine for **Knowlix**, a research wiki database driven by Google Gemini API ingestion workflows, PostgreSQL data persistence, and knowledge graph synthesis.
+Backend service for Knowlix: a private research wiki API with PostgreSQL persistence, Google Gemini ingestion/research workflows, layered TypeScript modules, and HttpOnly-cookie authentication.
 
----
+## Stack
 
-## 🛠️ Tech Stack
+- Node.js + TypeScript
+- Express
+- PostgreSQL
+- Zod validation
+- Google Gemini SDK
+- JWT session cookies
+- bcrypt password hashing
 
-- **Runtime Environment:** Node.js (TypeScript)
-- **Web Framework:** Express.js
-- **Database:** PostgreSQL (Client: `pg-pool`, Migrations: `node-pg-migrate`)
-- **AI Integration:** Google Gemini SDK (`@google/genai` using model `gemini-2.5-flash`)
-- **Validation:** Zod schemas
+## Project Structure
 
----
+```txt
+src/
+├── app.ts                  # Express app, middleware, route mounting
+├── server.ts               # HTTP server startup only
+├── config/                 # Typed environment, cookies, Gemini config
+├── database/               # Shared pool
+├── db/                     # Migration runner compatibility path
+├── errors/                 # Typed app errors and global error handler
+├── middleware/             # Async, validation, not-found, multer errors
+├── modules/
+│   ├── auth/               # Signup, login, logout, cookie auth middleware
+│   ├── users/              # /me
+│   ├── knowledge/          # Wiki page CRUD
+│   ├── sources/            # Source CRUD, upload, file streaming, ingest
+│   ├── notes/              # Notes CRUD
+│   ├── journal/            # Journal APIs
+│   ├── graph/              # Knowledge graph APIs
+│   ├── research/           # Gemini-backed research SSE
+│   └── maintenance/        # Lint/maintenance report
+├── types/
+├── utils/
+└── wiki/                   # Raw-file ingest helpers
+```
 
-## 🚀 Getting Started
+Layering rule:
 
-### 1. Installation
-Install all dependencies in the `backend` directory:
+```txt
+routes -> controllers -> services -> repositories -> database
+```
+
+Routes register endpoints, controllers handle HTTP, services own workflows, and repositories own SQL.
+
+## Environment
+
+Create `backend/.env`:
+
+```env
+PORT=4000
+DATABASE_URL=postgresql://postgres:123456@localhost:5432/knowlix
+FRONTEND_ORIGIN=http://127.0.0.1:5173
+JWT_SECRET=replace-me
+COOKIE_NAME=knowlix_session
+COOKIE_SECURE=false
+COOKIE_SAME_SITE=lax
+MAX_UPLOAD_MB=25
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-2.5-flash
+```
+
+For production, use a strong `JWT_SECRET`. If the frontend and backend are served cross-site, set `COOKIE_SAME_SITE=none` and `COOKIE_SECURE=true`.
+
+## Fresh Database Setup
+
+This schema assumes local data can be recreated. The canonical schema lives in:
+
+```txt
+backend/migrations/001_init.sql
+```
+
+Reset a local database manually if needed:
+
+```bash
+dropdb knowlix
+createdb knowlix
+```
+
+Or use the bundled PostgreSQL service:
+
+```bash
+cd backend
+docker compose up -d
+```
+
+Then run migrations:
+
+```bash
+cd backend
+npm run db:migrate
+```
+
+The schema creates:
+
+- `app_users`
+- `uploaded_files`
+- `sources`
+- `knowledge_entries`
+- `notes`
+- `journal_days`
+- `graph_nodes`
+- `graph_links`
+
+Users are not seeded. Create an account through Sign up.
+
+## Run Commands
+
+Install dependencies:
+
 ```bash
 cd backend
 npm install
 ```
 
-### 2. Configuration Setup
-Create a `.env` file in the `backend` folder:
-```env
-PORT=4000
-DATABASE_URL=postgres://username:password@localhost:5432/knowlix
-FRONTEND_ORIGIN=http://127.0.0.1:5173
-DEV_AUTH_TOKEN=dev-token
-GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_MODEL=gemini-2.5-flash
-```
+Run migrations:
 
-### 3. Start PostgreSQL Services
-You can run PostgreSQL locally or start the preconfigured container using Docker Compose:
-```bash
-docker compose up -d
-```
-
-### 4. Run Migrations
-Run the migrations to create tables and seed the default developer user (`user_dev`):
 ```bash
 npm run db:migrate
 ```
 
-### 5. Start Development Server
-Launch the development server with hot-reload enabled:
+Start development server:
+
 ```bash
 npm run dev
 ```
-The API is available by default at `http://127.0.0.1:4000`.
 
----
+Build:
 
-## 💾 Database Schema
-
-The database contains 8 main tables structured to store raw uploads, wiki articles, notes, journals, and the knowledge graph.
-
-```mermaid
-erDiagram
-    app_users ||--o{ uploaded_files : uploads
-    app_users ||--o{ sources : owns
-    app_users ||--o{ knowledge_entries : owns
-    app_users ||--o{ notes : writes
-    app_users ||--o{ journal_days : journal
-    app_users ||--o{ graph_nodes : graph
-    app_users ||--o{ graph_links : graph
-    uploaded_files ||--o{ sources : references
+```bash
+npm run build
 ```
 
-### Table Definitions
+The API listens on `http://127.0.0.1:4000` by default.
 
-#### 1. `app_users`
-Stores user profile information.
-- `id` (TEXT, PK): Unique user identifier (e.g., `'user_dev'`).
-- `name` (TEXT): Display name.
-- `initials` (TEXT): Profile display initials.
-- `created_at` (TIMESTAMPTZ): Signup timestamp.
+## Authentication
 
-#### 2. `uploaded_files`
-Metadata for raw source files uploaded by the user.
-- `id` (TEXT, PK): Unique upload ID.
-- `user_id` (TEXT, FK): References `app_users(id)`.
-- `name` (TEXT): Original filename.
-- `mime_type` (TEXT): File mime type (e.g., `application/pdf`).
-- `size_bytes` (INTEGER): File size in bytes.
-- `raw_path` (TEXT): Immutable file path on disk.
-- `ingest_status` (TEXT): Status (`'pending'`, `'completed'`, `'skipped'`, `'failed'`).
-- `ingest_outputs` (JSONB): Array of virtual file paths generated by ingestion.
+Knowlix uses a JWT stored in an HttpOnly cookie.
 
-#### 3. `sources` (Source of Truth)
-Document sources uploaded or added manually.
-- `id` (TEXT, PK): Unique source ID.
-- `user_id` (TEXT, FK): References `app_users(id)`.
-- `type` (TEXT): Type (`'Note'`, `'PDF'`, `'Article'`, `'Bookmark'`, `'Image'`, `'Voice'`, `'File'`).
-- `title` (TEXT): Filename or custom title.
-- `content` (TEXT): Main body content / Gemini-generated summary.
-- `tags` (TEXT[]): Associated tags.
-- `category` (TEXT): Class category.
-- `status` (TEXT): Processing state (`'Queued'`, `'Processing'`, `'Processed'`).
-- `meta` (TEXT): Extra info like file size.
-- `excerpt` (TEXT): 1-2 sentence overview.
-- `file_id` (TEXT, FK): References `uploaded_files(id)` (nullable).
+Auth endpoints:
 
-#### 4. `knowledge_entries` (Wiki Pages)
-Synthesized, concept-specific markdown pages generated by the AI model.
-- `slug` (TEXT, PK): URL-friendly string identifier.
-- `user_id` (TEXT, FK): References `app_users(id)`.
-- `title` (TEXT): Page header title.
-- `content` (TEXT): Main markdown body content.
-- `overview` (TEXT): Abstract summary.
-- `category` (TEXT): Group category.
-- `tags` (TEXT[]): List of tags.
-- `created` (TEXT): Static creation date string.
-- `updated` (TEXT): Static updated date string.
-- `read_time` (TEXT): Read time estimation.
-- `key_ideas` (JSONB): Core takeaways.
-- `explanation` (JSONB): Deeper explanation bullets.
-- `examples` (JSONB): Array of examples (title & body).
-- `related` (JSONB): Array of related concepts (slug & title).
-- `reference_list` (JSONB): Array of references.
-- `source_list` (JSONB): List of contributing parent sources (id, type, title).
-- `timeline` (JSONB): History events (date & event).
+```txt
+POST /api/v1/auth/signup
+POST /api/v1/auth/login
+POST /api/v1/auth/logout
+GET  /api/v1/me
+```
 
-#### 5. `notes`
-Manually written text/markdown drafts.
-- `id` (TEXT, PK): Unique note ID.
-- `user_id` (TEXT, FK): References `app_users(id)`.
-- `title` (TEXT): Note title.
-- `excerpt` (TEXT): Snippet description.
-- `content` (TEXT): Full markdown body.
-- `tags` (TEXT[]): Associated tags.
+Signup:
 
-#### 6. `journal_days`
-Daily log sheets summarizing tasks and learnings.
-- `date` (TEXT, PK): ISO Date (`YYYY-MM-DD`).
-- `user_id` (TEXT, FK): References `app_users(id)`.
-- `weekday` (TEXT): Full weekday name (e.g. `'Tuesday'`).
-- `summary` (TEXT): Daily overview.
-- `entries` (JSONB): Timeline of individual activities.
-- `learnings` (JSONB): Key learnings list.
-- `connections` (JSONB): Connected wiki references.
+```json
+{
+  "name": "Eleanor Vale",
+  "email": "eleanor@example.com",
+  "password": "password123"
+}
+```
 
-#### 7. `graph_nodes` & `graph_links`
-Stores relationships between concepts shown in the interactive Knowledge Graph.
-- `graph_nodes`: `id` (TEXT, PK), `user_id` (TEXT, FK), `label` (TEXT), `category` (TEXT), `tags` (TEXT[]), `x` / `y` (coordinates).
-- `graph_links`: `id` (UUID, PK), `user_id` (TEXT, FK), `source` (TEXT, slug), `target` (TEXT, slug).
+Login:
 
----
+```json
+{
+  "email": "eleanor@example.com",
+  "password": "password123"
+}
+```
 
-## 📡 API Endpoints
+Signup/Login response:
 
-All requests under `/api/v1/*` must include a bearer token in the `Authorization` header (`Authorization: Bearer <token>`) or as a query parameter (`?token=<token>`).
+```json
+{
+  "user": {
+    "id": "user_...",
+    "email": "eleanor@example.com",
+    "name": "Eleanor Vale",
+    "initials": "EV"
+  }
+}
+```
 
-### Auth & Profile
-* **`GET /api/v1/me`**
-  - **Purpose:** Fetches current user profile.
-  - **Response:** `200 OK` `{ "id": "user_dev", "name": "Dev User", "initials": "DU" }`
+The token is not returned in JSON. The server sets:
 
-### Sources (Source of Truth)
-* **`GET /api/v1/sources`**
-  - **Purpose:** Retrieves all sources for the authenticated user.
-* **`GET /api/v1/sources/:id`**
-  - **Purpose:** Retrieves a single source record by ID.
-* **`POST /api/v1/sources`**
-  - **Purpose:** Manually creates a source.
-  - **Payload:** Zod schema parsing `type`, `title`, `content`, `tags`, `category`, `status`, `meta`, `excerpt`.
-* **`POST /api/v1/sources/upload`**
-  - **Purpose:** Uploads a file, saves to `raw/uploads/`, and triggers asynchronous background Gemini ingestion.
-  - **Payload:** Multipart/form-data with field `file`. Supports `.pdf`, `.txt`, `.md`, `.json`, `.csv`.
-  - **Response:** `210 Created` returning the source immediately with status `'Processing'`.
-* **`GET /api/v1/files/:id`**
-  - **Purpose:** Streams/downloads the raw uploaded file directly (inline viewer for PDFs, images, text, etc.).
-* **`PATCH /api/v1/sources/:id`**
-  - **Purpose:** Updates metadata tags/category of a source.
-* **`DELETE /api/v1/sources/:id`**
-  - **Purpose:** Performs a cascade delete of the source, its uploaded file metadata, related knowledge entries, and cleans up graph elements.
+```txt
+Set-Cookie: knowlix_session=<jwt>; HttpOnly; SameSite=Lax; Path=/; Max-Age=604800
+```
 
-### Knowledge Entries (Wiki Pages)
-* **`GET /api/v1/knowledge`**
-  - **Purpose:** Lists and searches knowledge pages.
-  - **Query Params:** `q` (search term), `tags` (comma separated), `categories` (comma separated).
-* **`GET /api/v1/knowledge/:slug`**
-  - **Purpose:** Retrieves details for a specific concept page by its slug.
-* **`POST /api/v1/knowledge`**
-  - **Purpose:** Manually creates a knowledge page.
-* **`PATCH /api/v1/knowledge/:slug`**
-  - **Purpose:** Updates a concept wiki page content/metadata.
-* **`DELETE /api/v1/knowledge/:slug`**
-  - **Purpose:** Deletes a knowledge page.
+Frontend requests must include cookies:
+
+```ts
+fetch(url, { credentials: 'include' })
+```
+
+There is no `DEV_AUTH_TOKEN` flow anymore.
+
+## Main APIs
+
+All APIs below require the session cookie.
+
+### Sources
+
+- `GET /api/v1/sources`
+- `GET /api/v1/sources/:id`
+- `POST /api/v1/sources`
+- `POST /api/v1/sources/upload`
+- `GET /api/v1/files/:id`
+- `PATCH /api/v1/sources/:id`
+- `DELETE /api/v1/sources/:id`
+
+Upload accepts multipart form field `file` and returns immediately with an ingest status while background processing runs.
+
+### Knowledge Entries
+
+- `GET /api/v1/knowledge`
+- `GET /api/v1/knowledge/:slug`
+- `POST /api/v1/knowledge`
+- `PATCH /api/v1/knowledge/:slug`
+- `DELETE /api/v1/knowledge/:slug`
 
 ### Notes
-* **`GET /api/v1/notes`**
-  - **Purpose:** Paginated list of user notes.
-* **`POST /api/v1/notes`**
-  - **Purpose:** Creates a new note.
-* **`PATCH /api/v1/notes/:id`**
-  - **Purpose:** Updates note title or body content.
-* **`DELETE /api/v1/notes/:id`**
-  - **Purpose:** Deletes a note.
+
+- `GET /api/v1/notes`
+- `GET /api/v1/notes/:id`
+- `POST /api/v1/notes`
+- `PATCH /api/v1/notes/:id`
+- `DELETE /api/v1/notes/:id`
 
 ### Journal
-* **`GET /api/v1/journal`**
-  - **Purpose:** Lists journal day summaries.
-* **`POST /api/v1/journal/:date/entries`**
-  - **Purpose:** Appends a new activity log entry to a specific day (`YYYY-MM-DD`).
-* **`PATCH /api/v1/journal/:date`**
-  - **Purpose:** Updates the summary, learnings, and connections of a specific day.
+
+- `GET /api/v1/journal`
+- `POST /api/v1/journal/:date/entries`
+- `PATCH /api/v1/journal/:date`
 
 ### Graph
-* **`GET /api/v1/graph`**
-  - **Purpose:** Returns the nodes (`graph_nodes`) and links (`graph_links`) matching filters (search/tags/categories) for drawing the Knowledge Graph.
 
----
+- `GET /api/v1/graph`
 
-## 🔄 System Workflows
+### Research
 
-### 1. Ingestion Workflow
-When a file is uploaded, the ingestion process is executed as follows:
+- `POST /api/v1/research/messages`
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User
-    participant FE as Frontend App
-    participant BE as Backend Server
-    participant DB as PostgreSQL
-    participant AI as Gemini API
+Streams Server-Sent Events:
 
-    User->>FE: Upload File (e.g. final.pdf)
-    FE->>BE: POST /api/v1/sources/upload
-    Note over BE: Save raw file to disk
-    BE->>DB: INSERT into uploaded_files (status: pending)
-    BE->>DB: INSERT into sources (status: Processing)
-    BE-->>FE: 201 Created (Pending Source response)
-    Note right of FE: User sees "Processing" state (disabled card)
-    
-    loop Background Ingestion
-        BE->>AI: generateContent (guideline + file buffer)
-        AI-->>BE: Return JSON (summary + concepts + links)
-        BE->>DB: UPDATE uploaded_files (status: completed)
-        BE->>DB: UPDATE sources (status: Processed, content: summary)
-        BE->>DB: UPSERT knowledge_entries
-        BE->>DB: UPSERT graph_nodes & graph_links
-    end
-    Note over FE,BE: Real-time UI refresh pulls new database records
+```txt
+data: {"text":"..."}
+data: [DONE]
 ```
 
-### 2. Cascade Delete Workflow
-To prevent broken links or orphan nodes when deleting a source, the API applies a systematic clean up workflow:
+### Maintenance
 
-```mermaid
-graph TD
-    Start[Delete Source request] --> FetchSlugs[Find knowledge_entries where source_list contains Source ID]
-    FetchSlugs --> DelLinks1[Delete graph_links referencing matching Slugs]
-    DelLinks1 --> DelNodes1[Delete graph_nodes matching matching Slugs]
-    DelNodes1 --> DelKnowledge[Delete knowledge_entries matching Slugs]
-    DelKnowledge --> CleanLinks[Delete graph_links between placeholders only]
-    CleanLinks --> CleanNodes[Delete graph_nodes with no page and no links]
-    CleanNodes --> DelSource[Delete original Source record]
-    DelSource --> End[Delete Complete]
+- `POST /api/v1/maintenance/lint`
+
+Returns:
+
+```json
+{ "report": "..." }
 ```
 
----
+The report is also written to `outputs/lint-YYYY-MM-DD.md`.
 
-## 🛠️ CLI Utilities
+## Manual Ingest CLI
 
-You can manually trigger ingestion using node scripts inside the `backend` folder:
-- **Ingest single file:**
-  ```bash
-  npm run wiki:ingest -- ../raw/papers/your-document.pdf
-  ```
-- **Ingest all files in raw directory:**
-  ```bash
-  npm run wiki:ingest
-  ```
+```bash
+cd backend
+npm run wiki:ingest -- ../raw/papers/example.md
+```
+
+Or ingest supported files under `raw/`:
+
+```bash
+npm run wiki:ingest
+```
+
+Supported raw text formats are `.md`, `.txt`, `.json`, and `.csv`.

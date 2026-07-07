@@ -82,13 +82,12 @@ export function useResearch(initialQuestion: string) {
     setInput('')
     
     try {
-      const apiToken = import.meta.env.VITE_API_TOKEN ?? 'dev-token'
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:4000'}/api/v1/research/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiToken}`,
         },
+        credentials: 'include',
         body: JSON.stringify({
           question,
           scope: {

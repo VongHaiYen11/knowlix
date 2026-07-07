@@ -12,6 +12,7 @@ import { MarkdownPreview } from '@/features/editor/MarkdownPreview'
 import { sourceTypeIcon, statusIcon } from '@/features/library/SourceIcon'
 import { ROUTES } from '@/constants/routes'
 import { useSourceArticle, useTaxonomy } from '@/hooks/useLibrary'
+import { apiUrl } from '@/repositories/apiClient'
 import { libraryService } from '@/services/libraryService'
 
 export function SourceArticlePage({ id }: { id: string }) {
@@ -90,7 +91,7 @@ export function SourceArticlePage({ id }: { id: string }) {
           <div className="mt-10">
             {viewMode === 'original' && source.fileId ? (
               <iframe
-                src={`${import.meta.env.VITE_API_URL}/api/v1/files/${source.fileId}?token=${import.meta.env.VITE_API_TOKEN ?? 'dev-token'}`}
+                src={apiUrl(`/api/v1/files/${source.fileId}`)}
                 className="w-full h-[88vh] border border-border rounded-xl bg-card shadow-sm"
                 title={source.title}
               />

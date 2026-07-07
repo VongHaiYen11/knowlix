@@ -12,7 +12,7 @@ export type ErrorCode =
   | 'RATE_LIMITED'
   | 'INTERNAL_ERROR'
 
-export class ApiError extends Error {
+export class AppError extends Error {
   constructor(
     public readonly status: number,
     public readonly code: ErrorCode,
@@ -23,6 +23,24 @@ export class ApiError extends Error {
   }
 }
 
+export class UnauthorizedError extends AppError {
+  constructor(message = 'Missing or invalid session') {
+    super(401, 'UNAUTHORIZED', message)
+  }
+}
+
+export class NotFoundError extends AppError {
+  constructor(message = 'Not found') {
+    super(404, 'NOT_FOUND', message)
+  }
+}
+
+export class ConflictError extends AppError {
+  constructor(message: string, details: Record<string, unknown> = {}) {
+    super(409, 'CONFLICT', message, details)
+  }
+}
+
 export function errorHandler(error: unknown, _req: Request, res: Response, _next: NextFunction) {
   if (error instanceof ZodError) {
     return res.status(400).json({
@@ -30,7 +48,7 @@ export function errorHandler(error: unknown, _req: Request, res: Response, _next
     })
   }
 
-  if (error instanceof ApiError) {
+  if (error instanceof AppError) {
     return res.status(error.status).json({
       error: { code: error.code, message: error.message, details: error.details },
     })

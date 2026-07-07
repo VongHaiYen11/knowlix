@@ -2,6 +2,8 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE TABLE IF NOT EXISTS app_users (
   id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
   name TEXT NOT NULL,
   initials TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -18,32 +20,6 @@ CREATE TABLE IF NOT EXISTS uploaded_files (
   ingest_outputs JSONB NOT NULL DEFAULT '[]',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
-CREATE TABLE IF NOT EXISTS knowledge_entries (
-  slug TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
-  title TEXT NOT NULL,
-  content TEXT,
-  overview TEXT NOT NULL DEFAULT '',
-  category TEXT NOT NULL,
-  tags TEXT[] NOT NULL DEFAULT '{}',
-  created TEXT NOT NULL,
-  updated TEXT NOT NULL,
-  read_time TEXT NOT NULL DEFAULT '1 min read',
-  key_ideas JSONB NOT NULL DEFAULT '[]',
-  explanation JSONB NOT NULL DEFAULT '[]',
-  examples JSONB NOT NULL DEFAULT '[]',
-  related JSONB NOT NULL DEFAULT '[]',
-  reference_list JSONB NOT NULL DEFAULT '[]',
-  source_list JSONB NOT NULL DEFAULT '[]',
-  timeline JSONB NOT NULL DEFAULT '[]',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (user_id, slug)
-);
-
-CREATE INDEX IF NOT EXISTS knowledge_user_updated_idx ON knowledge_entries (user_id, updated_at DESC);
-CREATE INDEX IF NOT EXISTS knowledge_tags_idx ON knowledge_entries USING gin (tags);
 
 CREATE TABLE IF NOT EXISTS sources (
   id TEXT PRIMARY KEY,
@@ -64,6 +40,33 @@ CREATE TABLE IF NOT EXISTS sources (
 
 CREATE INDEX IF NOT EXISTS sources_user_updated_idx ON sources (user_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS sources_tags_idx ON sources USING gin (tags);
+
+CREATE TABLE IF NOT EXISTS knowledge_entries (
+  slug TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  content TEXT,
+  overview TEXT NOT NULL DEFAULT '',
+  category TEXT NOT NULL,
+  tags TEXT[] NOT NULL DEFAULT '{}',
+  created TEXT NOT NULL,
+  updated TEXT NOT NULL,
+  read_time TEXT NOT NULL DEFAULT '1 min read',
+  confidence TEXT NOT NULL DEFAULT 'medium' CHECK (confidence IN ('high', 'medium', 'low')),
+  key_ideas JSONB NOT NULL DEFAULT '[]',
+  explanation JSONB NOT NULL DEFAULT '[]',
+  examples JSONB NOT NULL DEFAULT '[]',
+  related JSONB NOT NULL DEFAULT '[]',
+  reference_list JSONB NOT NULL DEFAULT '[]',
+  source_list JSONB NOT NULL DEFAULT '[]',
+  timeline JSONB NOT NULL DEFAULT '[]',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (user_id, slug)
+);
+
+CREATE INDEX IF NOT EXISTS knowledge_user_updated_idx ON knowledge_entries (user_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS knowledge_tags_idx ON knowledge_entries USING gin (tags);
 
 CREATE TABLE IF NOT EXISTS notes (
   id TEXT PRIMARY KEY,
@@ -111,7 +114,3 @@ CREATE TABLE IF NOT EXISTS graph_links (
   target TEXT NOT NULL,
   UNIQUE (user_id, source, target)
 );
-
-INSERT INTO app_users (id, name, initials)
-VALUES ('user_dev', 'Dev User', 'DU')
-ON CONFLICT (id) DO NOTHING;

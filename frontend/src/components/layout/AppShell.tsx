@@ -1,7 +1,8 @@
-import { CalendarDays, Feather, Home, Library, PanelLeftClose, PanelLeftOpen, Settings, Share2, Sparkles, X } from 'lucide-react'
+import { CalendarDays, Feather, Home, Library, LogOut, PanelLeftClose, PanelLeftOpen, Settings, Share2, Sparkles, X } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router'
-import { APP_NAME, USER_INITIALS, USER_NAME } from '@/constants/app'
+import { useAuth } from '@/auth/useAuth'
+import { APP_NAME } from '@/constants/app'
 import { ROUTES } from '@/constants/routes'
 import { Button } from '@/components/ui/Button'
 import { ThemeToggle } from '@/components/layout/ThemeToggle'
@@ -18,6 +19,7 @@ const navItems = [
 
 function SidebarContent({ collapsed = false, onCollapseToggle, onNavigate }: { collapsed?: boolean; onCollapseToggle?: () => void; onNavigate?: () => void }) {
   const { pathname } = useLocation()
+  const { user, logout } = useAuth()
   const active = (href: string) => (href === ROUTES.home ? pathname === href : pathname.startsWith(href))
 
   return (
@@ -78,12 +80,21 @@ function SidebarContent({ collapsed = false, onCollapseToggle, onNavigate }: { c
           {!collapsed && <span>Settings</span>}
         </NavLink>
         <div className={cn('mt-3 flex items-center rounded-lg py-2.5', collapsed ? 'justify-center px-2' : 'gap-3 px-3')}>
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-sm text-accent-foreground">{USER_INITIALS}</span>
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-sm text-accent-foreground">{user?.initials ?? 'U'}</span>
           {!collapsed && <div className="min-w-0">
-            <p className="truncate text-sm text-foreground">{USER_NAME}</p>
+            <p className="truncate text-sm text-foreground">{user?.name ?? 'User'}</p>
             <p className="truncate text-xs text-muted-foreground">Private library</p>
           </div>}
         </div>
+        <button
+          onClick={() => void logout()}
+          title={collapsed ? 'Logout' : undefined}
+          aria-label={collapsed ? 'Logout' : undefined}
+          className={cn('mt-1 flex w-full items-center rounded-lg py-2 text-sm text-muted-foreground transition hover:bg-sidebar-accent/60 hover:text-foreground', collapsed ? 'justify-center px-2' : 'gap-3 px-3')}
+        >
+          <LogOut className="h-[18px] w-[18px]" strokeWidth={1.75} />
+          {!collapsed && <span>Logout</span>}
+        </button>
       </div>
     </div>
   )

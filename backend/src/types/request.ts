@@ -5,6 +5,7 @@ export type ProcessingStatus = 'Processed' | 'Processing' | 'Queued'
 
 export interface AuthUser {
   id: string
+  email: string
   name: string
   initials: string
 }

@@ -23,12 +23,9 @@ export function SettingsPage() {
     setLinting(true)
     setLintReport(null)
     try {
-      const apiToken = import.meta.env.VITE_API_TOKEN ?? 'dev-token'
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:4000'}/api/v1/maintenance/lint`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiToken}`,
-        },
+        credentials: 'include',
       })
       if (!response.ok) {
         throw new Error(`API error: ${response.statusText}`)

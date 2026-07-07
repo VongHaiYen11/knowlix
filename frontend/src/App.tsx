@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { Navigate, Outlet, Route, Routes, useParams } from 'react-router'
+import { useAuth } from '@/auth/useAuth'
 import { AppShell } from '@/components/layout/AppShell'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { ROUTES } from '@/constants/routes'
@@ -14,15 +15,31 @@ const KnowledgeArticlePage = lazy(() => import('@/pages/KnowledgeArticlePage').t
 const SourceArticlePage = lazy(() => import('@/pages/SourceArticlePage').then((module) => ({ default: module.SourceArticlePage })))
 const LibraryContentEditorPage = lazy(() => import('@/pages/LibraryContentEditorPage').then((module) => ({ default: module.LibraryContentEditorPage })))
 const NoteEditorPage = lazy(() => import('@/pages/NoteEditorPage').then((module) => ({ default: module.NoteEditorPage })))
+const LoginPage = lazy(() => import('@/pages/LoginPage').then((module) => ({ default: module.LoginPage })))
+const SignupPage = lazy(() => import('@/pages/SignupPage').then((module) => ({ default: module.SignupPage })))
+
+function LoadingScreen() {
+  return <div className="p-6"><Skeleton className="h-96" /></div>
+}
 
 function ShellRoute() {
+  const { status } = useAuth()
+  if (status === 'loading') return <LoadingScreen />
+  if (status === 'unauthenticated') return <Navigate to={ROUTES.login} replace />
   return (
     <AppShell>
-      <Suspense fallback={<div className="p-6"><Skeleton className="h-96" /></div>}>
+      <Suspense fallback={<LoadingScreen />}>
         <Outlet />
       </Suspense>
     </AppShell>
   )
+}
+
+function AuthRoute() {
+  const { status } = useAuth()
+  if (status === 'loading') return <LoadingScreen />
+  if (status === 'authenticated') return <Navigate to={ROUTES.home} replace />
+  return <Suspense fallback={<LoadingScreen />}><Outlet /></Suspense>
 }
 
 function KnowledgeRoute() {
@@ -53,6 +70,10 @@ function NoteRoute() {
 export function App() {
   return (
     <Routes>
+      <Route element={<AuthRoute />}>
+        <Route path="login" element={<LoginPage />} />
+        <Route path="signup" element={<SignupPage />} />
+      </Route>
       <Route element={<ShellRoute />}>
         <Route index element={<HomePage />} />
         <Route path="library" element={<LibraryPage />} />

@@ -1,5 +1,4 @@
-const apiBaseUrl = import.meta.env.VITE_API_URL?.replace(/\/$/, '')
-const apiToken = import.meta.env.VITE_API_TOKEN ?? 'dev-token'
+const apiBaseUrl = (import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:4000').replace(/\/$/, '')
 
 export const isApiRepositoryEnabled = Boolean(apiBaseUrl)
 
@@ -14,10 +13,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!apiBaseUrl) throw new Error('VITE_API_URL is not configured')
 
   const headers = new Headers(init.headers)
-  headers.set('Authorization', `Bearer ${apiToken}`)
   if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json')
 
-  const response = await fetch(`${apiBaseUrl}${path}`, { ...init, headers })
+  const response = await fetch(`${apiBaseUrl}${path}`, { ...init, headers, credentials: 'include' })
   if (response.status === 204) return undefined as T
 
   const payload = await response.json().catch(() => undefined)
@@ -35,6 +33,10 @@ export const apiClient = {
   postForm: <T>(path: string, body: FormData) => request<T>(path, { method: 'POST', body }),
   patch: <T>(path: string, body: unknown) => request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+}
+
+export function apiUrl(path: string): string {
+  return `${apiBaseUrl}${path}`
 }
 
 export async function getAllPages<T>(path: string): Promise<T[]> {
