@@ -63,20 +63,108 @@ export function useResearch(initialQuestion: string) {
     )))
   }, [activeThreadId])
 
-  const send = useCallback(() => {
+  const send = useCallback(async () => {
     const question = input.trim()
     if (!question) return
+    
+    const userMsgId = `u-${Date.now()}`
+    const assistantMsgId = `a-${Date.now()}`
+    
     updateActiveThread((thread) => ({
       ...thread,
       title: thread.title === 'Untitled research' ? question.slice(0, 56) : thread.title,
       messages: [
         ...thread.messages,
-        researchService.buildUserMessage(question),
-        researchService.buildAssistantReply(question, scopedKnowledge.length),
+        { id: userMsgId, role: 'user', content: question },
+        { id: assistantMsgId, role: 'assistant', content: 'Thinking...' },
       ],
     }))
     setInput('')
-  }, [input, scopedKnowledge.length, updateActiveThread])
+    
+    try {
+      const apiToken = import.meta.env.VITE_API_TOKEN ?? 'dev-token'
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:4000'}/api/v1/research/messages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiToken}`,
+        },
+        body: JSON.stringify({
+          question,
+          scope: {
+            tags: scope.tags,
+            categories: scope.categories,
+            dateRange: scope.dateRange,
+          }
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.statusText}`)
+      }
+
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+      let assistantText = ''
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          const chunk = decoder.decode(value, { stream: true })
+          
+          const lines = chunk.split('\n')
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.slice(6).trim()
+              if (data === '[DONE]') continue
+              try {
+                const parsed = JSON.parse(data)
+                if (parsed.text) {
+                  assistantText += parsed.text
+                  setThreads((current) => current.map((thread) => {
+                    if (thread.id !== activeThreadId) return thread
+                    return {
+                      ...thread,
+                      messages: thread.messages.map((msg) => 
+                        msg.id === assistantMsgId ? { ...msg, content: assistantText } : msg
+                      ),
+                      updatedAt: new Date().toISOString(),
+                    }
+                  }))
+                }
+              } catch {
+                assistantText += data
+                setThreads((current) => current.map((thread) => {
+                  if (thread.id !== activeThreadId) return thread
+                  return {
+                    ...thread,
+                    messages: thread.messages.map((msg) => 
+                      msg.id === assistantMsgId ? { ...msg, content: assistantText } : msg
+                    ),
+                    updatedAt: new Date().toISOString(),
+                  }
+                }))
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[Research] Ingest streaming error:', err)
+      const errorMsg = err instanceof Error ? err.message : String(err)
+      setThreads((current) => current.map((thread) => {
+        if (thread.id !== activeThreadId) return thread
+        return {
+          ...thread,
+          messages: thread.messages.map((msg) => 
+            msg.id === assistantMsgId ? { ...msg, content: `Error: Failed to stream research answer. Details: ${errorMsg}` } : msg
+          ),
+          updatedAt: new Date().toISOString(),
+        }
+      }))
+    }
+  }, [input, scope, activeThreadId, updateActiveThread])
 
   const reset = useCallback(() => {
     const thread = createThread()

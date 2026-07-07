@@ -1,10 +1,12 @@
-import { Boxes, Check, DownloadCloud, HardDrive, Moon, Palette, ShieldCheck, Sparkles, Sun } from 'lucide-react'
+import { Boxes, Check, DownloadCloud, Hammer, HardDrive, Moon, Palette, ShieldCheck, Sparkles, Sun } from 'lucide-react'
 import { useState } from 'react'
 import { PageHeader } from '@/components/common/PageHeader'
 import { PageShell } from '@/components/common/PageShell'
 import { Button } from '@/components/ui/Button'
+import { Card } from '@/components/ui/Card'
 import { Toggle } from '@/components/ui/Toggle'
 import { useThemeContext } from '@/components/layout/ThemeProvider'
+import { MarkdownPreview } from '@/features/editor/MarkdownPreview'
 import { SettingsGroup, SettingsRow } from '@/features/settings/SettingsGroup'
 import { cn } from '@/utils/cn'
 
@@ -14,6 +16,32 @@ export function SettingsPage() {
   const [analytics, setAnalytics] = useState(false)
   const [model, setModel] = useState('Balanced')
   const { theme, setTheme } = useThemeContext()
+  const [linting, setLinting] = useState(false)
+  const [lintReport, setLintReport] = useState<string | null>(null)
+
+  async function runLint() {
+    setLinting(true)
+    setLintReport(null)
+    try {
+      const apiToken = import.meta.env.VITE_API_TOKEN ?? 'dev-token'
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:4000'}/api/v1/maintenance/lint`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiToken}`,
+        },
+      })
+      if (!response.ok) {
+        throw new Error(`API error: ${response.statusText}`)
+      }
+      const data = await response.json()
+      setLintReport(data.report)
+    } catch (err) {
+      console.error('[Settings] Lint error:', err)
+      alert(err instanceof Error ? err.message : 'Lint failed')
+    } finally {
+      setLinting(false)
+    }
+  }
 
   return (
     <PageShell variant="readable">
@@ -43,6 +71,24 @@ export function SettingsPage() {
           <SettingsRow label="Usage analytics" hint="Off by default. Nothing about your content is ever shared."><Toggle enabled={analytics} onChange={setAnalytics} label="Usage analytics" /></SettingsRow>
           <SettingsRow label="On-device processing" hint="Your notes are never used to train external models."><span className="inline-flex items-center gap-1.5 text-sm text-primary"><ShieldCheck className="h-4 w-4" />Guaranteed</span></SettingsRow>
         </SettingsGroup>
+        <SettingsGroup icon={Hammer} title="Maintenance">
+          <SettingsRow label="Lint Knowledge Base" hint="Run Gemini AI lint to detect orphaned pages, logical contradictions, or missing links.">
+            <Button variant="outline" size="sm" onClick={runLint} disabled={linting}>
+              {linting ? 'Linting...' : 'Run Lint'}
+            </Button>
+          </SettingsRow>
+        </SettingsGroup>
+        {lintReport && (
+          <Card className="p-5 mt-4 border border-border">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-serif text-lg font-bold">Lint Maintenance Report</h3>
+              <Button variant="ghost" size="sm" onClick={() => setLintReport(null)}>Close</Button>
+            </div>
+            <div className="max-h-96 overflow-y-auto border border-border rounded-lg p-4 bg-secondary/20">
+              <MarkdownPreview content={lintReport} />
+            </div>
+          </Card>
+        )}
       </div>
     </PageShell>
   )

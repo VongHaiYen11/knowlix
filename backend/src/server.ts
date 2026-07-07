@@ -1,6 +1,8 @@
 import 'dotenv/config'
 import cors from 'cors'
 import path from 'node:path'
+import fs from 'node:fs'
+import { GoogleGenAI } from '@google/genai'
 import express, { type NextFunction, type RequestHandler, type Response } from 'express'
 import multer from 'multer'
 import { z } from 'zod'
@@ -761,20 +763,248 @@ app.get('/api/v1/graph', asyncRoute(async (req, res) => {
 
 app.post('/api/v1/research/messages', asyncRoute(async (req, res) => {
   const body = researchSchema.parse(req.body)
+  
+  if (!process.env.GEMINI_API_KEY) {
+    throw new ApiError(500, 'INTERNAL_ERROR', 'Missing GEMINI_API_KEY configuration')
+  }
+
   const knowledge = await pool.query(
-    `SELECT slug,title,overview FROM knowledge_entries
+    `SELECT slug, title, overview, content, source_list FROM knowledge_entries
      WHERE user_id=$1
        AND ($2::text[] = '{}' OR tags && $2::text[])
        AND ($3::text[] = '{}' OR category = ANY($3::text[]))
-     ORDER BY updated_at DESC LIMIT 8`,
+     ORDER BY updated_at DESC`,
     [req.user.id, uniqueCleanStrings(body.scope.tags), uniqueCleanStrings(body.scope.categories)],
   )
-  const evidence = knowledge.rows.map(({ slug, title }) => ({ slug, title }))
-  res.json({
-    answer: `Grounded synthesis for "${body.question}" based on ${evidence.length} matching knowledge page${evidence.length === 1 ? '' : 's'}.`,
-    evidence,
-    actions: ['Save as Knowledge', 'Create Note', 'Update Existing', 'Merge with Page'],
+
+  const sourcesMap = new Map<string, { id: string; type: string; title: string }>()
+  for (const row of knowledge.rows) {
+    const sources = Array.isArray(row.source_list) ? row.source_list : []
+    for (const s of sources) {
+      if (s && s.id) {
+        sourcesMap.set(s.id, s)
+      }
+    }
+  }
+  const uniqueSources = Array.from(sourcesMap.values())
+
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+
+  try {
+    const context = knowledge.rows.map((row: any) => {
+      return `Title: ${row.title}\nSlug: ${row.slug}\nOverview: ${row.overview}\nContent: ${row.content || ''}`
+    }).join('\n\n---\n\n')
+
+    const sourcesListStr = uniqueSources.map((s: any) => `- URL: http://127.0.0.1:5173/library/source/${s.id}, Title: ${s.title}`).join('\n')
+
+    const prompt = `You are a helpful research assistant. Answer the user's question based strictly on the provided Context.
+If the answer cannot be found in the Context, say so and do not speculate.
+
+Context:
+${context || 'No knowledge entries match the selected tags/categories in scope.'}
+
+Available sources for citation (MUST link to them in markdown when citing claims):
+${sourcesListStr || 'No source documents available.'}
+
+Rules for Citations:
+- When you make a claim based on a source, you MUST cite it using a markdown link to its exact URL from the list of available sources. E.g., "...according to the midterm notes [Midterm Notes](http://127.0.0.1:5173/library/source/file_xxx)..."
+- Do not make up any other URLs.
+- Always be concise, clear, and highly accurate to the Context.
+
+Question:
+${body.question}`
+
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+    const responseStream = await ai.models.generateContentStream({
+      model: process.env.GEMINI_MODEL ?? 'gemini-2.5-flash',
+      contents: prompt,
+    })
+
+    for await (const chunk of responseStream) {
+      const text = chunk.text
+      if (text) {
+        res.write(`data: ${JSON.stringify({ text })}\n\n`)
+      }
+    }
+    res.write('data: [DONE]\n\n')
+  } catch (streamErr: any) {
+    console.error('[Research API] Streaming error:', streamErr)
+    const errMsg = streamErr instanceof Error ? streamErr.message : String(streamErr)
+    res.write(`data: ${JSON.stringify({ text: `\n\n[Error during streaming: ${errMsg}]` })}\n\n`)
+  } finally {
+    res.end()
+  }
+}))
+
+app.post('/api/v1/maintenance/lint', asyncRoute(async (req, res) => {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new ApiError(500, 'INTERNAL_ERROR', 'Missing GEMINI_API_KEY configuration')
+  }
+
+  // 1. Fetch knowledge entries & graph links
+  const knowledge = await pool.query('SELECT slug, title, overview, content, tags, category, confidence FROM knowledge_entries WHERE user_id = $1', [req.user.id])
+  const links = await pool.query('SELECT source, target FROM graph_links WHERE user_id = $1', [req.user.id])
+
+  // 2. Identify orphaned pages (no incoming links)
+  const incomingLinks = new Set<string>()
+  for (const link of links.rows) {
+    incomingLinks.add(link.target)
+  }
+  const orphanedSlugs = knowledge.rows
+    .filter(row => !incomingLinks.has(row.slug))
+    .map(row => row.slug)
+
+  // 3. Identify missing concepts referenced by [[wikilinks]]
+  const existingSlugs = new Set(knowledge.rows.map(row => row.slug))
+  const missingConceptsMap = new Map<string, string[]>() // targetSlug -> sourceSlugs[]
+
+  for (const row of knowledge.rows) {
+    const text = `${row.overview} ${row.content || ''}`
+    const wikilinkRegex = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g
+    let match
+    while ((match = wikilinkRegex.exec(text)) !== null) {
+      const targetLabel = match[1].trim()
+      const targetSlug = slugify(targetLabel)
+      if (targetSlug && !existingSlugs.has(targetSlug)) {
+        if (!missingConceptsMap.has(targetSlug)) {
+          missingConceptsMap.set(targetSlug, [])
+        }
+        if (!missingConceptsMap.get(targetSlug)!.includes(row.slug)) {
+          missingConceptsMap.get(targetSlug)!.push(row.slug)
+        }
+      }
+    }
+  }
+
+  // 4. Update the graph for missing concepts (create Suggested placeholder nodes & links)
+  const missingDetails: string[] = []
+  for (const [missingSlug, referringSlugs] of missingConceptsMap.entries()) {
+    // Upsert Suggested placeholder node
+    await pool.query(
+      `INSERT INTO graph_nodes (id, user_id, label, category, tags, x, y)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (user_id, id) DO NOTHING`,
+      [missingSlug, req.user.id, missingSlug, 'Suggested', [], 0.5, 0.5]
+    )
+
+    // Insert incoming links from referring pages
+    for (const refSlug of referringSlugs) {
+      await pool.query(
+        `INSERT INTO graph_links (user_id, source, target)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (user_id, source, target) DO NOTHING`,
+        [req.user.id, refSlug, missingSlug]
+      )
+    }
+    missingDetails.push(`- **${missingSlug}** (referenced by: ${referringSlugs.map(s => `[[${s}]]`).join(', ')})`)
+  }
+
+  // 5. Query Gemini to scan for contradictions/conflicting claims
+  const entriesList = knowledge.rows.map(row => ({ slug: row.slug, title: row.title, overview: row.overview }))
+  const prompt = `You are a knowledge base maintainer. Scan the following list of knowledge base entries for any logical contradictions, stale claims, or conflicting information between them.
+  
+Knowledge Base Entries:
+${JSON.stringify(entriesList, null, 2)}
+
+Return ONLY a valid JSON array of objects representing contradictions found. Format:
+[
+  {
+    "slugs": ["slug-1", "slug-2"],
+    "explanation": "Description of the contradiction or stale claim..."
+  }
+]
+If no contradictions are found, return an empty array []. Do not include markdown code fences, extra words, or annotations. Return plain JSON only.`
+
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+  const response = await ai.models.generateContent({
+    model: process.env.GEMINI_MODEL ?? 'gemini-2.5-flash',
+    contents: prompt,
   })
+
+  let contradictions: Array<{ slugs: string[]; explanation: string }> = []
+  try {
+    const cleanText = response.text ? response.text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim() : '[]'
+    contradictions = JSON.parse(cleanText)
+  } catch (parseErr) {
+    console.error('[Lint API] Failed to parse Gemini contradiction JSON:', parseErr, response.text)
+  }
+
+  // 6. Apply actions to conflicting entries (update confidence to low)
+  const contradictionDetails: string[] = []
+  for (const c of contradictions) {
+    if (Array.isArray(c.slugs) && c.slugs.length > 0) {
+      for (const slug of c.slugs) {
+        await pool.query(
+          `UPDATE knowledge_entries 
+           SET confidence = 'low', updated_at = now() 
+           WHERE user_id = $1 AND slug = $2`,
+          [req.user.id, slug]
+        )
+      }
+      contradictionDetails.push(`- **Contradiction between: ${c.slugs.map(s => `[[${s}]]`).join(', ')}**\n  *Explanation:* ${c.explanation}\n  *Action:* Flagged confidence score to low.`)
+    }
+  }
+
+  // 7. Write Lint Report Markdown
+  const dateStr = todayLabel() // E.g., Jul 7, 2026
+  const isoDate = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+  
+  const reportContent = `# Knowledge Base Lint Maintenance Report
+**Date:** ${dateStr} (${isoDate})
+**User:** ${req.user.name}
+
+---
+
+## 🕸️ Orphaned Pages
+Identify pages with no incoming connections from any other pages:
+${orphanedSlugs.length > 0 
+  ? orphanedSlugs.map(slug => `- [[${slug}]]`).join('\n') 
+  : '*No orphaned pages detected.*'}
+
+---
+
+## 🔗 Missing Links / Suggested Concepts
+Identify concepts referenced by \`[[wikilinks]]\` but not created.
+*Action Taken: Automatically upserted suggested placeholder nodes and links into the knowledge graph.*
+
+${missingDetails.length > 0 
+  ? missingDetails.join('\n') 
+  : '*No missing links detected.*'}
+
+---
+
+## ⚠️ Logical Contradictions & Stale Claims
+Identify conflicting claims across pages.
+*Action Taken: Automatically lowered confidence scores of conflicting pages to 'low'.*
+
+${contradictionDetails.length > 0 
+  ? contradictionDetails.join('\n\n') 
+  : '*No logical contradictions or stale claims detected.*'}
+
+---
+
+## 📊 Maintenance Summary
+- **Orphaned Pages:** ${orphanedSlugs.length}
+- **Missing Concepts Added to Graph:** ${missingConceptsMap.size}
+- **Contradictions Flagged:** ${contradictions.length}
+`
+
+  // Save results to outputs/lint-YYYY-MM-DD.md
+  try {
+    const outputsDir = path.resolve('outputs')
+    if (!fs.existsSync(outputsDir)) {
+      fs.mkdirSync(outputsDir, { recursive: true })
+    }
+    const reportPath = path.join(outputsDir, `lint-${isoDate}.md`)
+    fs.writeFileSync(reportPath, reportContent, 'utf8')
+    console.log(`[Lint] ✅ Saved lint report to ${reportPath}`)
+  } catch (fsErr) {
+    console.error('[Lint API] Failed to write lint report file:', fsErr)
+  }
+
+  res.json({ report: reportContent })
 }))
 
 app.use((error: unknown, _req: express.Request, _res: Response, next: NextFunction) => {
