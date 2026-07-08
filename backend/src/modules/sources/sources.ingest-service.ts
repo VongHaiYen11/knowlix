@@ -1,7 +1,7 @@
 import { excerpt, slugify, uniqueCleanStrings, wordCount } from '../../utils/text.js'
 import { sourcesRepository } from './sources.repository.js'
 import { pool } from '../../database/pool.js'
-import { ingestRawFile, extractText } from '../../wiki/ingest.js'
+import { generateIngestSummary, extractKnowledgePages, extractText } from '../../wiki/ingest.js'
 import { storageService } from '../../lib/storage.js'
 import { env } from '../../config/env.js'
 import { embedText } from '../../lib/embeddings.js'
@@ -40,20 +40,27 @@ export async function runBackgroundIngest(input: {
     console.log(`[Ingest] Starting ingest for "${originalName}" (${sourceId})`)
     const raw = await storageService.download({ userId, storageObjectId: rawStorageObjectId })
     
-    // 1. Extract text first to generate embedding for candidate search
+    // 1. Extract text first
     let preExtractedText
     try {
       preExtractedText = await extractText(raw.buffer, originalName)
     } catch (e) {
-      console.warn(`[Ingest] Could not pre-extract text for candidates:`, e)
+      console.warn(`[Ingest] Could not pre-extract text:`, e)
     }
     
-    // 2. Generate embedding for hybrid search
-    const textSnippet = preExtractedText?.text?.slice(0, 1000) || originalName
+    // 2. Generate summary from extracted text
+    const summary = await generateIngestSummary(raw.buffer, {
+      originalName,
+      uploadedType,
+      preExtractedText,
+    })
+
+    // 3. Generate embedding for hybrid search using the summary excerpt
+    const textSnippet = summary.excerpt || summary.body || preExtractedText?.text?.slice(0, 1000) || originalName
     const fileEmbedding = await embedText(textSnippet).catch(() => [])
     const embeddingStr = `[${fileEmbedding.join(',')}]`
     
-    // 3. Find candidates using Hybrid Search (FTS + Vector)
+    // 4. Find candidates using Hybrid Search (FTS + Vector)
     const candidatesResult = await pool.query(
       `SELECT slug,title,overview,category,knowledge_tags AS tags
        FROM knowledge_entries
@@ -66,7 +73,8 @@ export async function runBackgroundIngest(input: {
       [userId, originalName, embeddingStr],
     )
     
-    const ingest = await ingestRawFile(raw.buffer, {
+    // 5. Extract knowledge pages using candidates and summary
+    const ingest = await extractKnowledgePages(raw.buffer, summary, {
       originalName,
       uploadedType,
       rawStorageUrl,
@@ -90,11 +98,10 @@ export async function runBackgroundIngest(input: {
       })
       : undefined
 
-    const summary = ingest.summary
-    const sourceTitle = summary?.title ?? originalName
-    const sourceCategory = summary?.category ?? 'Uncategorized'
-    const sourceTags = uniqueCleanStrings(summary?.tags ?? [])
-    const summaryMarkdown = summary?.body ?? ''
+    const sourceTitle = summary.title ?? originalName
+    const sourceCategory = summary.category ?? 'Uncategorized'
+    const sourceTags = uniqueCleanStrings(summary.tags ?? [])
+    const summaryMarkdown = summary.body ?? ''
     const summaryObject = summaryMarkdown
       ? await storageService.upload({
         userId,
@@ -104,7 +111,7 @@ export async function runBackgroundIngest(input: {
         mimeType: 'text/markdown',
       })
       : undefined
-    const sourceExcerpt = summary?.excerpt || excerpt(summaryMarkdown || originalName)
+    const sourceExcerpt = summary.excerpt || excerpt(summaryMarkdown || originalName)
     const sourceStatus = ingest.skipped ? 'Queued' : 'Processed'
 
     await pool.query(

@@ -293,7 +293,13 @@ after a note is converted into a Markdown source.
 - **Failure cases:** unsupported extension or no readable text fails ingest.
 - **Why this step exists:** Gemini receives extracted text, not raw file bytes.
 
-#### 8. Embed source snippet for candidate search
+#### 8. Generate AI Summary
+
+- **Module:** `generateIngestSummary`, `getIngestSummaryPrompt`
+- **What happens:** Gemini receives extracted text and generates a source-level summary JSON (category, tags, excerpt, body).
+- **Why this step exists:** Extract a semantic summary before candidate search to vastly improve the quality of vector embedding.
+
+#### 9. Embed source summary excerpt for candidate search
 
 - **Module:** `sources.ingest-service.ts`, `embedText`
 - **What happens:** the backend embeds the first 1000 characters of extracted text, falling back to the filename.
@@ -301,7 +307,7 @@ after a note is converted into a Markdown source.
 - **Failure behavior:** embedding failure falls back to an empty vector in candidate selection.
 - **Why this step exists:** candidate Knowledge pages help the ingest prompt decide whether to create, update, merge, replace, link, or skip.
 
-#### 9. Retrieve candidate Knowledge entries
+#### 10. Retrieve candidate Knowledge entries
 
 - **Module:** `sources.ingest-service.ts`
 - **What happens:** PostgreSQL ranks existing Knowledge entries for the same user using:
@@ -311,9 +317,9 @@ after a note is converted into a Markdown source.
 - **Indexes used:** GIN full-text index and HNSW vector index are defined in the migration.
 - **Why this step exists:** the LLM needs local candidate context to avoid always creating duplicate Knowledge pages.
 
-#### 10. Generate ingest JSON
+#### 11. Generate knowledge pages JSON
 
-- **Module:** `ingestRawFile`, `getIngestPrompt`
+- **Module:** `extractKnowledgePages`, `getIngestPagesPrompt`
 - **What happens:** Gemini receives:
   - filename
   - uploaded source type
@@ -326,28 +332,28 @@ after a note is converted into a Markdown source.
 - **Failure cases:** empty Gemini response or invalid JSON fails ingest.
 - **Why this step exists:** Knowlix turns raw source material into clean, standalone Knowledge pages.
 
-#### 11. Normalize LLM output
+#### 12. Normalize LLM output
 
-- **Module:** `normalizeIngestResult`
+- **Module:** `normalizeIngestPages`
 - **What happens:** backend cleans title numbering, ensures Markdown starts with one H1, normalizes action names, extracts tags, and falls back to a generated page if no pages are returned.
 - **Why this step exists:** LLM output must be normalized before persistence.
 - **Trade-off:** normalization is defensive, not a full schema validator for every nested field.
 
-#### 12. Store extracted text and source summary
+#### 13. Store extracted text and source summary
 
 - **Module:** `storageService.upload`
 - **What happens:** extracted text is stored as `extracted_text`; source summary Markdown is stored as `source_summary`.
 - **Tables written:** `storage_objects`
 - **Why this step exists:** PostgreSQL stores references and metadata, while file-like bodies remain in object storage.
 
-#### 13. Update the source row
+#### 14. Update the source row
 
 - **Module:** `sources.ingest-service.ts`
 - **What happens:** the source gets its generated title, category, tags, excerpt, storage object IDs, and status.
 - **Tables written:** `sources`
 - **Status behavior:** `Processed` when ingest succeeds; `Queued` when skipped or when a failure fallback writes an error excerpt.
 
-#### 14. Upsert Knowledge pages
+#### 15. Upsert Knowledge pages
 
 - **Module:** `sources.ingest-service.ts`
 - **What happens:** for each generated page:
@@ -358,14 +364,14 @@ after a note is converted into a Markdown source.
 - **Conflict target:** `(user_id, slug)`
 - **Why this step exists:** one user can revise a canonical Knowledge page while another user can independently own the same slug.
 
-#### 15. Generate Knowledge embeddings
+#### 16. Generate Knowledge embeddings
 
 - **Module:** `embedText`
 - **What happens:** the Knowledge title, content excerpt, and tags are embedded into 768 dimensions.
 - **Tables written:** `knowledge_entries.embedding`
 - **Why this step exists:** research uses semantic retrieval over Knowledge pages.
 
-#### 16. Track provenance and revisions
+#### 17. Track provenance and revisions
 
 - **Module:** `sources.ingest-service.ts`
 - **What happens:** the backend stores:
@@ -375,7 +381,7 @@ after a note is converted into a Markdown source.
   - relation rows in `knowledge_source_links`
 - **Why this step exists:** Knowledge pages remain explainable and traceable to source materials.
 
-#### 17. Finish or fail ingest
+#### 18. Finish or fail ingest
 
 - **Module:** `sourcesRepository.updateUploadedFileStatus`, `sourcesRepository.failUploadedFile`
 - **What happens:** the upload status becomes `completed`, `skipped`, or `failed`.
@@ -561,7 +567,8 @@ PostgreSQL stores the storage object IDs and metadata. This keeps rows compact w
 
 Prompts are centralized under `src/prompts`:
 
-- `ingest.prompt.ts` for source-to-Knowledge extraction
+- `ingest-summary.prompt.ts` for source summarization
+- `ingest-pages.prompt.ts` for source-to-Knowledge extraction
 - `research.prompt.ts` for candidate selection and grounded answer generation
 - `maintenance.prompt.ts` for linting Knowledge entries
 - `inspiration.prompt.ts` for daily inspiration
