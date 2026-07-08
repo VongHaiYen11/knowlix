@@ -1,4 +1,4 @@
-import { type ChangeEvent, useMemo, useState } from 'react'
+import { type ChangeEvent, useEffect, useMemo, useState } from 'react'
 import { Plus, Upload } from 'lucide-react'
 import { Link } from 'react-router'
 import { PageHeader } from '@/components/common/PageHeader'
@@ -34,6 +34,29 @@ export function LibraryPage() {
   const knowledge = useLibraryKnowledge(knowledgeFilters)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+
+  const hasProcessingSource = useMemo(() => {
+    return sources.data?.some((source) => source.status === 'Processing') ?? false
+  }, [sources.data])
+
+  useEffect(() => {
+    if (!hasProcessingSource) return
+
+    const interval = setInterval(async () => {
+      try {
+        const currentSources = await libraryService.getSources(sourceFilters)
+        const stillProcessing = currentSources.some((s) => s.status === 'Processing')
+        if (!stillProcessing) {
+          clearInterval(interval)
+          void Promise.all([sources.reload(), knowledge.reload()])
+        }
+      } catch (err) {
+        console.error('Failed to poll sources:', err)
+      }
+    }, 3000)
+
+    return () => clearInterval(interval)
+  }, [hasProcessingSource, sourceFilters, sources.reload, knowledge.reload])
 
   async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? [])

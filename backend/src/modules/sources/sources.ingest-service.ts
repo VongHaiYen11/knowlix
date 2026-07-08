@@ -226,6 +226,7 @@ export async function runBackgroundIngest(input: {
       await graphRepository.upsertNode({ userId, slug: target, label: link.target, category: sourceCategory, tags: sourceTags })
       await graphRepository.link(userId, source, target)
     }
+    console.log(`[Ingest] Ingest finished for "${originalName}" (${sourceId})`)
   } catch (error) {
     console.error(`[Ingest] Failed for "${originalName}":`, error)
     await sourcesRepository.failUploadedFile(fileId).catch(console.error)

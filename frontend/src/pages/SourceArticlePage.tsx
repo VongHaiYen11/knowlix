@@ -14,7 +14,7 @@ import { sourceTypeIcon, statusIcon } from '@/features/library/SourceIcon'
 import boredGreenImage from '@/assets/bored_green.png'
 import { ROUTES } from '@/constants/routes'
 import { useSourceArticle, useTaxonomy } from '@/hooks/useLibrary'
-import { apiUrl } from '@/repositories/apiClient'
+import { apiClient, apiUrl } from '@/repositories/apiClient'
 import { libraryService } from '@/services/libraryService'
 
 export function SourceArticlePage({ id }: { id: string }) {
@@ -27,11 +27,50 @@ export function SourceArticlePage({ id }: { id: string }) {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'original' | 'summary'>('original')
+  const [originalMarkdown, setOriginalMarkdown] = useState<string | null>(null)
+  const [loadingMarkdown, setLoadingMarkdown] = useState(false)
   const source = sourceState.data
 
   useEffect(() => {
     setNewTag('')
-  }, [id])
+    if (source && source.type === 'Markdown' && source.fileId) {
+      setLoadingMarkdown(true)
+      apiClient
+        .text(`/api/v1/files/${source.fileId}`)
+        .then((text) => {
+          setOriginalMarkdown(text)
+        })
+        .catch((err) => {
+          console.error('Failed to load original markdown:', err)
+          setOriginalMarkdown('Failed to load original Markdown content.')
+        })
+        .finally(() => {
+          setLoadingMarkdown(false)
+        })
+    } else {
+      setOriginalMarkdown(null)
+    }
+  }, [id, source?.fileId, source?.type])
+
+  const isProcessing = source?.status === 'Processing'
+
+  useEffect(() => {
+    if (!isProcessing) return
+
+    const interval = setInterval(async () => {
+      try {
+        const currentSource = await libraryService.getSourceById(id)
+        if (currentSource && currentSource.status !== 'Processing') {
+          clearInterval(interval)
+          void sourceState.reload()
+        }
+      } catch (err) {
+        console.error('Failed to poll source status:', err)
+      }
+    }, 3000)
+
+    return () => clearInterval(interval)
+  }, [isProcessing, id, sourceState.reload])
 
   async function handleDelete() {
     setDeleting(true)
@@ -95,11 +134,19 @@ export function SourceArticlePage({ id }: { id: string }) {
           <p className="mt-6 border-l-2 border-primary/40 pl-5 font-serif text-xl italic leading-relaxed text-muted-foreground">{source.excerpt}</p>
           <div className="mt-10">
             {viewMode === 'original' && source.fileId ? (
-              <iframe
-                src={apiUrl(`/api/v1/files/${source.fileId}`)}
-                className="w-full h-[88vh] border border-border rounded-xl bg-card shadow-sm"
-                title={source.title}
-              />
+              source.type === 'Markdown' ? (
+                loadingMarkdown ? (
+                  <div className="h-96 animate-pulse rounded-xl border border-border bg-card" />
+                ) : (
+                  <MarkdownPreview content={originalMarkdown || ''} />
+                )
+              ) : (
+                <iframe
+                  src={apiUrl(`/api/v1/files/${source.fileId}`)}
+                  className="w-full h-[88vh] border border-border rounded-xl bg-card shadow-sm"
+                  title={source.title}
+                />
+              )
             ) : (
               <MarkdownPreview content={source.content || 'No summary available.'} />
             )}
