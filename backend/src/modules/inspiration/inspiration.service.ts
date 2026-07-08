@@ -1,4 +1,5 @@
 import { getGeminiClient } from '../../config/gemini.js'
+import { getInspirationPrompt } from '../../prompts/index.js'
 
 const fallbackQuotes = [
   'Tiny notes become bright paths when you return to them with curiosity.',
@@ -21,13 +22,7 @@ function todayKey() {
 export const inspirationService = {
   async today(userId: string, model: string) {
     const date = todayKey()
-    const prompt = `Write one warm, cute inspiration sentence for a personal knowledge workspace.
-Rules:
-- Return only the sentence.
-- 16 words or fewer.
-- No quotation marks.
-- No emoji.
-- Make it feel calm, curious, and encouraging.`
+    const prompt = getInspirationPrompt()
 
     try {
       const response = await getGeminiClient().models.generateContent({ model, contents: prompt })

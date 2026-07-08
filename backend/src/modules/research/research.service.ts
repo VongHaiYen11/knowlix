@@ -4,6 +4,7 @@ import type { researchSchema, researchThreadSchema } from './research.schemas.js
 import { researchRepository } from './research.repository.js'
 import { storageService } from '../../lib/storage.js'
 import { cosineSimilarity, embedText } from '../../lib/embeddings.js'
+import { getResearchSelectionPrompt, getResearchAnswerPrompt } from '../../prompts/index.js'
 
 function threadRow(row: any) {
   return {
@@ -70,14 +71,7 @@ export const researchService = {
     }
     const uniqueSources = Array.from(sourcesMap.values())
     const candidateList = knowledge.map((row: any) => `Slug: ${row.slug}\nTitle: ${row.title}\nCategory: ${row.category}\nTags: ${(row.tags ?? []).join(', ')}\nOverview: ${row.overview}`).join('\n\n---\n\n')
-    const selectionPrompt = `Choose which candidate Knowledge Markdown files are necessary to answer the user's question.
-Return ONLY a JSON array of slugs. Prefer the fewest sufficient entries.
-
-Question:
-${body.question}
-
-Candidates:
-${candidateList || 'No candidates.'}`
+    const selectionPrompt = getResearchSelectionPrompt(body.question, candidateList)
     let selectedSlugs = new Set<string>()
     if (knowledge.length) {
       try {
@@ -103,22 +97,7 @@ ${candidateList || 'No candidates.'}`
     }
     const context = fullPages.join('\n\n---\n\n')
     const sourcesListStr = uniqueSources.map((source) => `- URL: http://127.0.0.1:5173/library/source/${source.id}, Title: ${source.title}`).join('\n')
-    const prompt = `You are a helpful research assistant. Answer the user's question based strictly on the provided Context.
-If the answer cannot be found in the Context, say so and do not speculate.
-
-Context:
-${context || 'No knowledge entries match the selected tags/categories in scope.'}
-
-Available sources for citation (MUST link to them in markdown when citing claims):
-${sourcesListStr || 'No source documents available.'}
-
-Rules for Citations:
-- When you make a claim based on a source, you MUST cite it using a markdown link to its exact URL from the list of available sources. E.g., "...according to the midterm notes [Midterm Notes](http://127.0.0.1:5173/library/source/file_xxx)..."
-- Do not make up any other URLs.
-- Always be concise, clear, and highly accurate to the Context.
-
-Question:
-${body.question}`
+    const prompt = getResearchAnswerPrompt(body.question, context, sourcesListStr)
 
     return getGeminiClient().models.generateContentStream({ model, contents: prompt })
   },

@@ -5,6 +5,7 @@ import { todayLabel } from '../../utils/date.js'
 import { slugify } from '../../utils/text.js'
 import { storageService } from '../../lib/storage.js'
 import { maintenanceRepository } from './maintenance.repository.js'
+import { getMaintenancePrompt } from '../../prompts/index.js'
 
 export const maintenanceService = {
   async lint(user: { id: string; name: string }, model: string) {
@@ -40,19 +41,7 @@ export const maintenanceService = {
     }
 
     const entriesList = knowledge.map((row) => ({ slug: row.slug, title: row.title, overview: row.overview }))
-    const prompt = `You are a knowledge base maintainer. Scan the following list of knowledge base entries for any logical contradictions, stale claims, or conflicting information between them.
-
-Knowledge Base Entries:
-${JSON.stringify(entriesList, null, 2)}
-
-Return ONLY a valid JSON array of objects representing contradictions found. Format:
-[
-  {
-    "slugs": ["slug-1", "slug-2"],
-    "explanation": "Description of the contradiction or stale claim..."
-  }
-]
-If no contradictions are found, return an empty array []. Do not include markdown code fences, extra words, or annotations. Return plain JSON only.`
+    const prompt = getMaintenancePrompt(entriesList)
 
     const response = await getGeminiClient().models.generateContent({
       model,
