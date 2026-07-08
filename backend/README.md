@@ -62,9 +62,13 @@ COOKIE_SAME_SITE=lax
 MAX_UPLOAD_MB=25
 GEMINI_API_KEY=your_gemini_api_key_here
 GEMINI_MODEL=gemini-2.5-flash
+GEMINI_EMBEDDING_MODEL=text-embedding-004
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+SUPABASE_STORAGE_BUCKET=knowlix-files
 ```
 
-For production, use a strong `JWT_SECRET`. If the frontend and backend are served cross-site, set `COOKIE_SAME_SITE=none` and `COOKIE_SECURE=true`.
+For production, use a strong `JWT_SECRET`. If the frontend and backend are served cross-site, set `COOKIE_SAME_SITE=none` and `COOKIE_SECURE=true`. Supabase is used only for Storage object operations; Knowlix authentication remains the app's own cookie/JWT flow.
 
 Clients may override the LLM model per request with:
 
@@ -198,7 +202,7 @@ Sources can be created manually with these domain types:
 Note, PDF, Article, Bookmark, Image, Voice, File
 ```
 
-Uploads are stored through multer memory storage and limited by `MAX_UPLOAD_MB`. The upload route accepts only PDF, DOCX, TXT, and Markdown files. The backend enforces both extension and compatible MIME type checks, with `application/octet-stream` allowed for browser/file-manager MIME quirks.
+Uploads are received through multer memory storage, limited by `MAX_UPLOAD_MB`, and immediately written to Supabase Storage. The upload route accepts only PDF, DOCX, TXT, and Markdown files. The backend enforces both extension and compatible MIME type checks, with `application/octet-stream` allowed for browser/file-manager MIME quirks.
 
 Accepted upload types:
 
@@ -220,42 +224,62 @@ Accepted extensions:
 .markdown
 ```
 
+### Storage-Backed Files
+
+Supabase Storage stores file bytes only. Knowlix does not use Supabase Auth and does not store app metadata as storage sidecar files. PostgreSQL stores bucket/key/url metadata, provenance, short excerpts, search vectors, embeddings, and revision rows.
+
+The database must not store complete file bodies:
+
+- No full raw upload text.
+- No full extracted text.
+- No full source summary Markdown.
+- No full Knowledge Markdown.
+- No full note Markdown.
+
 ### Text-First Extraction
 
-The automatic upload ingest is text-first:
+The automatic upload ingest is text-first and storage-backed:
 
 - `.txt`, `.md`, and `.markdown` are read as UTF-8 text. Markdown is not parsed or converted; its original text is passed through.
 - `.pdf` files are converted to plain text by the backend PDF extractor.
 - `.docx` files are converted to raw plain text by the backend DOCX extractor.
 - Gemini receives only the extracted text plus file metadata. Raw file bytes and file handles are not sent to Gemini.
+- Extracted text is written as a Supabase Storage `.txt` object and referenced by ID.
 - Unsupported upload types are rejected with `415 UNSUPPORTED_MEDIA_TYPE`.
 
 ### Summarizing Into Knowledge
 
 For supported uploads, `runBackgroundIngest` performs this pipeline:
 
-1. Save the raw file under `../raw/uploads/<date>/<fileId>-<safeName>`.
+1. Upload the raw file bytes to Supabase Storage.
 2. Create an `uploaded_files` row with `pending` ingest status.
 3. Create a `sources` row with `Processing` status.
-4. Extract or read plain text with `ingestRawFile`.
-5. Send only the extracted text and metadata to Gemini for structured JSON output.
-6. Update the source with the generated summary content, excerpt, tags, category, and `Processed` status.
-7. Upsert generated `knowledge_entries` rows:
+4. Download the raw storage object, then extract/read plain text in memory.
+5. Write extracted text to Supabase Storage.
+6. Send only the extracted text, file metadata, and candidate Knowledge metadata to Gemini.
+7. Write the LLM-generated source summary as a Supabase Storage `.md` object.
+8. Let the LLM choose per-concept actions:
+   - `create`: create a new Knowledge `.md`.
+   - `update`: revise an existing Knowledge `.md`.
+   - `merge`: merge overlapping knowledge into a canonical `.md`.
+   - `link_only`: add provenance without changing Markdown.
+   - `skip`: no durable knowledge contribution.
+9. Apply actions by writing Markdown files to Supabase Storage and updating metadata rows:
    - `slug` is derived from the file/page title with `slugify`.
    - `overview` is a short excerpt of the body.
-   - `content` stores the page body.
+   - `markdown_storage_object_id` points to the current Knowledge `.md`.
    - `explanation` is seeded from the first text blocks.
-   - `source_list` points back to the source.
-   - `reference_list` records the raw upload path.
+   - `knowledge_source_links` and `source_list` point back to the source.
+   - `reference_list` records the raw storage URL.
    - `timeline` records the generation event.
-8. Mark the uploaded file as `completed`, or `failed` if extraction or Gemini JSON parsing fails.
+10. Mark the uploaded file as `completed`, or `failed` if extraction or Gemini JSON parsing fails.
 
 ### Creating Links Between Knowledge
 
 Links are created in two places:
 
 - During ingest, any `related` values on ingest pages and any `graphLinks` returned by the ingest helper are normalized with `slugify`, upserted as graph nodes, and inserted into `graph_links`.
-- During maintenance linting, the backend scans knowledge `overview` and `content` for `[[wikilinks]]`. Missing linked concepts are inserted as placeholder graph nodes and linked from the referring page.
+- During maintenance linting, the backend scans knowledge `overview` and storage-backed Markdown for `[[wikilinks]]`. Missing linked concepts are inserted as placeholder graph nodes and linked from the referring page.
 
 Graph node positions are deterministic. `graphPosition(slug)` hashes the slug to stable `x` and `y` values, so graph layout is repeatable without storing custom positions from the frontend.
 
@@ -295,11 +319,16 @@ The backend does the following:
    - `scope.tags` filters with `tags && $tags`.
    - `scope.categories` filters with `category = ANY($categories)`.
    - `dateRange` is accepted for UI compatibility but is not currently applied in SQL.
-3. Build a prompt from each matched knowledge page's title, slug, overview, and content.
-4. Collect unique source references from `source_list`.
-5. Instruct Gemini to answer strictly from the provided context.
-6. Require markdown citations using exact source URLs from the available source list.
-7. Stream chunks as:
+3. Retrieve candidates with hybrid scoring:
+   - full-text search over titles, excerpts, categories, and concept tags.
+   - embedding similarity over derived metadata/index vectors.
+   - workspace labels such as `work` or `school` are filter labels only and do not contribute to ranking.
+4. Ask Gemini which candidate Knowledge entries require full Markdown.
+5. Download only selected Knowledge `.md` files from Supabase Storage.
+6. Collect unique source references from `source_list`.
+7. Instruct Gemini to answer strictly from the selected Markdown context.
+8. Require markdown citations using exact source URLs from the available source list.
+9. Stream chunks as:
 
 ```txt
 data: {"text":"..."}

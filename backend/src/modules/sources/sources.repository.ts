@@ -12,24 +12,60 @@ export const sourcesRepository = {
   },
   async create(input: any) {
     const { rows } = await pool.query(
-      `INSERT INTO sources (id,user_id,type,title,content,tags,category,created,status,meta,excerpt,file_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-      [input.id, input.userId, input.type, input.title, input.content, input.tags, input.category, input.created, input.status, input.meta, input.excerpt, input.fileId],
+      `INSERT INTO sources (id,user_id,type,title,content,tags,category,created,status,meta,excerpt,file_id,raw_storage_object_id,extracted_storage_object_id,summary_storage_object_id,knowledge_tags,workspace_labels)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
+      [
+        input.id,
+        input.userId,
+        input.type,
+        input.title,
+        null,
+        input.tags,
+        input.category,
+        input.created,
+        input.status,
+        input.meta,
+        input.excerpt,
+        input.fileId,
+        input.rawStorageObjectId,
+        input.extractedStorageObjectId,
+        input.summaryStorageObjectId,
+        input.knowledgeTags ?? input.tags ?? [],
+        input.workspaceLabels ?? [],
+      ],
     )
     return rows[0]
   },
   async update(input: any) {
     const { rows } = await pool.query(
-      `UPDATE sources SET type=$1,title=$2,content=$3,tags=$4,category=$5,status=$6,meta=$7,excerpt=$8,file_id=$9,updated_at=now()
-       WHERE user_id=$10 AND id=$11 RETURNING *`,
-      [input.type, input.title, input.content, input.tags, input.category, input.status, input.meta, input.excerpt, input.fileId, input.userId, input.id],
+      `UPDATE sources SET type=$1,title=$2,content=$3,tags=$4,category=$5,status=$6,meta=$7,excerpt=$8,file_id=$9,
+        raw_storage_object_id=$10,extracted_storage_object_id=$11,summary_storage_object_id=$12,knowledge_tags=$13,workspace_labels=$14,updated_at=now()
+       WHERE user_id=$15 AND id=$16 RETURNING *`,
+      [
+        input.type,
+        input.title,
+        null,
+        input.tags,
+        input.category,
+        input.status,
+        input.meta,
+        input.excerpt,
+        input.fileId,
+        input.rawStorageObjectId,
+        input.extractedStorageObjectId,
+        input.summaryStorageObjectId,
+        input.knowledgeTags ?? input.tags ?? [],
+        input.workspaceLabels ?? [],
+        input.userId,
+        input.id,
+      ],
     )
     return rows[0]
   },
   async createUploadedFile(input: any) {
     await pool.query(
-      'INSERT INTO uploaded_files (id,user_id,name,mime_type,size_bytes,raw_path,ingest_status,ingest_outputs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
-      [input.id, input.userId, input.name, input.mimeType, input.sizeBytes, input.rawPath, 'pending', '[]'],
+      'INSERT INTO uploaded_files (id,user_id,name,mime_type,size_bytes,raw_path,storage_object_id,ingest_status,ingest_outputs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',
+      [input.id, input.userId, input.name, input.mimeType, input.sizeBytes, input.rawPath, input.storageObjectId, 'pending', '[]'],
     )
   },
   async updateUploadedFileStatus(fileId: string, status: string, outputs: unknown[]) {
@@ -39,7 +75,7 @@ export const sourcesRepository = {
     await pool.query('UPDATE uploaded_files SET ingest_status=$1 WHERE id=$2', ['failed', fileId])
   },
   async file(userId: string, id: string) {
-    const { rows } = await pool.query('SELECT raw_path, mime_type, name FROM uploaded_files WHERE user_id=$1 AND id=$2', [userId, id])
+    const { rows } = await pool.query('SELECT raw_path, mime_type, name, storage_object_id FROM uploaded_files WHERE user_id=$1 AND id=$2', [userId, id])
     return rows[0]
   },
   async relatedKnowledgeSlugs(userId: string, sourceId: string) {

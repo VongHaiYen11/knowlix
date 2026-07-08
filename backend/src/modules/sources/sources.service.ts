@@ -5,7 +5,7 @@ import { parsePagination } from '../../utils/pagination.js'
 import { queryList } from '../../utils/query.js'
 import { excerpt } from '../../utils/text.js'
 import { todayLabel } from '../../utils/date.js'
-import { saveRawUpload } from '../../wiki/ingest.js'
+import { storageService } from '../../lib/storage.js'
 import { sourceRow } from './sources.mapper.js'
 import { binarySourceTypes, type sourceCreateSchema, type sourcePatchSchema } from './sources.schemas.js'
 import { sourcesRepository } from './sources.repository.js'
@@ -45,12 +45,21 @@ export const sourcesService = {
 
   async create(userId: string, body: z.infer<typeof sourceCreateSchema>) {
     if (binarySourceTypes.has(body.type) && !body.fileId) throw new AppError(400, 'VALIDATION_ERROR', 'fileId is required for binary source types')
+    const summaryObject = body.content
+      ? await storageService.upload({
+        userId,
+        kind: 'source_summary',
+        originalName: `${body.title}.md`,
+        body: body.content,
+        mimeType: 'text/markdown',
+      })
+      : undefined
     const row = await sourcesRepository.create({
       id: `source_${crypto.randomUUID()}`,
       userId,
       type: body.type,
       title: body.title,
-      content: body.content,
+      content: null,
       tags: body.tags,
       category: body.category,
       created: todayLabel(),
@@ -58,6 +67,11 @@ export const sourcesService = {
       meta: body.meta,
       excerpt: body.excerpt || excerpt(body.content ?? ''),
       fileId: body.fileId,
+      rawStorageObjectId: null,
+      extractedStorageObjectId: null,
+      summaryStorageObjectId: summaryObject?.id ?? null,
+      knowledgeTags: body.tags,
+      workspaceLabels: [],
     })
     return sourceRow(row)
   },
@@ -66,25 +80,45 @@ export const sourcesService = {
     const current = await sourcesRepository.find(userId, id)
     if (!current) throw new NotFoundError('Source not found')
     const next = { ...sourceRow(current), ...body }
+    const summaryObject = body.content
+      ? await storageService.upload({
+        userId,
+        kind: 'source_summary',
+        originalName: `${next.title}.md`,
+        body: body.content,
+        mimeType: 'text/markdown',
+      })
+      : undefined
     return sourceRow(await sourcesRepository.update({
       userId,
       id,
       type: next.type,
       title: next.title,
-      content: next.content,
+      content: null,
       tags: next.tags,
       category: next.category,
       status: next.status,
       meta: next.meta,
       excerpt: next.excerpt,
       fileId: body.fileId ?? current.file_id,
+      rawStorageObjectId: current.raw_storage_object_id,
+      extractedStorageObjectId: current.extracted_storage_object_id,
+      summaryStorageObjectId: summaryObject?.id ?? current.summary_storage_object_id,
+      knowledgeTags: next.knowledgeTags ?? next.tags,
+      workspaceLabels: next.workspaceLabels ?? [],
     }))
   },
 
   async upload(userId: string, file: Express.Multer.File) {
     const fileId = `file_${crypto.randomUUID()}`
-    const rawFilePath = await saveRawUpload({ fileId, originalName: file.originalname, buffer: file.buffer })
-    await sourcesRepository.createUploadedFile({ id: fileId, userId, name: file.originalname, mimeType: file.mimetype, sizeBytes: file.size, rawPath: rawFilePath })
+    const rawObject = await storageService.upload({
+      userId,
+      kind: 'raw_source',
+      originalName: file.originalname,
+      body: file.buffer,
+      mimeType: file.mimetype || 'application/octet-stream',
+    })
+    await sourcesRepository.createUploadedFile({ id: fileId, userId, name: file.originalname, mimeType: file.mimetype, sizeBytes: file.size, rawPath: rawObject.url, storageObjectId: rawObject.id })
 
     const sourceId = `source_${crypto.randomUUID()}`
     const created = todayLabel()
@@ -102,9 +136,14 @@ export const sourcesService = {
       meta: `${file.originalname} - ${Math.ceil(file.size / 1024)} KB`,
       excerpt: excerpt(file.originalname),
       fileId,
+      rawStorageObjectId: rawObject.id,
+      extractedStorageObjectId: null,
+      summaryStorageObjectId: null,
+      knowledgeTags: [],
+      workspaceLabels: [],
     })
 
-    runBackgroundIngest({ userId, fileId, sourceId, rawFilePath, originalName: file.originalname, created, uploadedType }).catch((err) => {
+    runBackgroundIngest({ userId, fileId, sourceId, rawStorageObjectId: rawObject.id, rawStorageUrl: rawObject.url, originalName: file.originalname, created, uploadedType }).catch((err) => {
       console.error('[Ingest] Unhandled background ingest rejection:', err)
     })
 
@@ -113,15 +152,29 @@ export const sourcesService = {
       name: file.originalname,
       mimeType: file.mimetype,
       size: file.size,
-      rawPath: rawFilePath,
+      rawPath: rawObject.url,
+      rawStorageObjectId: rawObject.id,
       ingest: { status: 'pending', written: [], message: undefined, source: sourceRow(sourceInsert), knowledge: [] },
     }
   },
 
   async file(userId: string, id: string) {
     const row = await sourcesRepository.file(userId, id)
-    if (!row || !row.raw_path) throw new NotFoundError('File not found')
+    if (!row) throw new NotFoundError('File not found')
+    if (row.storage_object_id) {
+      const { buffer } = await storageService.download({ userId, storageObjectId: row.storage_object_id })
+      return { buffer, mimeType: row.mime_type, name: row.name }
+    }
+    if (!row.raw_path) throw new NotFoundError('File not found')
     return { path: path.resolve(row.raw_path), mimeType: row.mime_type, name: row.name }
+  },
+
+  async content(userId: string, id: string) {
+    const row = await sourcesRepository.find(userId, id)
+    if (!row) throw new NotFoundError('Source not found')
+    if (!row.summary_storage_object_id) return ''
+    const { text } = await storageService.readText({ userId, storageObjectId: row.summary_storage_object_id })
+    return text
   },
 
   async delete(userId: string, id: string) {

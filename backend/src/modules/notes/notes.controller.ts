@@ -9,6 +9,9 @@ export const notesController = {
   async get(req: AuthedRequest, res: Response) {
     res.json(await notesService.get(req.user.id, req.params.id))
   },
+  async content(req: AuthedRequest, res: Response) {
+    res.type('text/markdown').send(await notesService.content(req.user.id, req.params.id))
+  },
   async create(req: AuthedRequest, res: Response) {
     res.status(201).json(await notesService.create(req.user.id, req.body))
   },

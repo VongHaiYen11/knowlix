@@ -2,7 +2,7 @@ import { pool } from '../../database/pool.js'
 
 export const maintenanceRepository = {
   async knowledge(userId: string) {
-    const { rows } = await pool.query('SELECT slug, title, overview, content, tags, category, confidence FROM knowledge_entries WHERE user_id=$1', [userId])
+    const { rows } = await pool.query('SELECT slug, title, overview, content, markdown_storage_object_id, tags, category, confidence FROM knowledge_entries WHERE user_id=$1', [userId])
     return rows
   },
   async links(userId: string) {

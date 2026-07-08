@@ -11,9 +11,13 @@ export interface KnowledgeEntry {
   slug: string
   title: string
   content?: string
+  contentUrl?: string
+  markdownStorageObjectId?: string
   overview: string
   category: string
   tags: string[]
+  knowledgeTags?: string[]
+  workspaceLabels?: string[]
   created: string
   updated: string
   readTime: string
@@ -31,7 +35,13 @@ export interface Source {
   type: SourceType
   title: string
   content?: string
+  contentUrl?: string
+  rawStorageObjectId?: string
+  extractedStorageObjectId?: string
+  summaryStorageObjectId?: string
   tags: string[]
+  knowledgeTags?: string[]
+  workspaceLabels?: string[]
   category: string
   created: string
   status: ProcessingStatus
@@ -47,6 +57,8 @@ export interface NoteItem {
   updated: string
   words: number
   content: string
+  contentUrl?: string
+  storageObjectId?: string
 }
 
 export interface JournalEntry {

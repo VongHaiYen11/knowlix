@@ -3,6 +3,7 @@ import path from 'node:path'
 import { getGeminiClient } from '../../config/gemini.js'
 import { todayLabel } from '../../utils/date.js'
 import { slugify } from '../../utils/text.js'
+import { storageService } from '../../lib/storage.js'
 import { maintenanceRepository } from './maintenance.repository.js'
 
 export const maintenanceService = {
@@ -16,7 +17,10 @@ export const maintenanceService = {
     const existingSlugs = new Set(knowledge.map((row) => row.slug))
     const missingConceptsMap = new Map<string, string[]>()
     for (const row of knowledge) {
-      const text = `${row.overview} ${row.content || ''}`
+      const markdown = row.markdown_storage_object_id
+        ? await storageService.readText({ userId: user.id, storageObjectId: row.markdown_storage_object_id }).then((result) => result.text).catch(() => '')
+        : ''
+      const text = `${row.overview} ${markdown}`
       const wikilinkRegex = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g
       let match
       while ((match = wikilinkRegex.exec(text)) !== null) {

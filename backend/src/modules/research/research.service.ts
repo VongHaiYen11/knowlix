@@ -2,6 +2,8 @@ import type { z } from 'zod'
 import { getGeminiClient } from '../../config/gemini.js'
 import type { researchSchema, researchThreadSchema } from './research.schemas.js'
 import { researchRepository } from './research.repository.js'
+import { storageService } from '../../lib/storage.js'
+import { cosineSimilarity, embedText } from '../../lib/embeddings.js'
 
 function threadRow(row: any) {
   return {
@@ -32,8 +34,33 @@ export const researchService = {
 
   deleteThread: researchRepository.deleteThread,
 
+  async retrievalPreview(userId: string, body: z.infer<typeof researchSchema>) {
+    const queryEmbedding = await embedText(body.question).catch(() => [])
+    const candidates = await researchRepository.retrieveCandidates(userId, { question: body.question, scope: body.scope, limit: 40 })
+    return candidates.map((row: any) => {
+      const vectorScore = cosineSimilarity(queryEmbedding, Array.isArray(row.embedding) ? row.embedding : [])
+      return {
+      slug: row.slug,
+      title: row.title,
+      overview: row.overview,
+      category: row.category,
+      tags: row.tags ?? [],
+      workspaceLabels: row.workspace_labels ?? [],
+      scoreReason: vectorScore > Number(row.fts_score ?? 0) ? 'vector' : row.fts_score > 0 ? 'fts' : 'metadata',
+      score: Math.max(Number(row.fts_score ?? 0), vectorScore),
+    }
+    }).sort((a, b) => b.score - a.score).slice(0, 12)
+  },
+
   async streamAnswer(userId: string, body: z.infer<typeof researchSchema>, model: string) {
-    const knowledge = await researchRepository.scopedKnowledge(userId, body.scope)
+    const queryEmbedding = await embedText(body.question).catch(() => [])
+    const knowledge = (await researchRepository.retrieveCandidates(userId, { question: body.question, scope: body.scope, limit: 40 }))
+      .map((row: any) => ({
+        ...row,
+        hybrid_score: Math.max(Number(row.fts_score ?? 0), cosineSimilarity(queryEmbedding, Array.isArray(row.embedding) ? row.embedding : [])),
+      }))
+      .sort((a: any, b: any) => b.hybrid_score - a.hybrid_score)
+      .slice(0, 12)
     const sourcesMap = new Map<string, { id: string; type: string; title: string }>()
     for (const row of knowledge) {
       const sources = Array.isArray(row.source_list) ? row.source_list : []
@@ -42,7 +69,35 @@ export const researchService = {
       }
     }
     const uniqueSources = Array.from(sourcesMap.values())
-    const context = knowledge.map((row: any) => `Title: ${row.title}\nSlug: ${row.slug}\nOverview: ${row.overview}\nContent: ${row.content || ''}`).join('\n\n---\n\n')
+    const candidateList = knowledge.map((row: any) => `Slug: ${row.slug}\nTitle: ${row.title}\nCategory: ${row.category}\nTags: ${(row.tags ?? []).join(', ')}\nOverview: ${row.overview}`).join('\n\n---\n\n')
+    const selectionPrompt = `Choose which candidate Knowledge Markdown files are necessary to answer the user's question.
+Return ONLY a JSON array of slugs. Prefer the fewest sufficient entries.
+
+Question:
+${body.question}
+
+Candidates:
+${candidateList || 'No candidates.'}`
+    let selectedSlugs = new Set<string>()
+    if (knowledge.length) {
+      try {
+        const selection = await getGeminiClient().models.generateContent({ model, contents: selectionPrompt })
+        const cleanText = selection.text ? selection.text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim() : '[]'
+        const parsed = JSON.parse(cleanText)
+        if (Array.isArray(parsed)) selectedSlugs = new Set(parsed.filter((slug): slug is string => typeof slug === 'string'))
+      } catch (error) {
+        console.error('[Research API] Failed to parse selected knowledge slugs:', error)
+      }
+    }
+    const selected = knowledge.filter((row: any) => selectedSlugs.has(row.slug)).slice(0, 6)
+    const fallbackSelected = selected.length ? selected : knowledge.slice(0, 4)
+    const fullPages: string[] = []
+    for (const row of fallbackSelected) {
+      const storageObjectId = row.markdown_storage_object_id
+      const content = storageObjectId ? (await storageService.readText({ userId, storageObjectId })).text : ''
+      fullPages.push(`Title: ${row.title}\nSlug: ${row.slug}\nOverview: ${row.overview}\nMarkdown:\n${content}`)
+    }
+    const context = fullPages.join('\n\n---\n\n')
     const sourcesListStr = uniqueSources.map((source) => `- URL: http://127.0.0.1:5173/library/source/${source.id}, Title: ${source.title}`).join('\n')
     const prompt = `You are a helpful research assistant. Answer the user's question based strictly on the provided Context.
 If the answer cannot be found in the Context, say so and do not speculate.

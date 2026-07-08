@@ -18,6 +18,10 @@ export const researchController = {
     res.status(204).send()
   },
 
+  async retrievalPreview(req: AuthedRequest, res: Response) {
+    res.json(await researchService.retrievalPreview(req.user.id, req.body))
+  },
+
   async message(req: AuthedRequest, res: Response) {
     res.setHeader('Content-Type', 'text/event-stream')
     res.setHeader('Cache-Control', 'no-cache')

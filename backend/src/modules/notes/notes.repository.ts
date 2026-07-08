@@ -12,15 +12,15 @@ export const notesRepository = {
   },
   async create(input: any) {
     const { rows } = await pool.query(
-      'INSERT INTO notes (id,user_id,title,excerpt,updated,words,content,tags) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
-      [input.id, input.userId, input.title, input.excerpt, input.updated, input.words, input.content, input.tags],
+      'INSERT INTO notes (id,user_id,title,excerpt,updated,words,content,tags,storage_object_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *',
+      [input.id, input.userId, input.title, input.excerpt, input.updated, input.words, '', input.tags, input.storageObjectId],
     )
     return rows[0]
   },
   async update(input: any) {
     const { rows } = await pool.query(
-      'UPDATE notes SET title=$1,excerpt=$2,updated=$3,words=$4,content=$5,tags=$6,updated_at=now() WHERE user_id=$7 AND id=$8 RETURNING *',
-      [input.title, input.excerpt, input.updated, input.words, input.content, input.tags, input.userId, input.id],
+      'UPDATE notes SET title=$1,excerpt=$2,updated=$3,words=$4,content=$5,tags=$6,storage_object_id=$7,updated_at=now() WHERE user_id=$8 AND id=$9 RETURNING *',
+      [input.title, input.excerpt, input.updated, input.words, '', input.tags, input.storageObjectId, input.userId, input.id],
     )
     return rows[0]
   },

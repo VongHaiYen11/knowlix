@@ -14,12 +14,36 @@ export interface ResearchThreadInput {
 export const researchRepository = {
   async scopedKnowledge(userId: string, scope: { tags: string[]; categories: string[] }) {
     const { rows } = await pool.query(
-      `SELECT slug, title, overview, content, source_list FROM knowledge_entries
+      `SELECT slug, title, overview, markdown_storage_object_id, source_list, knowledge_tags AS tags, category
        WHERE user_id=$1
-         AND ($2::text[] = '{}' OR tags && $2::text[])
+         AND ($2::text[] = '{}' OR knowledge_tags && $2::text[])
          AND ($3::text[] = '{}' OR category = ANY($3::text[]))
        ORDER BY updated_at DESC`,
       [userId, uniqueCleanStrings(scope.tags), uniqueCleanStrings(scope.categories)],
+    )
+    return rows
+  },
+
+  async retrieveCandidates(userId: string, input: { question: string; scope: { tags: string[]; categories: string[] }; limit?: number }) {
+    const tags = uniqueCleanStrings(input.scope.tags)
+    const categories = uniqueCleanStrings(input.scope.categories)
+    const limit = input.limit ?? 12
+    const { rows } = await pool.query(
+      `SELECT slug,title,overview,category,knowledge_tags AS tags,workspace_labels,markdown_storage_object_id,source_list,embedding,
+        ts_rank_cd(COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))), plainto_tsquery('simple', $4)) AS fts_score
+       FROM knowledge_entries
+       WHERE user_id=$1
+         AND ($2::text[] = '{}' OR knowledge_tags && $2::text[])
+         AND ($3::text[] = '{}' OR category = ANY($3::text[]))
+         AND (
+          $4 = ''
+          OR COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))) @@ plainto_tsquery('simple', $4)
+          OR title ILIKE '%' || $4 || '%'
+          OR overview ILIKE '%' || $4 || '%'
+         )
+       ORDER BY fts_score DESC, updated_at DESC
+       LIMIT $5`,
+      [userId, tags, categories, input.question.trim(), limit],
     )
     return rows
   },

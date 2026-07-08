@@ -37,7 +37,12 @@ export class ResearchService {
     return apiClient.delete<void>(`/api/v1/research/threads/${encodeURIComponent(id)}`)
   }
 
-  async getScopedKnowledge(scope: ResearchScope): Promise<KnowledgeEntry[]> {
+  async getScopedKnowledge(scope: ResearchScope, question = ''): Promise<KnowledgeEntry[]> {
+    try {
+      return await apiClient.post<KnowledgeEntry[]>('/api/v1/research/retrieval-preview', { question: question || 'knowledge', scope })
+    } catch {
+      // Local fallback keeps the UI usable when API mode is unavailable.
+    }
     const knowledge = await libraryService.getKnowledge()
     return knowledge.filter((entry) => {
       if (scope.categories.length && !scope.categories.includes(entry.category)) return false

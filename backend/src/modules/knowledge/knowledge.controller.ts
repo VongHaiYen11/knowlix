@@ -9,8 +9,14 @@ export const knowledgeController = {
   async get(req: AuthedRequest, res: Response) {
     res.json(await knowledgeService.get(req.user.id, req.params.slug))
   },
+  async content(req: AuthedRequest, res: Response) {
+    res.type('text/markdown').send(await knowledgeService.content(req.user.id, req.params.slug))
+  },
   async create(req: AuthedRequest, res: Response) {
     res.status(201).json(await knowledgeService.create(req.user.id, req.body))
+  },
+  async propose(req: AuthedRequest, res: Response) {
+    res.json(await knowledgeService.propose(req.user.id, req.params.slug, req.body))
   },
   async update(req: AuthedRequest, res: Response) {
     res.json(await knowledgeService.update(req.user.id, req.params.slug, req.body))

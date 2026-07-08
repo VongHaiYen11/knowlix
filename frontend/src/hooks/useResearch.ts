@@ -98,8 +98,9 @@ export function useResearch(initialQuestion: string) {
   }, [])
 
   useEffect(() => {
-    void researchService.getScopedKnowledge(scope).then(setScopedKnowledge)
-  }, [scope])
+    const lastQuestion = [...messages].reverse().find((message) => message.role === 'user')?.content ?? input
+    void researchService.getScopedKnowledge(scope, lastQuestion).then(setScopedKnowledge)
+  }, [scope, input, messages])
 
   const updateActiveThread = useCallback((updater: (thread: ResearchThread) => ResearchThread, persist = true) => {
     let nextThread: ResearchThread | undefined

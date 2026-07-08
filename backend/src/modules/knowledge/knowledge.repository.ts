@@ -24,23 +24,38 @@ export const knowledgeRepository = {
   async create(input: any) {
     const { rows } = await pool.query(
       `INSERT INTO knowledge_entries
-        (slug,user_id,title,content,overview,category,tags,created,updated,source_list,timeline)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$8,$9,$10)
+        (slug,user_id,title,content,overview,category,tags,created,updated,source_list,timeline,markdown_storage_object_id,knowledge_tags,workspace_labels,search_vector,embedding)
+       VALUES ($1,$2,$3,NULL,$4,$5,$6,$7,$7,$8,$9,$10,$11,$12,to_tsvector('simple', $13),$14)
        RETURNING *`,
-      [input.slug, input.userId, input.title, input.content, input.overview, input.category, input.tags, input.created, JSON.stringify(input.sources), JSON.stringify(input.timeline)],
+      [
+        input.slug,
+        input.userId,
+        input.title,
+        input.overview,
+        input.category,
+        input.tags,
+        input.created,
+        JSON.stringify(input.sources),
+        JSON.stringify(input.timeline),
+        input.markdownStorageObjectId,
+        input.knowledgeTags ?? input.tags,
+        input.workspaceLabels ?? [],
+        `${input.title}\n${input.overview}\n${(input.knowledgeTags ?? input.tags ?? []).join(' ')}`,
+        JSON.stringify(input.embedding ?? []),
+      ],
     )
     return rows[0]
   },
 
   async update(input: any) {
     const { rows } = await pool.query(
-      `UPDATE knowledge_entries SET slug=$1,title=$2,content=$3,overview=$4,category=$5,tags=$6,updated=$7,read_time=$8,
-        key_ideas=$9,explanation=$10,examples=$11,related=$12,reference_list=$13,source_list=$14,timeline=$15,updated_at=now()
-       WHERE user_id=$16 AND slug=$17 RETURNING *`,
+      `UPDATE knowledge_entries SET slug=$1,title=$2,content=NULL,overview=$3,category=$4,tags=$5,updated=$6,read_time=$7,
+        key_ideas=$8,explanation=$9,examples=$10,related=$11,reference_list=$12,source_list=$13,timeline=$14,
+        markdown_storage_object_id=COALESCE($15, markdown_storage_object_id),knowledge_tags=$16,workspace_labels=$17,search_vector=to_tsvector('simple', $18),embedding=$19,updated_at=now()
+       WHERE user_id=$20 AND slug=$21 RETURNING *`,
       [
         input.nextSlug,
         input.title,
-        input.content,
         input.overview,
         input.category,
         input.tags,
@@ -53,11 +68,24 @@ export const knowledgeRepository = {
         JSON.stringify(input.references),
         JSON.stringify(input.sources),
         JSON.stringify(input.timeline),
+        input.markdownStorageObjectId ?? null,
+        input.knowledgeTags ?? input.tags,
+        input.workspaceLabels ?? [],
+        `${input.title}\n${input.overview}\n${(input.knowledgeTags ?? input.tags ?? []).join(' ')}`,
+        JSON.stringify(input.embedding ?? []),
         input.userId,
         input.currentSlug,
       ],
     )
     return rows[0]
+  },
+
+  async createRevision(input: any) {
+    await pool.query(
+      `INSERT INTO knowledge_revisions (id,user_id,slug,storage_object_id,revision_type,model,reason)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [input.id, input.userId, input.slug, input.storageObjectId, input.revisionType, input.model ?? '', input.reason ?? ''],
+    )
   },
 
   async delete(userId: string, slug: string) {

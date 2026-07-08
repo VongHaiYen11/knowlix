@@ -23,7 +23,14 @@ export const sourcesController = {
     const file = await sourcesService.file(req.user.id, req.params.id)
     res.setHeader('Content-Type', file.mimeType)
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.name)}"`)
+    if ('buffer' in file) {
+      res.send(file.buffer)
+      return
+    }
     res.sendFile(file.path)
+  },
+  async content(req: AuthedRequest, res: Response) {
+    res.type('text/markdown').send(await sourcesService.content(req.user.id, req.params.id))
   },
   async update(req: AuthedRequest, res: Response) {
     res.json(await sourcesService.update(req.user.id, req.params.id, req.body))

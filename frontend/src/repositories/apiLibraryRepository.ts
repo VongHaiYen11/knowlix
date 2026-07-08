@@ -6,7 +6,11 @@ export const apiLibraryRepository: LibraryRepository = {
   getKnowledge: () => getAllPages<KnowledgeEntry>('/api/v1/knowledge'),
   getKnowledgeBySlug: async (slug) => {
     try {
-      return await apiClient.get<KnowledgeEntry>(`/api/v1/knowledge/${encodeURIComponent(slug)}`)
+      const entry = await apiClient.get<KnowledgeEntry>(`/api/v1/knowledge/${encodeURIComponent(slug)}`)
+      if (entry.contentUrl) {
+        entry.content = await apiClient.text(entry.contentUrl)
+      }
+      return entry
     } catch {
       return undefined
     }
@@ -14,7 +18,7 @@ export const apiLibraryRepository: LibraryRepository = {
   saveKnowledge: async (entry) => {
     const existing = await apiLibraryRepository.getKnowledgeBySlug(entry.slug)
     if (existing) {
-      await apiClient.patch<KnowledgeEntry>(`/api/v1/knowledge/${encodeURIComponent(entry.slug)}`, entry)
+      await apiClient.post<KnowledgeEntry>(`/api/v1/knowledge/${encodeURIComponent(entry.slug)}/proposals`, entry)
       return
     }
     await apiClient.post<KnowledgeEntry>('/api/v1/knowledge', entry)
@@ -22,7 +26,11 @@ export const apiLibraryRepository: LibraryRepository = {
   getSources: () => getAllPages<Source>('/api/v1/sources'),
   getSourceById: async (id) => {
     try {
-      return await apiClient.get<Source>(`/api/v1/sources/${encodeURIComponent(id)}`)
+      const source = await apiClient.get<Source>(`/api/v1/sources/${encodeURIComponent(id)}`)
+      if (source.contentUrl) {
+        source.content = await apiClient.text(source.contentUrl)
+      }
+      return source
     } catch {
       return undefined
     }
@@ -39,7 +47,11 @@ export const apiLibraryRepository: LibraryRepository = {
   getNotes: () => getAllPages<NoteItem>('/api/v1/notes'),
   getNoteById: async (id) => {
     try {
-      return await apiClient.get<NoteItem>(`/api/v1/notes/${encodeURIComponent(id)}`)
+      const note = await apiClient.get<NoteItem>(`/api/v1/notes/${encodeURIComponent(id)}`)
+      if (note.contentUrl) {
+        note.content = await apiClient.text(note.contentUrl)
+      }
+      return note
     } catch {
       return undefined
     }
