@@ -11,6 +11,7 @@ export type IngestAction = 'create' | 'update' | 'merge' | 'link_only' | 'skip'
 export interface IngestPage {
   filename: string
   title: string
+  overview: string
   body: string
   related: string[]
   action?: IngestAction
@@ -80,6 +81,7 @@ function normalizeAction(value: unknown): IngestAction {
 function normalizePage(value: unknown, fallbackTitle: string): IngestPage | null {
   const page = asRecord(value)
   const title = typeof page.title === 'string' && page.title.trim() ? page.title.trim() : fallbackTitle
+  const overview = typeof page.overview === 'string' && page.overview.trim() ? page.overview.trim() : ''
   const body = typeof page.body === 'string' ? page.body.trim() : ''
   const action = normalizeAction(page.action)
   if (!body && !['link_only', 'skip'].includes(action)) return null
@@ -87,6 +89,7 @@ function normalizePage(value: unknown, fallbackTitle: string): IngestPage | null
   return {
     filename,
     title,
+    overview,
     body,
     related: asStringArray(page.related),
     action,
@@ -101,6 +104,7 @@ function normalizeIngestResult(input: unknown, fallback: { sourcePath: string; t
   const summaryBody = typeof summaryRecord.body === 'string' && summaryRecord.body.trim() ? summaryRecord.body.trim() : fallback.extractedText
   
   const parsedTitle = summaryBody.match(/^#\s+(.+)/m)?.[1]?.trim()
+  const parsedExcerpt = typeof summaryRecord.excerpt === 'string' && summaryRecord.excerpt.trim() ? summaryRecord.excerpt.trim() : ''
   const cleanExcerpt = summaryBody.replace(/```[\s\S]*?```/g, '').replace(/[#*_>`|[\]-]/g, '').trim().slice(0, 180)
 
   const summary = {
@@ -109,14 +113,14 @@ function normalizeIngestResult(input: unknown, fallback: { sourcePath: string; t
     tags: asStringArray(summaryRecord.tags),
     workspaceLabels: asStringArray(summaryRecord.workspaceLabels),
     body: summaryBody,
-    excerpt: cleanExcerpt || excerpt(summaryBody),
+    excerpt: parsedExcerpt || cleanExcerpt || excerpt(summaryBody),
   }
   const pages = Array.isArray(parsed.pages)
     ? parsed.pages.map((page) => normalizePage(page, summary.title)).filter((page): page is IngestPage => Boolean(page))
     : []
 
   if (pages.length === 0) {
-    pages.push({ filename: `${summary.title}.md`, title: summary.title, body: summary.body, related: [], action: 'create' })
+    pages.push({ filename: `${summary.title}.md`, title: summary.title, overview: summary.excerpt, body: summary.body, related: [], action: 'create' })
   }
 
   const graphLinks = Array.isArray(parsed.graphLinks)

@@ -173,7 +173,7 @@ export async function runBackgroundIngest(input: {
           slug,
           userId,
           page.title,
-          excerpt(page.body, 220),
+          page.overview || excerpt(page.body, 220),
           sourceCategory,
           sourceTags,
           created,
@@ -226,7 +226,7 @@ export async function runBackgroundIngest(input: {
       await graphRepository.upsertNode({ userId, slug: target, label: link.target, category: sourceCategory, tags: sourceTags })
       await graphRepository.link(userId, source, target)
     }
-    console.log(`[Ingest] Ingest finished for "${originalName}" (${sourceId})`)
+    console.log(`[Ingest] Ingest finished for "${originalName}" (${sourceId}). Title: "${sourceTitle}", Excerpt: "${sourceExcerpt}". Ingested ${ingest.pages.length} pages: ${ingest.pages.map(p => `[${p.action || 'create'}] ${p.title}`).join(', ')}`)
   } catch (error) {
     console.error(`[Ingest] Failed for "${originalName}":`, error)
     await sourcesRepository.failUploadedFile(fileId).catch(console.error)
