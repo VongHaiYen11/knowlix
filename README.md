@@ -1,14 +1,3 @@
-Listed directory knowlix
-Listed directory frontend
-Listed directory backend
-Listed directory docs
-Viewed package.json:1-37
-Viewed package.json:1-40
-Viewed docker-compose.yml:1-21
-Viewed .env.example:1-15
-Viewed 001_init.sql:1-100
-Viewed .env.example:1-2
-
 # 🚀 Knowlix
 
 ![React](https://img.shields.io/badge/React-19.0-blue)
