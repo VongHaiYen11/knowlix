@@ -125,18 +125,19 @@ export const sourcesService = {
     const sourceId = `source_${crypto.randomUUID()}`
     const created = todayLabel()
     const uploadedType = sourceTypeFromUpload(file.mimetype, file.originalname)
+    const baseName = path.parse(file.originalname).name
     const sourceInsert = await sourcesRepository.create({
       id: sourceId,
       userId,
       type: uploadedType,
-      title: file.originalname,
+      title: baseName,
       content: null,
       tags: [],
       category: 'Uncategorized',
       created,
       status: 'Processing',
       meta: `${file.originalname} - ${Math.ceil(file.size / 1024)} KB`,
-      excerpt: excerpt(file.originalname),
+      excerpt: excerpt(baseName),
       fileId,
       rawStorageObjectId: rawObject.id,
       extractedStorageObjectId: null,

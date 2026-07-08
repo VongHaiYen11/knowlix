@@ -1,4 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS vector;
 
 CREATE TABLE IF NOT EXISTS app_users (
   id TEXT PRIMARY KEY,
@@ -87,7 +88,7 @@ CREATE TABLE IF NOT EXISTS knowledge_entries (
   knowledge_tags TEXT[] NOT NULL DEFAULT '{}',
   workspace_labels TEXT[] NOT NULL DEFAULT '{}',
   search_vector TSVECTOR,
-  embedding JSONB,
+  embedding VECTOR(768),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (user_id, slug)
@@ -98,6 +99,7 @@ CREATE INDEX IF NOT EXISTS knowledge_tags_idx ON knowledge_entries USING gin (ta
 CREATE INDEX IF NOT EXISTS knowledge_knowledge_tags_idx ON knowledge_entries USING gin (knowledge_tags);
 CREATE INDEX IF NOT EXISTS knowledge_workspace_labels_idx ON knowledge_entries USING gin (workspace_labels);
 CREATE INDEX IF NOT EXISTS knowledge_search_vector_idx ON knowledge_entries USING gin (search_vector);
+CREATE INDEX IF NOT EXISTS knowledge_embedding_idx ON knowledge_entries USING hnsw (embedding vector_cosine_ops);
 
 CREATE TABLE IF NOT EXISTS knowledge_revisions (
   id TEXT PRIMARY KEY,
@@ -205,5 +207,5 @@ ALTER TABLE knowledge_entries ADD COLUMN IF NOT EXISTS markdown_storage_object_i
 ALTER TABLE knowledge_entries ADD COLUMN IF NOT EXISTS knowledge_tags TEXT[] NOT NULL DEFAULT '{}';
 ALTER TABLE knowledge_entries ADD COLUMN IF NOT EXISTS workspace_labels TEXT[] NOT NULL DEFAULT '{}';
 ALTER TABLE knowledge_entries ADD COLUMN IF NOT EXISTS search_vector TSVECTOR;
-ALTER TABLE knowledge_entries ADD COLUMN IF NOT EXISTS embedding JSONB;
+ALTER TABLE knowledge_entries ADD COLUMN IF NOT EXISTS embedding VECTOR(768);
 ALTER TABLE notes ADD COLUMN IF NOT EXISTS storage_object_id TEXT REFERENCES storage_objects(id) ON DELETE SET NULL;

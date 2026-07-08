@@ -24,13 +24,15 @@ export const researchRepository = {
     return rows
   },
 
-  async retrieveCandidates(userId: string, input: { question: string; scope: { tags: string[]; categories: string[] }; limit?: number }) {
+  async retrieveCandidates(userId: string, input: { question: string; scope: { tags: string[]; categories: string[] }; queryEmbedding: number[]; limit?: number }) {
     const tags = uniqueCleanStrings(input.scope.tags)
     const categories = uniqueCleanStrings(input.scope.categories)
     const limit = input.limit ?? 12
+    const embeddingStr = `[${input.queryEmbedding.join(',')}]`
     const { rows } = await pool.query(
-      `SELECT slug,title,overview,category,knowledge_tags AS tags,workspace_labels,markdown_storage_object_id,source_list,embedding,
-        ts_rank_cd(COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))), plainto_tsquery('simple', $4)) AS fts_score
+      `SELECT slug,title,overview,category,knowledge_tags AS tags,workspace_labels,markdown_storage_object_id,source_list,
+        ts_rank_cd(COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))), plainto_tsquery('simple', $4)) AS fts_score,
+        1 - (embedding <=> $6::vector) AS vector_score
        FROM knowledge_entries
        WHERE user_id=$1
          AND ($2::text[] = '{}' OR knowledge_tags && $2::text[])
@@ -40,10 +42,14 @@ export const researchRepository = {
           OR COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))) @@ plainto_tsquery('simple', $4)
           OR title ILIKE '%' || $4 || '%'
           OR overview ILIKE '%' || $4 || '%'
+          OR embedding <=> $6::vector < 0.3
          )
-       ORDER BY fts_score DESC, updated_at DESC
+       ORDER BY GREATEST(
+          ts_rank_cd(COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))), plainto_tsquery('simple', $4)),
+          1 - (embedding <=> $6::vector)
+       ) DESC, updated_at DESC
        LIMIT $5`,
-      [userId, tags, categories, input.question.trim(), limit],
+      [userId, tags, categories, input.question.trim(), limit, embeddingStr],
     )
     return rows
   },

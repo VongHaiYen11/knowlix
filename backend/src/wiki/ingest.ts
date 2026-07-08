@@ -98,13 +98,17 @@ function normalizeIngestResult(input: unknown, fallback: { sourcePath: string; t
   const parsed = asRecord(input)
   const summaryRecord = asRecord(parsed.summary)
   const summaryBody = typeof summaryRecord.body === 'string' && summaryRecord.body.trim() ? summaryRecord.body.trim() : fallback.extractedText
+  
+  const parsedTitle = summaryBody.match(/^#\s+(.+)/m)?.[1]?.trim()
+  const cleanExcerpt = summaryBody.replace(/```[\s\S]*?```/g, '').replace(/[#*_>`|[\]-]/g, '').trim().slice(0, 180)
+
   const summary = {
-    title: typeof summaryRecord.title === 'string' && summaryRecord.title.trim() ? summaryRecord.title.trim() : fallback.title,
+    title: parsedTitle || fallback.title,
     category: typeof summaryRecord.category === 'string' && summaryRecord.category.trim() ? summaryRecord.category.trim() : 'Uncategorized',
     tags: asStringArray(summaryRecord.tags),
     workspaceLabels: asStringArray(summaryRecord.workspaceLabels),
     body: summaryBody,
-    excerpt: typeof summaryRecord.excerpt === 'string' && summaryRecord.excerpt.trim() ? summaryRecord.excerpt.trim() : excerpt(summaryBody),
+    excerpt: cleanExcerpt || excerpt(summaryBody),
   }
   const pages = Array.isArray(parsed.pages)
     ? parsed.pages.map((page) => normalizePage(page, summary.title)).filter((page): page is IngestPage => Boolean(page))
@@ -126,7 +130,7 @@ function normalizeIngestResult(input: unknown, fallback: { sourcePath: string; t
   return { sourcePath: fallback.sourcePath, written: [], pages, graphLinks, summary, extractedText: fallback.extractedText, fileKind: fallback.fileKind }
 }
 
-async function extractText(buffer: Buffer, originalName: string): Promise<ExtractedText> {
+export async function extractText(buffer: Buffer, originalName: string): Promise<ExtractedText> {
   const extension = path.extname(originalName).toLowerCase()
   if (!supportedExtensions.has(extension)) {
     throw new Error(`Unsupported file extension: ${extension || 'none'}`)
@@ -142,14 +146,14 @@ async function extractText(buffer: Buffer, originalName: string): Promise<Extrac
   return { fileKind: 'DOCX', text: result.value }
 }
 
-export async function ingestRawFile(buffer: Buffer, options: IngestRawFileOptions = {}): Promise<IngestResult> {
+export async function ingestRawFile(buffer: Buffer, options: IngestRawFileOptions & { preExtractedText?: ExtractedText } = {}): Promise<IngestResult> {
   const originalName = options.originalName ?? 'upload'
   const extension = path.extname(originalName).toLowerCase()
   if (!supportedExtensions.has(extension)) {
     return { sourcePath: options.rawStorageUrl ?? '', written: [], pages: [], graphLinks: [], skipped: `Unsupported file extension: ${extension || 'none'}` }
   }
 
-  const extracted = await extractText(buffer, originalName)
+  const extracted = options.preExtractedText ?? await extractText(buffer, originalName)
   const extractedText = extracted.text.trim()
   if (!extractedText) {
     throw new Error(`No readable text found in ${originalName}`)
@@ -169,12 +173,10 @@ The backend has already converted the uploaded file to plain text. Use only the 
 Return ONLY valid JSON in this shape:
 {
   "summary": {
-    "title": "Short source title",
     "category": "Short category",
     "tags": ["tag-one"],
     "workspaceLabels": ["work"],
-    "body": "# Markdown source summary grounded in the extracted text",
-    "excerpt": "One short excerpt"
+    "body": "# Suggested Title Without File Extension\\n\\nShort descriptive excerpt...\\n\\nDetailed markdown summary grounded in the text..."
   },
   "pages": [
     {
@@ -216,7 +218,13 @@ ${JSON.stringify(candidates, null, 2)}
 Extracted text:
 ${extractedText}`
 
-  const response = await getGeminiClient().models.generateContent({ model: env.geminiModel, contents: prompt })
+  const response = await getGeminiClient().models.generateContent({
+    model: env.geminiModel,
+    contents: prompt,
+    config: {
+      responseMimeType: 'application/json'
+    }
+  })
   const responseText = response.text ? cleanJsonText(response.text) : ''
   if (!responseText) throw new Error('Gemini returned an empty ingest response')
 

@@ -54,7 +54,11 @@ Return ONLY a valid JSON array of objects representing contradictions found. For
 ]
 If no contradictions are found, return an empty array []. Do not include markdown code fences, extra words, or annotations. Return plain JSON only.`
 
-    const response = await getGeminiClient().models.generateContent({ model, contents: prompt })
+    const response = await getGeminiClient().models.generateContent({
+      model,
+      contents: prompt,
+      config: { responseMimeType: 'application/json' }
+    })
     let contradictions: Array<{ slugs: string[]; explanation: string }> = []
     try {
       const cleanText = response.text ? response.text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim() : '[]'

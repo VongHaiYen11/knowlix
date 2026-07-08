@@ -36,9 +36,9 @@ export const researchService = {
 
   async retrievalPreview(userId: string, body: z.infer<typeof researchSchema>) {
     const queryEmbedding = await embedText(body.question).catch(() => [])
-    const candidates = await researchRepository.retrieveCandidates(userId, { question: body.question, scope: body.scope, limit: 40 })
+    const candidates = await researchRepository.retrieveCandidates(userId, { question: body.question, scope: body.scope, queryEmbedding, limit: 40 })
     return candidates.map((row: any) => {
-      const vectorScore = cosineSimilarity(queryEmbedding, Array.isArray(row.embedding) ? row.embedding : [])
+      const vectorScore = Number(row.vector_score ?? 0)
       return {
       slug: row.slug,
       title: row.title,
@@ -54,10 +54,10 @@ export const researchService = {
 
   async streamAnswer(userId: string, body: z.infer<typeof researchSchema>, model: string) {
     const queryEmbedding = await embedText(body.question).catch(() => [])
-    const knowledge = (await researchRepository.retrieveCandidates(userId, { question: body.question, scope: body.scope, limit: 40 }))
+    const knowledge = (await researchRepository.retrieveCandidates(userId, { question: body.question, scope: body.scope, queryEmbedding, limit: 40 }))
       .map((row: any) => ({
         ...row,
-        hybrid_score: Math.max(Number(row.fts_score ?? 0), cosineSimilarity(queryEmbedding, Array.isArray(row.embedding) ? row.embedding : [])),
+        hybrid_score: Math.max(Number(row.fts_score ?? 0), Number(row.vector_score ?? 0)),
       }))
       .sort((a: any, b: any) => b.hybrid_score - a.hybrid_score)
       .slice(0, 12)
@@ -81,7 +81,11 @@ ${candidateList || 'No candidates.'}`
     let selectedSlugs = new Set<string>()
     if (knowledge.length) {
       try {
-        const selection = await getGeminiClient().models.generateContent({ model, contents: selectionPrompt })
+        const selection = await getGeminiClient().models.generateContent({
+          model,
+          contents: selectionPrompt,
+          config: { responseMimeType: 'application/json' }
+        })
         const cleanText = selection.text ? selection.text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim() : '[]'
         const parsed = JSON.parse(cleanText)
         if (Array.isArray(parsed)) selectedSlugs = new Set(parsed.filter((slug): slug is string => typeof slug === 'string'))

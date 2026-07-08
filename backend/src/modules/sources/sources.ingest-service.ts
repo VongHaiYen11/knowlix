@@ -2,7 +2,7 @@ import { excerpt, slugify, uniqueCleanStrings, wordCount } from '../../utils/tex
 import { graphRepository } from '../graph/graph.repository.js'
 import { sourcesRepository } from './sources.repository.js'
 import { pool } from '../../database/pool.js'
-import { ingestRawFile } from '../../wiki/ingest.js'
+import { ingestRawFile, extractText } from '../../wiki/ingest.js'
 import { storageService } from '../../lib/storage.js'
 import { env } from '../../config/env.js'
 import { embedText } from '../../lib/embeddings.js'
@@ -26,18 +26,38 @@ export async function runBackgroundIngest(input: {
   try {
     console.log(`[Ingest] Starting ingest for "${originalName}" (${sourceId})`)
     const raw = await storageService.download({ userId, storageObjectId: rawStorageObjectId })
+    
+    // 1. Extract text first to generate embedding for candidate search
+    let preExtractedText
+    try {
+      preExtractedText = await extractText(raw.buffer, originalName)
+    } catch (e) {
+      console.warn(`[Ingest] Could not pre-extract text for candidates:`, e)
+    }
+    
+    // 2. Generate embedding for hybrid search
+    const textSnippet = preExtractedText?.text?.slice(0, 1000) || originalName
+    const fileEmbedding = await embedText(textSnippet).catch(() => [])
+    const embeddingStr = `[${fileEmbedding.join(',')}]`
+    
+    // 3. Find candidates using Hybrid Search (FTS + Vector)
     const candidatesResult = await pool.query(
       `SELECT slug,title,overview,category,knowledge_tags AS tags
        FROM knowledge_entries
        WHERE user_id=$1
-       ORDER BY updated_at DESC
+       ORDER BY GREATEST(
+          ts_rank_cd(COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))), plainto_tsquery('simple', $2)),
+          1 - (embedding <=> $3::vector)
+       ) DESC, updated_at DESC
        LIMIT 20`,
-      [userId],
+      [userId, originalName, embeddingStr],
     )
+    
     const ingest = await ingestRawFile(raw.buffer, {
       originalName,
       uploadedType,
       rawStorageUrl,
+      preExtractedText,
       candidates: candidatesResult.rows.map((row) => ({
         slug: row.slug,
         title: row.title,
