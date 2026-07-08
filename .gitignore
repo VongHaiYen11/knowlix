@@ -32,5 +32,6 @@ coverage/
 # User uploads and generated files
 raw/
 wiki/
+!backend/src/wiki/
+!backend/src/wiki/**
 outputs/
-

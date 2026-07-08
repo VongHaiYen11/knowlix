@@ -14,10 +14,7 @@ import { runBackgroundIngest } from './sources.ingest-service.js'
 function sourceTypeFromUpload(mimeType: string, filename: string) {
   const extension = filename.toLowerCase().split('.').pop()
   if (mimeType === 'application/pdf' || extension === 'pdf') return 'PDF'
-  if (mimeType.startsWith('image/')) return 'Image'
-  if (mimeType.startsWith('audio/')) return 'Voice'
-  if (extension === 'md' || extension === 'txt') return 'Note'
-  if (extension === 'html' || extension === 'htm') return 'Article'
+  if (extension === 'md' || extension === 'markdown' || extension === 'txt') return 'Note'
   return 'File'
 }
 

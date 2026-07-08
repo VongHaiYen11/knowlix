@@ -198,46 +198,49 @@ Sources can be created manually with these domain types:
 Note, PDF, Article, Bookmark, Image, Voice, File
 ```
 
-Uploads are stored through multer memory storage and limited by `MAX_UPLOAD_MB`. The upload route currently accepts any file that reaches multer; `allowedUploadMimeTypes` documents intended MIME types but is not enforced by the route yet.
+Uploads are stored through multer memory storage and limited by `MAX_UPLOAD_MB`. The upload route accepts only PDF, DOCX, TXT, and Markdown files. The backend enforces both extension and compatible MIME type checks, with `application/octet-stream` allowed for browser/file-manager MIME quirks.
 
-Intended upload MIME types:
+Accepted upload types:
 
 ```txt
 application/pdf
-image/png
-image/jpeg
-image/webp
-audio/mpeg
-audio/wav
+application/vnd.openxmlformats-officedocument.wordprocessingml.document
 text/plain
 text/markdown
-application/json
-text/csv
 application/octet-stream
 ```
 
-### Text Extraction Reality
+Accepted extensions:
 
-The current automatic text ingest is intentionally simple:
+```txt
+.pdf
+.docx
+.txt
+.md
+.markdown
+```
 
-- `.md`, `.txt`, `.json`, and `.csv` are read as UTF-8 text by `backend/src/wiki/ingest.ts`.
-- The whole text becomes one ingest page.
-- The upload source is updated with text content, excerpt, tags, category, and `Processed` status.
-- A knowledge page is upserted from the ingest page.
-- Unsupported extensions are stored as source files but marked skipped at the uploaded-file level, and the visible source returns to `Queued`.
+### Text-First Extraction
 
-PDF, image, and audio uploads are classified as source types and file records are stored, but there is no PDF parser, OCR, or speech-to-text parser wired into the backend yet.
+The automatic upload ingest is text-first:
+
+- `.txt`, `.md`, and `.markdown` are read as UTF-8 text. Markdown is not parsed or converted; its original text is passed through.
+- `.pdf` files are converted to plain text by the backend PDF extractor.
+- `.docx` files are converted to raw plain text by the backend DOCX extractor.
+- Gemini receives only the extracted text plus file metadata. Raw file bytes and file handles are not sent to Gemini.
+- Unsupported upload types are rejected with `415 UNSUPPORTED_MEDIA_TYPE`.
 
 ### Summarizing Into Knowledge
 
-For supported text uploads, `runBackgroundIngest` performs this pipeline:
+For supported uploads, `runBackgroundIngest` performs this pipeline:
 
 1. Save the raw file under `../raw/uploads/<date>/<fileId>-<safeName>`.
 2. Create an `uploaded_files` row with `pending` ingest status.
 3. Create a `sources` row with `Processing` status.
-4. Read the raw text with `ingestRawFile`.
-5. Update the source with extracted content and a short excerpt.
-6. Upsert a `knowledge_entries` row:
+4. Extract or read plain text with `ingestRawFile`.
+5. Send only the extracted text and metadata to Gemini for structured JSON output.
+6. Update the source with the generated summary content, excerpt, tags, category, and `Processed` status.
+7. Upsert generated `knowledge_entries` rows:
    - `slug` is derived from the file/page title with `slugify`.
    - `overview` is a short excerpt of the body.
    - `content` stores the page body.
@@ -245,9 +248,7 @@ For supported text uploads, `runBackgroundIngest` performs this pipeline:
    - `source_list` points back to the source.
    - `reference_list` records the raw upload path.
    - `timeline` records the generation event.
-7. Mark the uploaded file as `completed`, or `skipped` if the extension is unsupported.
-
-Despite the field names, this pipeline is extractive and deterministic today; it does not call Gemini to summarize uploaded files.
+8. Mark the uploaded file as `completed`, or `failed` if extraction or Gemini JSON parsing fails.
 
 ### Creating Links Between Knowledge
 

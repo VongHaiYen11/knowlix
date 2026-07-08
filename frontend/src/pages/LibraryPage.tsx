@@ -151,7 +151,7 @@ function LibraryControls({
           </Link>
           <label className={`inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-3.5 text-sm text-foreground transition hover:border-ring/40 ${uploading ? 'cursor-wait opacity-70' : 'cursor-pointer'}`}>
             <Upload className="h-4 w-4" strokeWidth={1.75} />{uploading ? 'Ingesting...' : 'Upload'}
-            <input type="file" multiple className="hidden" aria-label="Upload source files" disabled={uploading} onChange={onUpload} />
+            <input type="file" multiple accept=".pdf,.docx,.txt,.md,.markdown" className="hidden" aria-label="Upload source files" disabled={uploading} onChange={onUpload} />
           </label>
           {uploadError ? <span className="text-xs text-destructive">{uploadError}</span> : null}
           <Dropdown label="Type" options={sourceTypes} selected={[sourceType]} onToggle={onSourceType} showSelectedCount={false} />

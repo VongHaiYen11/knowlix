@@ -22,13 +22,7 @@ export async function runBackgroundIngest(input: {
   const { userId, fileId, sourceId, rawFilePath, originalName, created, uploadedType } = input
   try {
     console.log(`[Ingest] Starting ingest for "${originalName}" (${sourceId})`)
-    const ingest = await ingestRawFile(rawFilePath).catch((error: unknown): IngestResult => ({
-      sourcePath: rawFilePath,
-      written: [],
-      pages: [],
-      graphLinks: [],
-      skipped: error instanceof Error ? error.message : 'Gemini ingest failed',
-    }))
+    const ingest = await ingestRawFile(rawFilePath, { originalName, uploadedType })
 
     await sourcesRepository.updateUploadedFileStatus(fileId, ingest.skipped ? 'skipped' : 'completed', ingest.written)
 

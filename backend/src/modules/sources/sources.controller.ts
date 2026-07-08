@@ -1,7 +1,7 @@
 import type { Response } from 'express'
 import { AppError } from '../../errors/index.js'
 import type { AuthedRequest } from '../../types/request.js'
-import { allowedUploadMimeTypes } from './sources.upload.js'
+import { isAllowedUploadFile } from './sources.upload.js'
 import { sourcesService } from './sources.service.js'
 
 export const sourcesController = {
@@ -16,7 +16,7 @@ export const sourcesController = {
   },
   async upload(req: AuthedRequest, res: Response) {
     if (!req.file) throw new AppError(400, 'VALIDATION_ERROR', 'file is required')
-    if (!allowedUploadMimeTypes.includes(req.file.mimetype)) throw new AppError(415, 'UNSUPPORTED_MEDIA_TYPE', 'Unsupported file type')
+    if (!isAllowedUploadFile(req.file)) throw new AppError(415, 'UNSUPPORTED_MEDIA_TYPE', 'Unsupported file type. Upload PDF, DOCX, TXT, or Markdown files only.')
     res.status(201).json(await sourcesService.upload(req.user.id, req.file))
   },
   async file(req: AuthedRequest, res: Response) {
