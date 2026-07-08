@@ -102,7 +102,7 @@ export async function runBackgroundIngest(input: {
        WHERE id=$12`,
       [
         uploadedType,
-        originalName,
+        sourceTitle,
         sourceTags,
         sourceCategory,
         sourceStatus,
@@ -116,7 +116,7 @@ export async function runBackgroundIngest(input: {
       ],
     )
 
-    const sourceReference = { id: sourceId, type: uploadedType, title: originalName }
+    const sourceReference = { id: sourceId, type: uploadedType, title: sourceTitle }
     const writtenObjects = [extractedObject?.url, summaryObject?.url].filter(Boolean)
     for (const page of ingest.pages) {
       const action = page.action ?? 'create'
