@@ -1,4 +1,4 @@
-import { ArrowLeft, Clock, Download, FileStack, History, Link2, Pencil, RefreshCw, Sparkles } from 'lucide-react'
+import { ArrowLeft, Clock, Download, ExternalLink, FileStack, History, Link2, Pencil, RefreshCw, Sparkles } from 'lucide-react'
 import { Link } from 'react-router'
 import { PageHeader } from '@/components/common/PageHeader'
 import { PageShell } from '@/components/common/PageShell'
@@ -51,7 +51,22 @@ export function KnowledgeArticlePage({ slug }: { slug: string }) {
               <ArticleSection title="Examples"><div className="space-y-4">{entry.examples.map((example) => <Card key={example.title} className="p-5"><p className="font-serif text-lg leading-snug tracking-tight">{example.title}</p><p className="mt-1.5 text-[15px] leading-relaxed text-muted-foreground">{example.body}</p></Card>)}</div></ArticleSection>
             </>
           )}
-          <ArticleSection title="References"><ul className="space-y-2">{entry.references.map((ref) => <li key={ref.label} className="flex items-baseline justify-between gap-4 border-b border-border pb-2 text-[15px]"><span>{ref.label}</span><span className="shrink-0 text-xs text-muted-foreground">{ref.source}</span></li>)}</ul></ArticleSection>
+          <ArticleSection title="References">
+            <ul className="space-y-2">
+              {entry.references.map((ref) => (
+                <li key={ref.label} className="flex items-baseline justify-between gap-4 border-b border-border pb-2 text-[15px]">
+                  <span>{ref.label}</span>
+                  {ref.source.startsWith('http') ? (
+                    <a href={ref.source} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground transition hover:text-primary hover:underline">
+                      View Source <ExternalLink className="h-3 w-3" />
+                    </a>
+                  ) : (
+                    <span className="shrink-0 text-xs text-muted-foreground line-clamp-1">{ref.source}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </ArticleSection>
           <ArticleSection title="Source materials">
             <ul className="grid gap-3 sm:grid-cols-2">
               {entry.sources.map((source) => {
