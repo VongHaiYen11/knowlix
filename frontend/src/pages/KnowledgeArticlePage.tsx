@@ -51,27 +51,26 @@ export function KnowledgeArticlePage({ slug }: { slug: string }) {
               <ArticleSection title="Examples"><div className="space-y-4">{entry.examples.map((example) => <Card key={example.title} className="p-5"><p className="font-serif text-lg leading-snug tracking-tight">{example.title}</p><p className="mt-1.5 text-[15px] leading-relaxed text-muted-foreground">{example.body}</p></Card>)}</div></ArticleSection>
             </>
           )}
-          <ArticleSection title="References">
-            <ul className="space-y-2">
-              {entry.references.map((ref) => (
-                <li key={ref.label} className="flex items-baseline justify-between gap-4 border-b border-border pb-2 text-[15px]">
-                  <span>{ref.label}</span>
-                  {ref.source.startsWith('http') ? (
-                    <a href={ref.source} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground transition hover:text-primary hover:underline">
-                      View Source <ExternalLink className="h-3 w-3" />
-                    </a>
-                  ) : (
-                    <span className="shrink-0 text-xs text-muted-foreground line-clamp-1">{ref.source}</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </ArticleSection>
           <ArticleSection title="Source materials">
             <ul className="grid gap-3 sm:grid-cols-2">
               {entry.sources.map((source) => {
                 const Icon = sourceTypeIcon[source.type]
-                return <li key={source.id} className="flex items-start gap-3 rounded-2xl border border-border bg-card p-4 elevated"><span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground"><Icon className="h-4 w-4" strokeWidth={1.75} /></span><div><p className="text-[10px] uppercase tracking-wide text-muted-foreground">{source.type}</p><p className="mt-0.5 text-sm leading-snug">{source.title}</p></div></li>
+                return (
+                  <li key={source.id}>
+                    <Link
+                      to={ROUTES.source(source.id)}
+                      className="flex items-start gap-3 rounded-2xl border border-border bg-card p-4 elevated hover:border-ring/40 transition-colors duration-200"
+                    >
+                      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
+                        <Icon className="h-4 w-4" strokeWidth={1.75} />
+                      </span>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{source.type}</p>
+                        <p className="mt-0.5 text-sm font-medium leading-snug hover:text-primary transition-colors">{source.title}</p>
+                      </div>
+                    </Link>
+                  </li>
+                )
               })}
             </ul>
           </ArticleSection>
