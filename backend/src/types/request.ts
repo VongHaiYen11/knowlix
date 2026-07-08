@@ -1,6 +1,6 @@
 import type { Request } from 'express'
 
-export type SourceType = 'Note' | 'PDF' | 'Article' | 'Bookmark' | 'Image' | 'Voice' | 'File'
+export type SourceType = 'PDF' | 'DOCX' | 'TXT' | 'Markdown'
 export type ProcessingStatus = 'Processed' | 'Processing' | 'Queued'
 
 export interface AuthUser {

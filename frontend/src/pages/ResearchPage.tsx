@@ -16,6 +16,7 @@ export function ResearchPage() {
   const [renaming, setRenaming] = useState(false)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const taxonomy = useTaxonomy()
+  const taxonomyData = taxonomy.data
   const home = useHomeData()
   const research = useResearch(searchParams.get('q') ?? '')
 
@@ -86,8 +87,8 @@ export function ResearchPage() {
             <ResearchHistoryPanel
               threads={research.threads}
               activeThreadId={research.activeThread?.id}
-              tags={taxonomy.tags}
-              categories={taxonomy.categories}
+              tags={taxonomyData.tags}
+              categories={taxonomyData.categories}
               onSelectThread={(id) => {
                 research.selectThread(id)
                 setHistoryOpen(false)
@@ -99,8 +100,8 @@ export function ResearchPage() {
       {!historyOpen && (
         <EvidencePanel
           knowledge={research.scopedKnowledge}
-          tags={taxonomy.tags}
-          categories={taxonomy.categories}
+          tags={taxonomyData.tags}
+          categories={taxonomyData.categories}
           scope={research.scope}
           total={home.data.knowledge.length}
           onScopeChange={research.setScope}

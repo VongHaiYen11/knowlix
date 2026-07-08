@@ -1,4 +1,3 @@
-import { allCategories, allTags } from '@/constants/sampleData'
 import { apiClient, isApiRepositoryEnabled } from '@/repositories/apiClient'
 import { libraryRepository, type LibraryRepository } from '@/repositories/libraryRepository'
 import type { GraphLink, GraphNode, JournalDay, KnowledgeEntry, NoteItem, Source, SourceType } from '@/types/knowledge'
@@ -172,8 +171,11 @@ ${entry.explanation.join('\n\n')}
     return this.repository.getJournal()
   }
 
-  getTaxonomy(): { tags: string[]; categories: string[] } {
-    return { tags: allTags, categories: allCategories }
+  async getTaxonomy(): Promise<{ tags: string[]; categories: string[] }> {
+    const [sources, knowledge] = await Promise.all([this.repository.getSources(), this.repository.getKnowledge()])
+    const tags = Array.from(new Set([...sources.flatMap((source) => source.tags), ...knowledge.flatMap((entry) => entry.tags)].filter(Boolean))).sort()
+    const categories = Array.from(new Set([...sources.map((source) => source.category), ...knowledge.map((entry) => entry.category)].filter(Boolean))).sort()
+    return { tags, categories }
   }
 
   async uploadSources(files: File[]): Promise<void> {

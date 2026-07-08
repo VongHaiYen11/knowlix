@@ -17,7 +17,7 @@ import type { SourceType } from '@/types/knowledge'
 
 type LibraryTab = 'sources' | 'knowledge'
 
-const sourceTypes: Array<SourceType | 'All'> = ['All', 'Note', 'PDF', 'Article', 'Bookmark', 'Image', 'Voice', 'File']
+const sourceTypes: Array<SourceType | 'All'> = ['All', 'PDF', 'DOCX', 'TXT', 'Markdown']
 
 export function LibraryPage() {
   const [tab, setTab] = useState<LibraryTab>('sources')
@@ -27,6 +27,7 @@ export function LibraryPage() {
   const [tag, setTag] = useState('All')
   const [sort, setSort] = useState<'updated-desc' | 'created-desc' | 'title-asc' | 'type-asc'>('updated-desc')
   const taxonomy = useTaxonomy()
+  const taxonomyData = taxonomy.data
   const sourceFilters = useMemo(() => ({ query, sourceType, category, tag, sort }), [category, query, sort, sourceType, tag])
   const knowledgeFilters = useMemo(() => ({ query, category, tag, sort }), [category, query, sort, tag])
   const sources = useLibrarySources(sourceFilters)
@@ -67,8 +68,8 @@ export function LibraryPage() {
             category={category}
             tag={tag}
             sort={sort}
-            categories={taxonomy.categories}
-            tags={taxonomy.tags}
+            categories={taxonomyData.categories}
+            tags={taxonomyData.tags}
             uploading={uploading}
             uploadError={uploadError}
             onUpload={handleUpload}
@@ -87,8 +88,8 @@ export function LibraryPage() {
             category={category}
             tag={tag}
             sort={sort}
-            categories={taxonomy.categories}
-            tags={taxonomy.tags}
+            categories={taxonomyData.categories}
+            tags={taxonomyData.tags}
             uploading={uploading}
             uploadError={uploadError}
             onUpload={handleUpload}

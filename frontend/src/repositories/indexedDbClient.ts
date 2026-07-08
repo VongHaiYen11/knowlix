@@ -1,5 +1,4 @@
 import { DB_NAME, DB_VERSION } from '@/constants/app'
-import { graphLinks, graphNodes, sampleJournal, sampleKnowledge, sampleNotes, sampleSources } from '@/constants/sampleData'
 import type { GraphLink, GraphNode, JournalDay, KnowledgeEntry, NoteItem, Source } from '@/types/knowledge'
 
 export const STORE_NAMES = {
@@ -22,7 +21,6 @@ interface StoreMap {
   graphLinks: GraphLink & { id: string }
 }
 
-const seededStores = new Set<StoreName>()
 let dbPromise: Promise<IDBDatabase> | null = null
 
 function getKeyPath(storeName: StoreName): string {
@@ -56,51 +54,13 @@ export function openDatabase(): Promise<IDBDatabase> {
   return dbPromise
 }
 
-async function seedStore<K extends keyof StoreMap>(storeName: K, records: StoreMap[K][]): Promise<void> {
-  if (seededStores.has(storeName)) return
-  const db = await openDatabase()
-  const countTx = db.transaction(storeName, 'readonly')
-  const count = await requestToPromise(countTx.objectStore(storeName).count())
-  if (count > 0) {
-    seededStores.add(storeName)
-    return
-  }
-
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction(storeName, 'readwrite')
-    const store = tx.objectStore(storeName)
-    records.forEach((record) => store.put(record))
-    tx.oncomplete = () => {
-      seededStores.add(storeName)
-      resolve()
-    }
-    tx.onerror = () => reject(tx.error ?? new Error(`Could not seed ${storeName}`))
-  })
-}
-
-export async function seedDatabase(): Promise<void> {
-  await Promise.all([
-    seedStore(STORE_NAMES.knowledge, sampleKnowledge),
-    seedStore(STORE_NAMES.sources, sampleSources),
-    seedStore(STORE_NAMES.notes, sampleNotes),
-    seedStore(STORE_NAMES.journal, sampleJournal),
-    seedStore(STORE_NAMES.graphNodes, graphNodes),
-    seedStore(
-      STORE_NAMES.graphLinks,
-      graphLinks.map((link, index) => ({ ...link, id: `gl-${index}` })),
-    ),
-  ])
-}
-
 export async function getAllFromStore<K extends keyof StoreMap>(storeName: K): Promise<StoreMap[K][]> {
-  await seedDatabase()
   const db = await openDatabase()
   const tx = db.transaction(storeName, 'readonly')
   return requestToPromise(tx.objectStore(storeName).getAll())
 }
 
 export async function getFromStore<K extends keyof StoreMap>(storeName: K, key: string): Promise<StoreMap[K] | undefined> {
-  await seedDatabase()
   const db = await openDatabase()
   const tx = db.transaction(storeName, 'readonly')
   const result = await requestToPromise(tx.objectStore(storeName).get(key))
@@ -108,7 +68,6 @@ export async function getFromStore<K extends keyof StoreMap>(storeName: K, key: 
 }
 
 export async function putInStore<K extends keyof StoreMap>(storeName: K, value: StoreMap[K]): Promise<void> {
-  await seedDatabase()
   const db = await openDatabase()
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(storeName, 'readwrite')
@@ -119,7 +78,6 @@ export async function putInStore<K extends keyof StoreMap>(storeName: K, value: 
 }
 
 export async function deleteFromStore(storeName: StoreName, key: string): Promise<void> {
-  await seedDatabase()
   const db = await openDatabase()
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(storeName, 'readwrite')

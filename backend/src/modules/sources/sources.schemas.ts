@@ -1,9 +1,9 @@
 import { z } from 'zod'
 import { uniqueCleanStrings } from '../../utils/text.js'
 
-export const sourceTypes = ['Note', 'PDF', 'Article', 'Bookmark', 'Image', 'Voice', 'File'] as const
+export const sourceTypes = ['PDF', 'DOCX', 'TXT', 'Markdown'] as const
 export const statuses = ['Queued', 'Processing', 'Processed'] as const
-export const binarySourceTypes = new Set(['PDF', 'Image', 'Voice', 'File'])
+export const binarySourceTypes = new Set(['PDF', 'DOCX'])
 
 const tagsSchema = z.array(z.string()).default([]).transform(uniqueCleanStrings)
 

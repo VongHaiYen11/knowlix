@@ -39,5 +39,6 @@ export function useGraphData() {
 }
 
 export function useTaxonomy() {
-  return libraryService.getTaxonomy()
+  const loader = useCallback(() => libraryService.getTaxonomy(), [])
+  return useAsync(loader, { tags: [], categories: [] })
 }

@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS storage_objects (
 CREATE TABLE IF NOT EXISTS sources (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
-  type TEXT NOT NULL CHECK (type IN ('Note', 'PDF', 'Article', 'Bookmark', 'Image', 'Voice', 'File')),
+  type TEXT NOT NULL CHECK (type IN ('PDF', 'DOCX', 'TXT', 'Markdown')),
   title TEXT NOT NULL,
   content TEXT,
   tags TEXT[] NOT NULL DEFAULT '{}',

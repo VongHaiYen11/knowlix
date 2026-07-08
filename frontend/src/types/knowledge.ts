@@ -1,4 +1,4 @@
-export type SourceType = 'Note' | 'PDF' | 'Article' | 'Bookmark' | 'Image' | 'Voice' | 'File'
+export type SourceType = 'PDF' | 'DOCX' | 'TXT' | 'Markdown'
 export type ProcessingStatus = 'Processed' | 'Processing' | 'Queued'
 
 export interface KnowledgeSource {
@@ -92,7 +92,7 @@ export interface GraphLink {
 
 export interface LibrarySearchResult {
   id: string
-  kind: 'Knowledge' | 'Note' | 'Journal' | 'PDF' | 'Bookmark'
+  kind: 'Knowledge' | 'Note' | 'Journal' | SourceType
   title: string
   snippet: string
   meta: string

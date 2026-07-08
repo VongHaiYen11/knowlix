@@ -65,7 +65,7 @@ function SidebarContent({ collapsed = false, onCollapseToggle, onNavigate }: { c
           ))}
         </ul>
       </nav>
-      <div className="px-3 pb-5">
+      <div className="px-3 pb-2">
         <div className={cn('flex items-center rounded-lg py-2.5', collapsed ? 'justify-center px-2' : 'gap-3 px-3')}>
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-sm text-accent-foreground">{user?.initials ?? 'U'}</span>
           {!collapsed && <>

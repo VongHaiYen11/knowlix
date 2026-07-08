@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useState } from 'react'
-import { sampleNoteContent } from '@/constants/sampleData'
 import { libraryService } from '@/services/libraryService'
 import { useAsync } from './useAsync'
 
@@ -9,7 +8,7 @@ export function useNoteEditor(noteId: string) {
   const isNew = noteId === 'new'
   const loader = useCallback(() => (isNew ? Promise.resolve(undefined) : libraryService.getNoteById(noteId)), [isNew, noteId])
   const noteState = useAsync(loader, undefined)
-  const [draft, setDraft] = useState(isNew ? '# Untitled note\n\n' : sampleNoteContent)
+  const [draft, setDraft] = useState('# Untitled note\n\n')
   const [view, setView] = useState<EditorView>('split')
 
   const title = useMemo(() => draft.match(/^#\s+(.+)/m)?.[1] ?? 'Untitled note', [draft])

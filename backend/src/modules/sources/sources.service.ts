@@ -14,8 +14,10 @@ import { runBackgroundIngest } from './sources.ingest-service.js'
 function sourceTypeFromUpload(mimeType: string, filename: string) {
   const extension = filename.toLowerCase().split('.').pop()
   if (mimeType === 'application/pdf' || extension === 'pdf') return 'PDF'
-  if (extension === 'md' || extension === 'markdown' || extension === 'txt') return 'Note'
-  return 'File'
+  if (extension === 'docx') return 'DOCX'
+  if (extension === 'txt') return 'TXT'
+  if (extension === 'md' || extension === 'markdown') return 'Markdown'
+  throw new AppError(415, 'UNSUPPORTED_MEDIA_TYPE', 'Unsupported file type. Upload PDF, DOCX, TXT, or Markdown files only.')
 }
 
 export const sourcesService = {

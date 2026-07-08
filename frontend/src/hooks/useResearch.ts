@@ -1,15 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import { researchService, type ResearchMessage, type ResearchScope, type ResearchThread } from '@/services/researchService'
+import { researchService, type ResearchScope, type ResearchThread } from '@/services/researchService'
 import type { KnowledgeEntry } from '@/types/knowledge'
 import { getModelPreference } from '@/utils/modelPreference'
 
 const storageKey = 'knowlix.researchThreads'
 const defaultDateRange = 'Anytime'
 const defaultScope: ResearchScope = { tags: [], categories: [], dateRange: defaultDateRange }
-const seedMessages: ResearchMessage[] = [
-  { id: 'seed-u', role: 'user', content: 'What do I actually know about how memory works?' },
-  { id: 'seed-a', role: 'assistant', content: 'Across your knowledge pages, three ideas form a coherent picture: memory decays, retrieval strengthens it, and spaced repetition operationalizes both.' },
-]
 
 const createThread = (title = 'Untitled'): ResearchThread => {
   const now = new Date().toISOString()
@@ -24,14 +20,12 @@ const createThread = (title = 'Untitled'): ResearchThread => {
   }
 }
 
-function isLegacySeedThread(thread: ResearchThread) {
-  return thread.title === 'Memory research'
-    && thread.messages.length === seedMessages.length
-    && thread.messages.every((message, index) => message.role === seedMessages[index].role && message.content === seedMessages[index].content)
-}
-
 function titleFromQuestion(question: string) {
   return question.trim().split(/\s+/).slice(0, 3).join(' ') || 'Untitled'
+}
+
+function isLegacyInitializedThread(thread: ResearchThread) {
+  return thread.messages.length > 0 && thread.messages.every((message) => message.id.startsWith('seed-'))
 }
 
 const loadThreads = (): ResearchThread[] => {
@@ -40,7 +34,7 @@ const loadThreads = (): ResearchThread[] => {
     if (!stored) return [createThread()]
     const parsed = JSON.parse(stored) as ResearchThread[]
     if (!Array.isArray(parsed) || !parsed.length) return [createThread()]
-    const threads = parsed.filter((thread) => !isLegacySeedThread(thread)).map((thread) => ({
+    const threads = parsed.filter((thread) => !isLegacyInitializedThread(thread)).map((thread) => ({
       ...thread,
       title: thread.title === 'Untitled research' ? 'Untitled' : thread.title,
       titleManuallyEdited: thread.titleManuallyEdited ?? !['Untitled', 'Untitled research'].includes(thread.title),

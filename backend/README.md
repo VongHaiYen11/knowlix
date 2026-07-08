@@ -122,7 +122,7 @@ The schema creates:
 - `research_threads`
 - `research_messages`
 
-Users are not seeded. Create an account through Sign up.
+No users are created automatically. Create an account through Sign up.
 
 ## Run Commands
 
@@ -268,7 +268,7 @@ For supported uploads, `runBackgroundIngest` performs this pipeline:
    - `slug` is derived from the file/page title with `slugify`.
    - `overview` is a short excerpt of the body.
    - `markdown_storage_object_id` points to the current Knowledge `.md`.
-   - `explanation` is seeded from the first text blocks.
+   - `explanation` is initialized from the first text blocks.
    - `knowledge_source_links` and `source_list` point back to the source.
    - `reference_list` records the raw storage URL.
    - `timeline` records the generation event.

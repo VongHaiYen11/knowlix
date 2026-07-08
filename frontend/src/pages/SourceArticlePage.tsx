@@ -20,6 +20,7 @@ import { libraryService } from '@/services/libraryService'
 export function SourceArticlePage({ id }: { id: string }) {
   const sourceState = useSourceArticle(id)
   const taxonomy = useTaxonomy()
+  const taxonomyData = taxonomy.data
   const navigate = useNavigate()
   const [newTag, setNewTag] = useState('')
   const [deleting, setDeleting] = useState(false)
@@ -143,7 +144,7 @@ export function SourceArticlePage({ id }: { id: string }) {
             </Button>
             <Card className="p-4">
               <h2 className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground"><Tag className="h-3.5 w-3.5" />Tags</h2>
-              <Dropdown label="Assign tags" options={taxonomy.tags} selected={source.tags} onToggle={toggleTag} prefix="#" triggerClassName="w-full justify-between" />
+              <Dropdown label="Assign tags" options={taxonomyData.tags} selected={source.tags} onToggle={toggleTag} prefix="#" triggerClassName="w-full justify-between" />
               <div className="mt-3 flex gap-2">
                 <input value={newTag} onChange={(event) => setNewTag(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void addTag() }} placeholder="Create tag" className="min-w-0 flex-1 rounded-lg border border-border bg-card px-3 py-2 text-sm focus:outline-none" />
                 <Button variant="outline" size="icon" onClick={addTag} aria-label="Create tag"><Plus className="h-4 w-4" /></Button>

@@ -79,7 +79,7 @@ The app runs at `http://localhost:5173`.
 ```text
 src/
 ├── components/      # Reusable UI, shared layout, and common page pieces
-├── constants/       # Routes, app constants, and seed data
+├── constants/       # Routes and app constants
 ├── features/        # Domain-specific UI sections
 ├── hooks/           # Async, library, research, editor, and theme hooks
 ├── pages/           # Route-level views
@@ -132,7 +132,7 @@ IndexedDB stores are declared in `src/repositories/indexedDbClient.ts`:
 - `graphNodes`
 - `graphLinks`
 
-The first app load seeds IndexedDB from `src/constants/sampleData.ts`.
+IndexedDB starts empty and is used only as a local fallback/cache when API mode is unavailable.
 
 Research chat threads are stored in PostgreSQL through `/api/v1/research/threads`. The frontend keeps a local cache for resilience. Theme and model preference are persisted with `localStorage`.
 
