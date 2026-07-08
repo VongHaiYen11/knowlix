@@ -1,6 +1,7 @@
 import { apiClient, isApiRepositoryEnabled } from '@/repositories/apiClient'
 import { libraryRepository, type LibraryRepository } from '@/repositories/libraryRepository'
-import type { GraphLink, GraphNode, JournalDay, KnowledgeEntry, NoteItem, Source, SourceType } from '@/types/knowledge'
+import type { JournalDay, KnowledgeEntry, NoteItem, Source, SourceType } from '@/types/knowledge'
+import { vietnamDateString, vietnamTimeString } from '@/utils/vietnamTime'
 
 export interface LibraryFilters {
   query?: string
@@ -31,6 +32,10 @@ function titleFromMarkdown(content: string, fallback: string): string {
 
 function plainExcerpt(content: string): string {
   return content.replace(/```[\s\S]*?```/g, '').replace(/[#*_>`|[\]-]/g, '').trim().slice(0, 180)
+}
+
+function cleanTags(tags: string[]) {
+  return Array.from(new Set(tags.map((tag) => tag.trim()).filter(Boolean)))
 }
 
 export class LibraryService {
@@ -147,6 +152,12 @@ ${entry.explanation.join('\n\n')}
     return this.repository.getNoteById(id)
   }
 
+  async getNotes(filters: Pick<LibraryFilters, 'query' | 'sort'> = {}): Promise<NoteItem[]> {
+    const notes = await this.repository.getNotes()
+    const filtered = notes.filter((note) => includesQuery([note.title, note.excerpt], filters.query ?? ''))
+    return sortByFilter(filtered, filters.sort)
+  }
+
   async saveNote(id: string, content: string): Promise<NoteItem> {
     const title = content.match(/^#\s+(.+)/m)?.[1] ?? 'Untitled note'
     const words = content.trim().split(/\s+/).filter(Boolean).length
@@ -158,17 +169,23 @@ ${entry.explanation.join('\n\n')}
       words,
       content,
     }
-    await this.repository.saveNote(note)
-    return note
+    return this.repository.saveNote(note)
   }
 
-  async getGraph(): Promise<{ nodes: GraphNode[]; links: GraphLink[] }> {
-    const [nodes, links] = await Promise.all([this.repository.getGraphNodes(), this.repository.getGraphLinks()])
-    return { nodes, links }
+  promoteNoteToSource(id: string): Promise<Source> {
+    return this.repository.promoteNoteToSource(id)
   }
 
   getJournal(): Promise<JournalDay[]> {
-    return this.repository.getJournal()
+    return this.repository.getJournal().then((days) => [...days].sort((a, b) => b.date.localeCompare(a.date)))
+  }
+
+  appendJournalEntry(input: { text: string; tags: string[] }): Promise<JournalDay> {
+    return this.repository.appendJournalEntry(vietnamDateString(), {
+      time: vietnamTimeString(),
+      text: input.text.trim(),
+      tags: cleanTags(input.tags),
+    })
   }
 
   async getTaxonomy(): Promise<{ tags: string[]; categories: string[] }> {

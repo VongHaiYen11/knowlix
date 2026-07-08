@@ -67,12 +67,12 @@ export function JournalToday({ journal }: { journal: JournalDay[] }) {
 
   return (
     <section className="mt-14">
-      <SectionHeading title="Journal today" href={ROUTES.journal} icon={CalendarDays} />
+      <SectionHeading title="Latest journal note" href={ROUTES.journal} icon={CalendarDays} />
       <Link to={ROUTES.journal}>
         <Card className="block p-6 transition hover:border-ring/40">
           <p className="font-serif text-xl leading-snug tracking-tight">{today.weekday}, {today.date}</p>
-          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{today.summary}</p>
-          <p className="mt-4 text-xs text-muted-foreground">{today.entries.length} entries - summary generated</p>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{today.entries[0]?.text ?? 'No notes yet today.'}</p>
+          <p className="mt-4 text-xs text-muted-foreground">{today.entries.length} journal note{today.entries.length === 1 ? '' : 's'} captured</p>
         </Card>
       </Link>
     </section>

@@ -6,7 +6,7 @@ import { getGeminiClient } from '../config/gemini.js'
 import { excerpt } from '../utils/text.js'
 import { getIngestPrompt } from '../prompts/index.js'
 
-export type IngestAction = 'create' | 'update' | 'merge' | 'link_only' | 'skip'
+export type IngestAction = 'create' | 'update' | 'merge' | 'replace' | 'link_only' | 'skip'
 
 export interface IngestPage {
   filename: string
@@ -23,7 +23,6 @@ export interface IngestResult {
   sourcePath: string
   written: string[]
   pages: IngestPage[]
-  graphLinks: Array<{ source: string; target: string }>
   skipped?: string
   extractedText?: string
   fileKind?: string
@@ -31,7 +30,6 @@ export interface IngestResult {
     title: string
     category: string
     tags: string[]
-    workspaceLabels?: string[]
     body: string
     excerpt: string
   }
@@ -74,15 +72,30 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 }
 
+function cleanLeadingSectionNumber(value: string): string {
+  return value.replace(/^\s*\d+(?:\.\d+)*[.)]\s+/, '').trim()
+}
+
+function normalizeMarkdownTitle(body: string, title: string): string {
+  const cleanTitle = cleanLeadingSectionNumber(title) || title
+  const cleanBody = body.trim()
+  if (!cleanBody) return cleanBody
+  if (/^#\s+.+/m.test(cleanBody)) {
+    return cleanBody.replace(/^#\s+.+/m, `# ${cleanTitle}`)
+  }
+  return `# ${cleanTitle}\n\n${cleanBody}`
+}
+
 function normalizeAction(value: unknown): IngestAction {
-  return value === 'update' || value === 'merge' || value === 'link_only' || value === 'skip' ? value : 'create'
+  return value === 'update' || value === 'merge' || value === 'replace' || value === 'link_only' || value === 'skip' ? value : 'create'
 }
 
 function normalizePage(value: unknown, fallbackTitle: string): IngestPage | null {
   const page = asRecord(value)
-  const title = typeof page.title === 'string' && page.title.trim() ? page.title.trim() : fallbackTitle
+  const rawTitle = typeof page.title === 'string' && page.title.trim() ? page.title.trim() : fallbackTitle
+  const title = cleanLeadingSectionNumber(rawTitle) || rawTitle
   const overview = typeof page.overview === 'string' && page.overview.trim() ? page.overview.trim() : ''
-  const body = typeof page.body === 'string' ? page.body.trim() : ''
+  const body = typeof page.body === 'string' ? normalizeMarkdownTitle(page.body, title) : ''
   const action = normalizeAction(page.action)
   if (!body && !['link_only', 'skip'].includes(action)) return null
   const filename = typeof page.filename === 'string' && page.filename.trim() ? page.filename.trim() : `${title}.md`
@@ -101,17 +114,18 @@ function normalizePage(value: unknown, fallbackTitle: string): IngestPage | null
 function normalizeIngestResult(input: unknown, fallback: { sourcePath: string; title: string; extractedText: string; fileKind: string }): IngestResult {
   const parsed = asRecord(input)
   const summaryRecord = asRecord(parsed.summary)
-  const summaryBody = typeof summaryRecord.body === 'string' && summaryRecord.body.trim() ? summaryRecord.body.trim() : fallback.extractedText
+  const rawSummaryBody = typeof summaryRecord.body === 'string' && summaryRecord.body.trim() ? summaryRecord.body.trim() : fallback.extractedText
   
-  const parsedTitle = summaryBody.match(/^#\s+(.+)/m)?.[1]?.trim()
+  const parsedTitle = cleanLeadingSectionNumber(rawSummaryBody.match(/^#\s+(.+)/m)?.[1]?.trim() ?? '')
+  const summaryTitle = parsedTitle || cleanLeadingSectionNumber(fallback.title) || fallback.title
+  const summaryBody = normalizeMarkdownTitle(rawSummaryBody, summaryTitle)
   const parsedExcerpt = typeof summaryRecord.excerpt === 'string' && summaryRecord.excerpt.trim() ? summaryRecord.excerpt.trim() : ''
   const cleanExcerpt = summaryBody.replace(/```[\s\S]*?```/g, '').replace(/[#*_>`|[\]-]/g, '').trim().slice(0, 180)
 
   const summary = {
-    title: parsedTitle || fallback.title,
+    title: summaryTitle,
     category: typeof summaryRecord.category === 'string' && summaryRecord.category.trim() ? summaryRecord.category.trim() : 'Uncategorized',
     tags: asStringArray(summaryRecord.tags),
-    workspaceLabels: asStringArray(summaryRecord.workspaceLabels),
     body: summaryBody,
     excerpt: parsedExcerpt || cleanExcerpt || excerpt(summaryBody),
   }
@@ -123,16 +137,7 @@ function normalizeIngestResult(input: unknown, fallback: { sourcePath: string; t
     pages.push({ filename: `${summary.title}.md`, title: summary.title, overview: summary.excerpt, body: summary.body, related: [], action: 'create' })
   }
 
-  const graphLinks = Array.isArray(parsed.graphLinks)
-    ? parsed.graphLinks.map((link) => {
-      const record = asRecord(link)
-      const source = typeof record.source === 'string' ? record.source.trim() : ''
-      const target = typeof record.target === 'string' ? record.target.trim() : ''
-      return source && target ? { source, target } : null
-    }).filter((link): link is { source: string; target: string } => Boolean(link))
-    : []
-
-  return { sourcePath: fallback.sourcePath, written: [], pages, graphLinks, summary, extractedText: fallback.extractedText, fileKind: fallback.fileKind }
+  return { sourcePath: fallback.sourcePath, written: [], pages, summary, extractedText: fallback.extractedText, fileKind: fallback.fileKind }
 }
 
 export async function extractText(buffer: Buffer, originalName: string): Promise<ExtractedText> {
@@ -155,7 +160,7 @@ export async function ingestRawFile(buffer: Buffer, options: IngestRawFileOption
   const originalName = options.originalName ?? 'upload'
   const extension = path.extname(originalName).toLowerCase()
   if (!supportedExtensions.has(extension)) {
-    return { sourcePath: options.rawStorageUrl ?? '', written: [], pages: [], graphLinks: [], skipped: `Unsupported file extension: ${extension || 'none'}` }
+    return { sourcePath: options.rawStorageUrl ?? '', written: [], pages: [], skipped: `Unsupported file extension: ${extension || 'none'}` }
   }
 
   const extracted = options.preExtractedText ?? await extractText(buffer, originalName)

@@ -4,7 +4,12 @@ import { uniqueCleanStrings } from '../../utils/text.js'
 export interface ResearchThreadInput {
   id: string
   title: string
-  messages: Array<{ id: string; role: 'user' | 'assistant'; content: string }>
+  messages: Array<{
+    id: string
+    role: 'user' | 'assistant'
+    content: string
+    references?: Array<{ number: number; id: string; type: string; title: string; tags?: string[]; categories?: string[] }>
+  }>
   scope: { tags: string[]; categories: string[]; dateRange?: string }
   createdAt?: string
   updatedAt?: string
@@ -12,25 +17,13 @@ export interface ResearchThreadInput {
 }
 
 export const researchRepository = {
-  async scopedKnowledge(userId: string, scope: { tags: string[]; categories: string[] }) {
-    const { rows } = await pool.query(
-      `SELECT slug, title, overview, markdown_storage_object_id, source_list, knowledge_tags AS tags, category
-       WHERE user_id=$1
-         AND ($2::text[] = '{}' OR knowledge_tags && $2::text[])
-         AND ($3::text[] = '{}' OR category = ANY($3::text[]))
-       ORDER BY updated_at DESC`,
-      [userId, uniqueCleanStrings(scope.tags), uniqueCleanStrings(scope.categories)],
-    )
-    return rows
-  },
-
   async retrieveCandidates(userId: string, input: { question: string; scope: { tags: string[]; categories: string[] }; queryEmbedding: number[]; limit?: number }) {
     const tags = uniqueCleanStrings(input.scope.tags)
     const categories = uniqueCleanStrings(input.scope.categories)
     const limit = input.limit ?? 12
     const embeddingStr = `[${input.queryEmbedding.join(',')}]`
     const { rows } = await pool.query(
-      `SELECT slug,title,overview,category,knowledge_tags AS tags,workspace_labels,markdown_storage_object_id,source_list,
+      `SELECT slug,title,overview,category,knowledge_tags AS tags,markdown_storage_object_id,
         ts_rank_cd(COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))), plainto_tsquery('simple', $4)) AS fts_score,
         1 - (embedding <=> $6::vector) AS vector_score
        FROM knowledge_entries
@@ -65,7 +58,7 @@ export const researchRepository = {
     const ids = threadResult.rows.map((row) => row.id)
     const messageResult = ids.length
       ? await pool.query(
-        `SELECT thread_id,id,role,content
+        `SELECT thread_id,id,role,content,reference_list
          FROM research_messages
          WHERE user_id=$1 AND thread_id = ANY($2::text[])
          ORDER BY thread_id, position ASC, created_at ASC`,
@@ -75,7 +68,12 @@ export const researchRepository = {
     const messagesByThread = new Map<string, any[]>()
     for (const message of messageResult.rows) {
       const current = messagesByThread.get(message.thread_id) ?? []
-      current.push({ id: message.id, role: message.role, content: message.content })
+      current.push({
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        references: Array.isArray(message.reference_list) ? message.reference_list : [],
+      })
       messagesByThread.set(message.thread_id, current)
     }
     return threadResult.rows.map((row) => ({
@@ -113,9 +111,9 @@ export const researchRepository = {
       await client.query('DELETE FROM research_messages WHERE user_id=$1 AND thread_id=$2', [userId, thread.id])
       for (const [index, message] of thread.messages.entries()) {
         await client.query(
-          `INSERT INTO research_messages (thread_id,user_id,id,role,content,position)
-           VALUES ($1,$2,$3,$4,$5,$6)`,
-          [thread.id, userId, message.id, message.role, message.content, index],
+          `INSERT INTO research_messages (thread_id,user_id,id,role,content,reference_list,position)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [thread.id, userId, message.id, message.role, message.content, JSON.stringify(message.references ?? []), index],
         )
       }
       await client.query('COMMIT')

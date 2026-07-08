@@ -1,8 +1,9 @@
 import path from 'node:path'
+import { readFile } from 'node:fs/promises'
+import mammoth from 'mammoth'
 import type { z } from 'zod'
 import { AppError, NotFoundError } from '../../errors/index.js'
 import { parsePagination } from '../../utils/pagination.js'
-import { queryList } from '../../utils/query.js'
 import { excerpt } from '../../utils/text.js'
 import { todayLabel } from '../../utils/date.js'
 import { storageService } from '../../lib/storage.js'
@@ -18,6 +19,53 @@ function sourceTypeFromUpload(mimeType: string, filename: string) {
   if (extension === 'txt') return 'TXT'
   if (extension === 'md' || extension === 'markdown') return 'Markdown'
   throw new AppError(415, 'UNSUPPORTED_MEDIA_TYPE', 'Unsupported file type. Upload PDF, DOCX, TXT, or Markdown files only.')
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+function previewHtml(title: string, body: string) {
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(title)}</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      margin: 0;
+      padding: 40px;
+      font-family: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+      line-height: 1.7;
+      color: #2f2a24;
+      background: #fffaf2;
+    }
+    article {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 40px;
+      border: 1px solid #e5dccd;
+      border-radius: 16px;
+      background: #fffefd;
+      box-shadow: 0 12px 36px rgba(47, 42, 36, 0.08);
+    }
+    h1, h2, h3 { line-height: 1.2; color: #2c2925; }
+    p { margin: 1em 0; }
+    table { width: 100%; border-collapse: collapse; }
+    td, th { border: 1px solid #e5dccd; padding: 8px; }
+    img { max-width: 100%; height: auto; }
+  </style>
+</head>
+<body>
+  <article>${body}</article>
+</body>
+</html>`
 }
 
 export const sourcesService = {
@@ -73,7 +121,6 @@ export const sourcesService = {
       extractedStorageObjectId: null,
       summaryStorageObjectId: summaryObject?.id ?? null,
       knowledgeTags: body.tags,
-      workspaceLabels: [],
     })
     return sourceRow(row)
   },
@@ -107,7 +154,6 @@ export const sourcesService = {
       extractedStorageObjectId: current.extracted_storage_object_id,
       summaryStorageObjectId: summaryObject?.id ?? current.summary_storage_object_id,
       knowledgeTags: next.knowledgeTags ?? next.tags,
-      workspaceLabels: next.workspaceLabels ?? [],
     }))
   },
 
@@ -143,7 +189,6 @@ export const sourcesService = {
       extractedStorageObjectId: null,
       summaryStorageObjectId: null,
       knowledgeTags: [],
-      workspaceLabels: [],
     })
 
     runBackgroundIngest({ userId, fileId, sourceId, rawStorageObjectId: rawObject.id, rawStorageUrl: rawObject.url, originalName: file.originalname, created, uploadedType }).catch((err) => {
@@ -170,6 +215,16 @@ export const sourcesService = {
     }
     if (!row.raw_path) throw new NotFoundError('File not found')
     return { path: path.resolve(row.raw_path), mimeType: row.mime_type, name: row.name }
+  },
+
+  async filePreview(userId: string, id: string) {
+    const file = await this.file(userId, id)
+    const isDocx = file.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file.name.toLowerCase().endsWith('.docx')
+    if (!isDocx) throw new AppError(415, 'UNSUPPORTED_MEDIA_TYPE', 'Preview is only available for DOCX files.')
+    const buffer = 'buffer' in file && file.buffer ? file.buffer : 'path' in file ? await readFile(file.path) : undefined
+    if (!buffer) throw new NotFoundError('File not found')
+    const result = await mammoth.convertToHtml({ buffer })
+    return { html: previewHtml(file.name, result.value || '<p>No preview content available.</p>'), mimeType: 'text/html; charset=utf-8' }
   },
 
   async content(userId: string, id: string) {

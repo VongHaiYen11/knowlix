@@ -1,5 +1,4 @@
 import { excerpt, slugify, uniqueCleanStrings, wordCount } from '../../utils/text.js'
-import { graphRepository } from '../graph/graph.repository.js'
 import { sourcesRepository } from './sources.repository.js'
 import { pool } from '../../database/pool.js'
 import { ingestRawFile, extractText } from '../../wiki/ingest.js'
@@ -10,6 +9,20 @@ import { embedText } from '../../lib/embeddings.js'
 function readTimeFromContent(content: string) {
   const minutes = Math.max(1, Math.ceil(wordCount(content) / 220))
   return `${minutes} min read`
+}
+
+function timelineEvent(action: string, sourceTitle: string, reason?: string) {
+  const prefix = action === 'create'
+    ? 'Generated'
+    : action === 'merge'
+      ? 'Merged'
+      : action === 'replace'
+        ? 'Replaced'
+        : action === 'link_only'
+          ? 'Linked'
+          : 'Updated'
+  const detail = reason?.trim()
+  return detail ? `${prefix} from ${sourceTitle}: ${detail}` : `${prefix} from ${sourceTitle}`
 }
 
 export async function runBackgroundIngest(input: {
@@ -81,7 +94,6 @@ export async function runBackgroundIngest(input: {
     const sourceTitle = summary?.title ?? originalName
     const sourceCategory = summary?.category ?? 'Uncategorized'
     const sourceTags = uniqueCleanStrings(summary?.tags ?? [])
-    const workspaceLabels = uniqueCleanStrings(summary?.workspaceLabels ?? [])
     const summaryMarkdown = summary?.body ?? ''
     const summaryObject = summaryMarkdown
       ? await storageService.upload({
@@ -98,8 +110,8 @@ export async function runBackgroundIngest(input: {
     await pool.query(
       `UPDATE sources
        SET type=$1,title=$2,content=NULL,tags=$3,category=$4,status=$5,excerpt=$6,
-        raw_storage_object_id=$7,extracted_storage_object_id=$8,summary_storage_object_id=$9,knowledge_tags=$10,workspace_labels=$11,updated_at=now()
-       WHERE id=$12`,
+        raw_storage_object_id=$7,extracted_storage_object_id=$8,summary_storage_object_id=$9,knowledge_tags=$10,updated_at=now()
+       WHERE id=$11`,
       [
         uploadedType,
         sourceTitle,
@@ -111,7 +123,6 @@ export async function runBackgroundIngest(input: {
         extractedObject?.id ?? null,
         summaryObject?.id ?? null,
         sourceTags,
-        workspaceLabels,
         sourceId,
       ],
     )
@@ -122,11 +133,33 @@ export async function runBackgroundIngest(input: {
       const action = page.action ?? 'create'
       if (action === 'skip') continue
       const targetSlug = page.targetSlug ? slugify(page.targetSlug) : ''
-      const slug = action === 'update' || action === 'merge' || action === 'link_only'
+      const slug = action === 'update' || action === 'merge' || action === 'replace' || action === 'link_only'
         ? targetSlug || slugify(page.filename.replace(/\.md$/i, '') || page.title)
         : slugify(page.filename.replace(/\.md$/i, '') || page.title)
       if (!slug) continue
       if (action === 'link_only') {
+        await pool.query(
+          `UPDATE knowledge_entries
+           SET source_list=(
+             SELECT COALESCE(jsonb_agg(source_item), '[]'::jsonb)
+             FROM (
+               SELECT DISTINCT ON (source_item->>'id') source_item
+               FROM jsonb_array_elements(source_list || $1::jsonb) AS source_items(source_item)
+               ORDER BY source_item->>'id'
+             ) deduped_sources
+           ),
+           timeline=timeline || $2::jsonb,
+           updated=$3,
+           updated_at=now()
+           WHERE user_id=$4 AND slug=$5`,
+          [
+            JSON.stringify([sourceReference]),
+            JSON.stringify([{ date: created, event: timelineEvent(action, sourceTitle, page.reason) }]),
+            created,
+            userId,
+            slug,
+          ],
+        )
         await pool.query(
           `INSERT INTO knowledge_source_links (user_id,slug,source_id,relation)
            VALUES ($1,$2,$3,$4)
@@ -148,8 +181,8 @@ export async function runBackgroundIngest(input: {
       const embedding = await embedText(`${page.title}\n${excerpt(page.body, 1000)}\n${sourceTags.join(' ')}`)
       await pool.query(
         `INSERT INTO knowledge_entries
-          (slug,user_id,title,content,overview,category,tags,created,updated,read_time,key_ideas,explanation,examples,related,reference_list,source_list,timeline,markdown_storage_object_id,knowledge_tags,workspace_labels,search_vector,embedding)
-         VALUES ($1,$2,$3,NULL,$4,$5,$6,$7,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,to_tsvector('simple', $19),$20)
+          (slug,user_id,title,content,overview,category,tags,created,updated,read_time,key_ideas,explanation,examples,related,reference_list,source_list,timeline,markdown_storage_object_id,knowledge_tags,search_vector,embedding)
+         VALUES ($1,$2,$3,NULL,$4,$5,$6,$7,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,to_tsvector('simple', $18),$19)
          ON CONFLICT (user_id, slug) DO UPDATE SET
           title=EXCLUDED.title,
           content=NULL,
@@ -161,10 +194,16 @@ export async function runBackgroundIngest(input: {
           explanation=EXCLUDED.explanation,
           related=EXCLUDED.related,
           reference_list=EXCLUDED.reference_list,
-          source_list=EXCLUDED.source_list,
+          source_list=(
+            SELECT COALESCE(jsonb_agg(source_item), '[]'::jsonb)
+            FROM (
+              SELECT DISTINCT ON (source_item->>'id') source_item
+              FROM jsonb_array_elements(knowledge_entries.source_list || EXCLUDED.source_list) AS source_items(source_item)
+              ORDER BY source_item->>'id'
+            ) deduped_sources
+          ),
           markdown_storage_object_id=EXCLUDED.markdown_storage_object_id,
           knowledge_tags=(SELECT ARRAY(SELECT DISTINCT unnest(knowledge_entries.knowledge_tags || EXCLUDED.knowledge_tags))),
-          workspace_labels=(SELECT ARRAY(SELECT DISTINCT unnest(knowledge_entries.workspace_labels || EXCLUDED.workspace_labels))),
           search_vector=EXCLUDED.search_vector,
           embedding=EXCLUDED.embedding,
           timeline=knowledge_entries.timeline || EXCLUDED.timeline,
@@ -184,10 +223,9 @@ export async function runBackgroundIngest(input: {
           JSON.stringify(related),
           JSON.stringify([{ label: sourceTitle, source: rawStorageUrl }]),
           JSON.stringify([sourceReference]),
-          JSON.stringify([{ date: created, event: `${action === 'create' ? 'Generated' : 'Revised'} from ${sourceTitle}` }]),
+          JSON.stringify([{ date: created, event: timelineEvent(action, sourceTitle, page.reason) }]),
           markdownObject.id,
           sourceTags,
-          workspaceLabels,
           `${page.title}\n${excerpt(page.body, 500)}\n${sourceTags.join(' ')}`,
           JSON.stringify(embedding),
         ],
@@ -201,31 +239,11 @@ export async function runBackgroundIngest(input: {
         `INSERT INTO knowledge_source_links (user_id,slug,source_id,relation)
          VALUES ($1,$2,$3,$4)
          ON CONFLICT (user_id, slug, source_id) DO UPDATE SET relation=EXCLUDED.relation`,
-        [userId, slug, sourceId, action === 'merge' ? 'merged_from' : 'supports'],
+        [userId, slug, sourceId, action === 'merge' ? 'merged_from' : action === 'replace' ? 'replaced_from' : 'supports'],
       )
-      await graphRepository.upsertNode({ userId, slug, label: page.title, category: sourceCategory, tags: sourceTags })
     }
 
     await sourcesRepository.updateUploadedFileStatus(fileId, ingest.skipped ? 'skipped' : 'completed', writtenObjects)
-
-    for (const page of ingest.pages) {
-      const slug = slugify(page.filename.replace(/\.md$/i, '') || page.title)
-      for (const related of page.related) {
-        const target = slugify(related)
-        if (!slug || !target || slug === target) continue
-        await graphRepository.upsertNode({ userId, slug: target, label: related, category: sourceCategory, tags: sourceTags })
-        await graphRepository.link(userId, slug, target)
-      }
-    }
-
-    for (const link of ingest.graphLinks) {
-      const source = slugify(link.source)
-      const target = slugify(link.target)
-      if (!source || !target || source === target) continue
-      await graphRepository.upsertNode({ userId, slug: source, label: link.source, category: sourceCategory, tags: sourceTags })
-      await graphRepository.upsertNode({ userId, slug: target, label: link.target, category: sourceCategory, tags: sourceTags })
-      await graphRepository.link(userId, source, target)
-    }
     console.log(`[Ingest] Ingest finished for "${originalName}" (${sourceId}). Title: "${sourceTitle}", Excerpt: "${sourceExcerpt}". Ingested ${ingest.pages.length} pages: ${ingest.pages.map(p => `[${p.action || 'create'}] ${p.title}`).join(', ')}`)
   } catch (error) {
     console.error(`[Ingest] Failed for "${originalName}":`, error)

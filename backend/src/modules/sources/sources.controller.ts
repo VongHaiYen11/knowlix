@@ -29,6 +29,11 @@ export const sourcesController = {
     }
     res.sendFile(file.path)
   },
+  async filePreview(req: AuthedRequest, res: Response) {
+    const preview = await sourcesService.filePreview(req.user.id, req.params.id)
+    res.setHeader('Content-Type', preview.mimeType)
+    res.send(preview.html)
+  },
   async content(req: AuthedRequest, res: Response) {
     res.type('text/markdown').send(await sourcesService.content(req.user.id, req.params.id))
   },

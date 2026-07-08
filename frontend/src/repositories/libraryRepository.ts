@@ -1,7 +1,7 @@
 import { deleteFromStore, getAllFromStore, getFromStore, putInStore, STORE_NAMES } from '@/repositories/indexedDbClient'
 import { apiLibraryRepository } from '@/repositories/apiLibraryRepository'
 import { isApiRepositoryEnabled } from '@/repositories/apiClient'
-import type { GraphLink, GraphNode, JournalDay, KnowledgeEntry, NoteItem, Source } from '@/types/knowledge'
+import type { JournalDay, KnowledgeEntry, NoteItem, Source } from '@/types/knowledge'
 
 export interface LibraryRepository {
   getKnowledge(): Promise<KnowledgeEntry[]>
@@ -13,10 +13,11 @@ export interface LibraryRepository {
   deleteSource(id: string): Promise<void>
   getNotes(): Promise<NoteItem[]>
   getNoteById(id: string): Promise<NoteItem | undefined>
-  saveNote(note: NoteItem): Promise<void>
+  saveNote(note: NoteItem): Promise<NoteItem>
+  deleteNote(id: string): Promise<void>
+  promoteNoteToSource(id: string): Promise<Source>
   getJournal(): Promise<JournalDay[]>
-  getGraphNodes(): Promise<GraphNode[]>
-  getGraphLinks(): Promise<GraphLink[]>
+  appendJournalEntry(date: string, entry: { time: string; text: string; tags: string[] }): Promise<JournalDay>
 }
 
 export const indexedDbLibraryRepository: LibraryRepository = {
@@ -40,49 +41,8 @@ export const indexedDbLibraryRepository: LibraryRepository = {
     const slugs = relatedEntries.map(e => e.slug)
     
     if (slugs.length > 0) {
-      const links = await getAllFromStore(STORE_NAMES.graphLinks)
-      const nodes = await getAllFromStore(STORE_NAMES.graphNodes)
-      
-      for (const link of links) {
-        if (slugs.includes(link.source) || slugs.includes(link.target)) {
-          await deleteFromStore(STORE_NAMES.graphLinks, link.id)
-        }
-      }
-      for (const node of nodes) {
-        if (slugs.includes(node.id)) {
-          await deleteFromStore(STORE_NAMES.graphNodes, node.id)
-        }
-      }
       for (const slug of slugs) {
         await deleteFromStore(STORE_NAMES.knowledge, slug)
-      }
-
-      // Cleanup graph links and nodes that are now orphaned/placeholder only
-      const updatedKnowledge = await indexedDbLibraryRepository.getKnowledge()
-      const activeSlugs = updatedKnowledge.map(e => e.slug)
-      const currentLinks = await getAllFromStore(STORE_NAMES.graphLinks)
-      const currentNodes = await getAllFromStore(STORE_NAMES.graphNodes)
-
-      // Delete links that connect two placeholder nodes (neither is in activeSlugs)
-      for (const link of currentLinks) {
-        if (!activeSlugs.includes(link.source) && !activeSlugs.includes(link.target)) {
-          await deleteFromStore(STORE_NAMES.graphLinks, link.id)
-        }
-      }
-
-      // Re-fetch remaining links to check remaining node connections
-      const remainingLinks = await getAllFromStore(STORE_NAMES.graphLinks)
-      const connectedSlugs = new Set<string>()
-      remainingLinks.forEach(link => {
-        connectedSlugs.add(link.source)
-        connectedSlugs.add(link.target)
-      })
-
-      // Delete nodes that have no page and no active connections
-      for (const node of currentNodes) {
-        if (!activeSlugs.includes(node.id) && !connectedSlugs.has(node.id)) {
-          await deleteFromStore(STORE_NAMES.graphNodes, node.id)
-        }
       }
     }
     
@@ -90,12 +50,48 @@ export const indexedDbLibraryRepository: LibraryRepository = {
   },
   getNotes: () => getAllFromStore(STORE_NAMES.notes),
   getNoteById: (id) => getFromStore(STORE_NAMES.notes, id),
-  saveNote: (note) => putInStore(STORE_NAMES.notes, note),
+  saveNote: async (note) => {
+    await putInStore(STORE_NAMES.notes, note)
+    return note
+  },
+  deleteNote: (id) => deleteFromStore(STORE_NAMES.notes, id),
+  promoteNoteToSource: async (id) => {
+    const note = await indexedDbLibraryRepository.getNoteById(id)
+    if (!note) throw new Error('Note not found')
+    const source: Source = {
+      id: `source_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      type: 'Markdown',
+      title: note.title,
+      content: note.content,
+      tags: [],
+      category: 'Uncategorized',
+      created: 'Today',
+      status: 'Processing',
+      meta: 'Promoted note',
+      excerpt: note.excerpt,
+    }
+    await putInStore(STORE_NAMES.sources, source)
+    await deleteFromStore(STORE_NAMES.notes, id)
+    return source
+  },
   getJournal: () => getAllFromStore(STORE_NAMES.journal),
-  getGraphNodes: () => getAllFromStore(STORE_NAMES.graphNodes),
-  getGraphLinks: async () => {
-    const stored = await getAllFromStore(STORE_NAMES.graphLinks)
-    return stored.map(({ source, target }) => ({ source, target }))
+  appendJournalEntry: async (date, entry) => {
+    const existing = await getFromStore(STORE_NAMES.journal, date)
+    const day: JournalDay = {
+      date,
+      weekday: new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(new Date(`${date}T00:00:00`)),
+      entries: [
+        ...(existing?.entries ?? []),
+        {
+          id: `journal_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          ...entry,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ],
+    }
+    await putInStore(STORE_NAMES.journal, day)
+    return day
   },
 }
 

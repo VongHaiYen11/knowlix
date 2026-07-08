@@ -1,6 +1,6 @@
 import { apiClient, getAllPages } from '@/repositories/apiClient'
 import type { LibraryRepository } from '@/repositories/libraryRepository'
-import type { GraphLink, GraphNode, JournalDay, KnowledgeEntry, NoteItem, Source } from '@/types/knowledge'
+import type { JournalDay, KnowledgeEntry, NoteItem, Source } from '@/types/knowledge'
 
 export const apiLibraryRepository: LibraryRepository = {
   getKnowledge: () => getAllPages<KnowledgeEntry>('/api/v1/knowledge'),
@@ -59,18 +59,12 @@ export const apiLibraryRepository: LibraryRepository = {
   saveNote: async (note) => {
     const existing = await apiLibraryRepository.getNoteById(note.id)
     if (existing) {
-      await apiClient.patch<NoteItem>(`/api/v1/notes/${encodeURIComponent(note.id)}`, note)
-      return
+      return apiClient.patch<NoteItem>(`/api/v1/notes/${encodeURIComponent(note.id)}`, note)
     }
-    await apiClient.post<NoteItem>('/api/v1/notes', note)
+    return apiClient.post<NoteItem>('/api/v1/notes', note)
   },
+  deleteNote: (id) => apiClient.delete<void>(`/api/v1/notes/${encodeURIComponent(id)}`),
+  promoteNoteToSource: (id) => apiClient.post<Source>(`/api/v1/notes/${encodeURIComponent(id)}/source`, {}),
   getJournal: () => getAllPages<JournalDay>('/api/v1/journal'),
-  getGraphNodes: async () => {
-    const graph = await apiClient.get<{ nodes: GraphNode[]; links: GraphLink[] }>('/api/v1/graph')
-    return graph.nodes
-  },
-  getGraphLinks: async () => {
-    const graph = await apiClient.get<{ nodes: GraphNode[]; links: GraphLink[] }>('/api/v1/graph')
-    return graph.links
-  },
+  appendJournalEntry: (date, entry) => apiClient.post<JournalDay>(`/api/v1/journal/${encodeURIComponent(date)}/entries`, entry),
 }

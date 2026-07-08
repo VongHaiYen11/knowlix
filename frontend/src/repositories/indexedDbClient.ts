@@ -1,13 +1,11 @@
 import { DB_NAME, DB_VERSION } from '@/constants/app'
-import type { GraphLink, GraphNode, JournalDay, KnowledgeEntry, NoteItem, Source } from '@/types/knowledge'
+import type { JournalDay, KnowledgeEntry, NoteItem, Source } from '@/types/knowledge'
 
 export const STORE_NAMES = {
   knowledge: 'knowledge',
   sources: 'sources',
   notes: 'notes',
   journal: 'journal',
-  graphNodes: 'graphNodes',
-  graphLinks: 'graphLinks',
 } as const
 
 export type StoreName = (typeof STORE_NAMES)[keyof typeof STORE_NAMES]
@@ -17,8 +15,6 @@ interface StoreMap {
   sources: Source
   notes: NoteItem
   journal: JournalDay
-  graphNodes: GraphNode
-  graphLinks: GraphLink & { id: string }
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null

@@ -1,7 +1,8 @@
 export function getMaintenancePrompt(entriesList: any[]): string {
-  return `You are a knowledge base maintainer. Scan the following list of knowledge base entries for any logical contradictions, stale claims, or conflicting information between them.
+  return `You are maintaining a private knowledge workspace. Scan the following Knowledge entries for logical contradictions, stale claims, or conflicting information between entries.
+Only report conflicts that are grounded in the provided titles and overviews. Do not invent external facts.
 
-Knowledge Base Entries:
+Knowledge Entries:
 ${JSON.stringify(entriesList, null, 2)}
 
 Return ONLY a valid JSON array of objects representing contradictions found. Format:

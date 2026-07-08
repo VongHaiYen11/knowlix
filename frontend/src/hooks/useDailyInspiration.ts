@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { AuthUser } from '@/auth/authTypes'
 import { getModelPreference } from '@/utils/modelPreference'
+import { vietnamDateString } from '@/utils/vietnamTime'
 
 interface DailyInspiration {
   date: string
@@ -8,13 +9,6 @@ interface DailyInspiration {
 }
 
 const fallbackQuote = 'Tiny notes become bright paths when you return to them with curiosity.'
-
-function todayKey() {
-  const date = new Date()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${date.getFullYear()}-${month}-${day}`
-}
 
 export function useDailyInspiration(user: AuthUser | null) {
   const [quote, setQuote] = useState(fallbackQuote)
@@ -27,7 +21,7 @@ export function useDailyInspiration(user: AuthUser | null) {
       return
     }
 
-    const date = todayKey()
+    const date = vietnamDateString()
     const storageKey = `knowlix.dailyInspiration.${user.id}.${date}`
     const cached = localStorage.getItem(storageKey)
     if (cached) {

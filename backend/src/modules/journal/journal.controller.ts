@@ -9,7 +9,4 @@ export const journalController = {
   async appendEntry(req: AuthedRequest, res: Response) {
     res.status(201).json(await journalService.appendEntry(req.user.id, req.params.date, req.body))
   },
-  async update(req: AuthedRequest, res: Response) {
-    res.json(await journalService.update(req.user.id, req.params.date, req.body))
-  },
 }

@@ -6,10 +6,20 @@ export const researchScopeSchema = z.object({
   dateRange: z.string().optional(),
 })
 
+export const researchReferenceSchema = z.object({
+  number: z.number().int().positive(),
+  id: z.string().trim().min(1),
+  type: z.string().trim().min(1),
+  title: z.string().trim().min(1),
+  tags: z.array(z.string()).default([]),
+  categories: z.array(z.string()).default([]),
+})
+
 export const researchMessageSchema = z.object({
   id: z.string().trim().min(1),
   role: z.enum(['user', 'assistant']),
   content: z.string(),
+  references: z.array(researchReferenceSchema).default([]),
 })
 
 export const researchThreadSchema = z.object({

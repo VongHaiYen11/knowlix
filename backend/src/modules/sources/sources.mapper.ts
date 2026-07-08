@@ -10,7 +10,6 @@ export function sourceRow(row: any) {
     contentUrl: row.summary_storage_object_id ? `/api/v1/sources/${encodeURIComponent(row.id)}/content` : undefined,
     tags: row.tags,
     knowledgeTags: row.knowledge_tags ?? row.tags,
-    workspaceLabels: row.workspace_labels ?? [],
     category: row.category,
     created: row.created,
     status: row.status,

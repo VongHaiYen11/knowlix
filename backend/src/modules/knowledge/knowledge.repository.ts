@@ -24,8 +24,8 @@ export const knowledgeRepository = {
   async create(input: any) {
     const { rows } = await pool.query(
       `INSERT INTO knowledge_entries
-        (slug,user_id,title,content,overview,category,tags,created,updated,source_list,timeline,markdown_storage_object_id,knowledge_tags,workspace_labels,search_vector,embedding)
-       VALUES ($1,$2,$3,NULL,$4,$5,$6,$7,$7,$8,$9,$10,$11,$12,to_tsvector('simple', $13),$14)
+        (slug,user_id,title,content,overview,category,tags,created,updated,source_list,timeline,markdown_storage_object_id,knowledge_tags,search_vector,embedding)
+       VALUES ($1,$2,$3,NULL,$4,$5,$6,$7,$7,$8,$9,$10,$11,to_tsvector('simple', $12),$13)
        RETURNING *`,
       [
         input.slug,
@@ -39,7 +39,6 @@ export const knowledgeRepository = {
         JSON.stringify(input.timeline),
         input.markdownStorageObjectId,
         input.knowledgeTags ?? input.tags,
-        input.workspaceLabels ?? [],
         `${input.title}\n${input.overview}\n${(input.knowledgeTags ?? input.tags ?? []).join(' ')}`,
         JSON.stringify(input.embedding ?? []),
       ],
@@ -51,8 +50,8 @@ export const knowledgeRepository = {
     const { rows } = await pool.query(
       `UPDATE knowledge_entries SET slug=$1,title=$2,content=NULL,overview=$3,category=$4,tags=$5,updated=$6,read_time=$7,
         key_ideas=$8,explanation=$9,examples=$10,related=$11,reference_list=$12,source_list=$13,timeline=$14,
-        markdown_storage_object_id=COALESCE($15, markdown_storage_object_id),knowledge_tags=$16,workspace_labels=$17,search_vector=to_tsvector('simple', $18),embedding=$19,updated_at=now()
-       WHERE user_id=$20 AND slug=$21 RETURNING *`,
+        markdown_storage_object_id=COALESCE($15, markdown_storage_object_id),knowledge_tags=$16,search_vector=to_tsvector('simple', $17),embedding=$18,updated_at=now()
+       WHERE user_id=$19 AND slug=$20 RETURNING *`,
       [
         input.nextSlug,
         input.title,
@@ -70,7 +69,6 @@ export const knowledgeRepository = {
         JSON.stringify(input.timeline),
         input.markdownStorageObjectId ?? null,
         input.knowledgeTags ?? input.tags,
-        input.workspaceLabels ?? [],
         `${input.title}\n${input.overview}\n${(input.knowledgeTags ?? input.tags ?? []).join(' ')}`,
         JSON.stringify(input.embedding ?? []),
         input.userId,
@@ -89,8 +87,6 @@ export const knowledgeRepository = {
   },
 
   async delete(userId: string, slug: string) {
-    await pool.query('DELETE FROM graph_links WHERE user_id=$1 AND (source=$2 OR target=$2)', [userId, slug])
-    await pool.query('DELETE FROM graph_nodes WHERE user_id=$1 AND id=$2', [userId, slug])
     await pool.query('DELETE FROM knowledge_entries WHERE user_id=$1 AND slug=$2', [userId, slug])
   },
 }

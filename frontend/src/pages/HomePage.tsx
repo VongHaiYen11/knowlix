@@ -7,12 +7,13 @@ import { useAuth } from '@/auth/useAuth'
 import { useDailyInspiration } from '@/hooks/useDailyInspiration'
 import { useHomeData } from '@/hooks/useLibrary'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { vietnamHour } from '@/utils/vietnamTime'
 
 export function HomePage() {
   const { user } = useAuth()
   const { data, status } = useHomeData()
   const inspiration = useDailyInspiration(user)
-  const hour = new Date().getHours()
+  const hour = vietnamHour()
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
   const firstName = user?.name?.trim().split(/\s+/)[0] || 'there'
 

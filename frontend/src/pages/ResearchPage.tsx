@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { Conversation } from '@/features/research/Conversation'
 import { EvidencePanel } from '@/features/research/EvidencePanel'
 import { ResearchHistoryPanel } from '@/features/research/ResearchHistoryPanel'
-import { useHomeData, useTaxonomy } from '@/hooks/useLibrary'
+import { useTaxonomy } from '@/hooks/useLibrary'
 import { useResearch } from '@/hooks/useResearch'
 
 export function ResearchPage() {
@@ -17,7 +17,6 @@ export function ResearchPage() {
   const titleInputRef = useRef<HTMLInputElement>(null)
   const taxonomy = useTaxonomy()
   const taxonomyData = taxonomy.data
-  const home = useHomeData()
   const research = useResearch(searchParams.get('q') ?? '')
 
   useEffect(() => {
@@ -76,7 +75,7 @@ export function ResearchPage() {
                 </div>
                 <div className="flex shrink-0 items-center gap-4 text-right text-xs text-primary-foreground/75">
                   <span>{research.messages.length} messages</span>
-                  <span>{research.scopedKnowledge.length} sources in scope</span>
+                  <span>{research.usedReferences.length} references used</span>
                 </div>
               </div>
             </div>
@@ -99,11 +98,10 @@ export function ResearchPage() {
       </div>
       {!historyOpen && (
         <EvidencePanel
-          knowledge={research.scopedKnowledge}
+          references={research.usedReferences}
           tags={taxonomyData.tags}
           categories={taxonomyData.categories}
           scope={research.scope}
-          total={home.data.knowledge.length}
           onScopeChange={research.setScope}
           collapsed={!scopeOpen}
           onCollapsedChange={(collapsed) => setScopeOpen(!collapsed)}

@@ -8,7 +8,6 @@ import { ROUTES } from '@/constants/routes'
 const HomePage = lazy(() => import('@/pages/HomePage').then((module) => ({ default: module.HomePage })))
 const LibraryPage = lazy(() => import('@/pages/LibraryPage').then((module) => ({ default: module.LibraryPage })))
 const ResearchPage = lazy(() => import('@/pages/ResearchPage').then((module) => ({ default: module.ResearchPage })))
-const GraphPage = lazy(() => import('@/pages/GraphPage').then((module) => ({ default: module.GraphPage })))
 const JournalPage = lazy(() => import('@/pages/JournalPage').then((module) => ({ default: module.JournalPage })))
 const SettingsPage = lazy(() => import('@/pages/SettingsPage').then((module) => ({ default: module.SettingsPage })))
 const KnowledgeArticlePage = lazy(() => import('@/pages/KnowledgeArticlePage').then((module) => ({ default: module.KnowledgeArticlePage })))
@@ -83,7 +82,6 @@ export function App() {
         <Route path="library/source/:id/edit" element={<SourceEditRoute />} />
         <Route path="library/note/:id" element={<NoteRoute />} />
         <Route path="research" element={<ResearchPage />} />
-        <Route path="graph" element={<GraphPage />} />
         <Route path="journal" element={<JournalPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to={ROUTES.home} replace />} />

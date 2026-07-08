@@ -35,11 +35,7 @@ Markdown document edited by the user. Notes can be sources and can later become 
 
 ### JournalDay
 
-Daily record containing entries, AI summary, learnings, and connections.
-
-### Graph
-
-Derived relationship data between knowledge pages. Nodes reference `KnowledgeEntry.slug`; links connect two slugs.
+Daily group of standalone journal notes captured by date.
 
 ## API List
 
@@ -62,6 +58,14 @@ Purpose: List knowledge pages.
 Query: `q`, `category`, `tags`, `page`, `pageSize`.
 
 Response `200`:
+
+```txt
+data: {"references":[{"number":1,"id":"source-id","type":"PDF","title":"Source title"}]}
+data: {"text":"..."}
+data: [DONE]
+```
+
+The UI shows references saved from the bracketed citations in completed assistant messages for the current chat.
 
 ```json
 { "items": [], "page": 1, "pageSize": 10, "total": 0 }
@@ -99,7 +103,7 @@ Errors: `400` invalid payload, `404` missing page, `409` slug conflict.
 
 ### DELETE `/api/v1/knowledge/:slug`
 
-Purpose: Delete a knowledge page and derived graph links.
+Purpose: Delete a knowledge page.
 
 Response: `204`.
 
@@ -183,7 +187,7 @@ Response: `204`.
 
 ### GET `/api/v1/journal`
 
-Purpose: List journal days.
+Purpose: List journal note days.
 
 Query: `from`, `to`, `page`, `pageSize`.
 
@@ -191,40 +195,22 @@ Response: paginated `JournalDay[]`.
 
 ### POST `/api/v1/journal/:date/entries`
 
-Purpose: Add a journal entry to a day.
+Purpose: Add a journal note to a day.
 
-Request: `time`, `kind`, `text`.
+Request: `time`, `text`, optional `tags`.
 
 Response: `201` with updated `JournalDay`.
 
-### PATCH `/api/v1/journal/:date`
-
-Purpose: Update daily summary, learnings, or connections.
-
-Response: `200` with updated `JournalDay`.
-
-### GET `/api/v1/graph`
-
-Purpose: Return knowledge graph nodes and links.
-
-Response `200`:
-
-```json
-{ "nodes": [], "links": [] }
-```
-
-Query: optional `q`, `tags`, `categories`.
-
 ### POST `/api/v1/research/messages`
 
-Purpose: Ask a grounded question across scoped knowledge.
+Purpose: Ask a grounded question across all knowledge. `scope` is accepted for thread UI state but does not tune answer retrieval.
 
 Request:
 
 ```json
 {
   "question": "What do I know about memory?",
-  "scope": { "tags": ["memory"], "categories": ["Learning"], "dateRange": "Past month" }
+  "scope": { "tags": [], "categories": [], "dateRange": "Anytime" }
 }
 ```
 
@@ -262,14 +248,11 @@ Use stable error codes: `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `VALIDATION_ER
 2. Home loads `/knowledge`, `/notes`, and `/journal`.
 3. Library searches `/sources` or `/knowledge` depending on active tab.
 4. Note editor loads `/notes/:id` and autosaves with `PATCH /notes/:id`.
-5. Research sends scope and question to `/research/messages`, then uses returned evidence links.
-6. Graph loads `/graph`; filtering may be server-side for large libraries.
+5. Research sends the question to `/research/messages`, saves cited references on each assistant message, then filters visible references inside the current chat panel.
 
 ## Relationships
 
 - User has many knowledge entries, sources, notes, and journal days.
 - Knowledge entries have many source references.
 - Knowledge entries relate to other knowledge entries by slug.
-- Graph nodes are derived from knowledge entries.
-- Graph links are derived from related knowledge, tags, and explicit references.
 - Notes may also appear as sources.

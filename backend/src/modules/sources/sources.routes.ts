@@ -18,4 +18,5 @@ sourcesRouter.get('/:id', asyncRoute(sourcesController.get as any))
 sourcesRouter.patch('/:id', validateBody(sourcePatchSchema), asyncRoute(sourcesController.update as any))
 sourcesRouter.delete('/:id', asyncRoute(sourcesController.remove as any))
 
+filesRouter.get('/:id/preview', requireAuth, asyncRoute(sourcesController.filePreview as any))
 filesRouter.get('/:id', requireAuth, asyncRoute(sourcesController.file as any))

@@ -103,10 +103,10 @@ export function ResearchHistoryPanel({ threads, activeThreadId, tags, categories
                       <Badge tone="accent" className="ml-auto">{thread.scope.dateRange}</Badge>
                     </div>
                     <h2 className="font-serif text-2xl leading-snug tracking-tight">{thread.title || 'Untitled'}</h2>
-                    <p className="mt-2 line-clamp-3 flex-1 text-sm leading-relaxed text-muted-foreground">
+                    <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-muted-foreground">
                       {thread.messages.find((message) => message.role === 'assistant')?.content ?? 'No assistant response yet.'}
                     </p>
-                    <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                    <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1.5 pt-4">
                       {thread.scope.categories.slice(0, 2).map((category) => <Badge key={category} tone="accent"><Layers className="h-2.5 w-2.5" />{category}</Badge>)}
                       {thread.scope.tags.slice(0, 3).map((tag) => <span key={tag} className="text-[11px] text-muted-foreground">#{tag}</span>)}
                       <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-muted-foreground"><Clock className="h-3 w-3" />{formatDate(thread.updatedAt)}</span>

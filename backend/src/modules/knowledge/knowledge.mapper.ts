@@ -9,7 +9,6 @@ export function knowledgeRow(row: any) {
     category: row.category,
     tags: row.tags,
     knowledgeTags: row.knowledge_tags ?? row.tags,
-    workspaceLabels: row.workspace_labels ?? [],
     created: row.created,
     updated: row.updated,
     readTime: row.read_time,

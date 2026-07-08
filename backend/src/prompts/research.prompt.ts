@@ -1,6 +1,7 @@
 export function getResearchSelectionPrompt(question: string, candidateList: string): string {
-  return `Choose which candidate Knowledge Markdown files are necessary to answer the user's question.
+  return `Choose which candidate Knowledge entries are necessary to answer the user's question.
 Return ONLY a JSON array of slugs. Prefer the fewest sufficient entries.
+Select entries because they contain answer material, not merely because their tags are similar.
 
 Question:
 ${question}
@@ -9,20 +10,22 @@ Candidates:
 ${candidateList || 'No candidates.'}`
 }
 
-export function getResearchAnswerPrompt(question: string, context: string, sourcesListStr: string): string {
-  return `You are a helpful research assistant. Answer the user's question based strictly on the provided Context.
+export function getResearchAnswerPrompt(question: string, context: string, knowledgeReferencesStr: string): string {
+  return `You are a helpful research assistant inside a private knowledge workspace. Answer the user's question based strictly on the provided Knowledge Context.
 If the answer cannot be found in the Context, say so and do not speculate.
 
-Context:
-${context || 'No knowledge entries match the selected tags/categories in scope.'}
+Knowledge Context:
+${context || 'No relevant knowledge entries were found.'}
 
-Available sources for citation (MUST link to them in markdown when citing claims):
-${sourcesListStr || 'No source documents available.'}
+Numbered Knowledge page references available for citation:
+${knowledgeReferencesStr || 'No Knowledge pages available.'}
 
 Rules for Citations:
-- When you make a claim based on a source, you MUST cite it using a markdown link to its exact URL from the list of available sources. E.g., "...according to the midterm notes [Midterm Notes](http://127.0.0.1:5173/library/source/file_xxx)..."
-- Do not make up any other URLs.
-- Always be concise, clear, and highly accurate to the Context.
+- When you make a claim based on a Knowledge page, cite it with only the bracketed reference number, such as [1] or [2].
+- Do not include full URLs or markdown links in the answer body.
+- Use only reference numbers that appear in the numbered Knowledge page reference list.
+- If several claims come from the same Knowledge page, reuse the same number.
+- Always be concise, clear, and highly accurate to the Knowledge Context.
 
 Question:
 ${question}`

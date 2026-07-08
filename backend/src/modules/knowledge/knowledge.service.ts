@@ -66,7 +66,6 @@ export const knowledgeService = {
         timeline: [{ date: created, event: 'Page created' }],
         markdownStorageObjectId: markdownObject.id,
         knowledgeTags: body.tags,
-        workspaceLabels: [],
         embedding,
       })
       await knowledgeRepository.createRevision({
@@ -108,7 +107,6 @@ export const knowledgeService = {
         nextSlug,
         markdownStorageObjectId: markdownObject?.id,
         knowledgeTags: merged.knowledgeTags ?? merged.tags,
-        workspaceLabels: merged.workspaceLabels ?? [],
         embedding,
       })
       if (markdownObject) {

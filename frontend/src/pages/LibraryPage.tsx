@@ -1,5 +1,5 @@
 import { type ChangeEvent, useEffect, useMemo, useState } from 'react'
-import { Plus, Upload } from 'lucide-react'
+import { ArrowRight, FileText, Plus, Upload } from 'lucide-react'
 import { Link } from 'react-router'
 import { PageHeader } from '@/components/common/PageHeader'
 import { PageShell } from '@/components/common/PageShell'
@@ -11,11 +11,11 @@ import { TabPanel, Tabs } from '@/components/ui/Tabs'
 import { KnowledgeGrid } from '@/features/library/KnowledgeGrid'
 import { SourceList } from '@/features/library/SourceList'
 import { ROUTES } from '@/constants/routes'
-import { useLibraryKnowledge, useLibrarySources, useTaxonomy } from '@/hooks/useLibrary'
+import { useLibraryKnowledge, useLibraryNotes, useLibrarySources, useTaxonomy } from '@/hooks/useLibrary'
 import { libraryService } from '@/services/libraryService'
-import type { SourceType } from '@/types/knowledge'
+import type { NoteItem, SourceType } from '@/types/knowledge'
 
-type LibraryTab = 'sources' | 'knowledge'
+type LibraryTab = 'sources' | 'knowledge' | 'notes'
 
 const sourceTypes: Array<SourceType | 'All'> = ['All', 'PDF', 'DOCX', 'TXT', 'Markdown']
 
@@ -30,10 +30,13 @@ export function LibraryPage() {
   const taxonomyData = taxonomy.data
   const sourceFilters = useMemo(() => ({ query, sourceType, category, tag, sort }), [category, query, sort, sourceType, tag])
   const knowledgeFilters = useMemo(() => ({ query, category, tag, sort }), [category, query, sort, tag])
+  const noteFilters = useMemo(() => ({ query, sort }), [query, sort])
   const sources = useLibrarySources(sourceFilters)
   const knowledge = useLibraryKnowledge(knowledgeFilters)
+  const notes = useLibraryNotes(noteFilters)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [promotingNoteId, setPromotingNoteId] = useState<string | null>(null)
 
   const hasProcessingSource = useMemo(() => {
     return sources.data?.some((source) => source.status === 'Processing') ?? false
@@ -48,7 +51,7 @@ export function LibraryPage() {
         const stillProcessing = currentSources.some((s) => s.status === 'Processing')
         if (!stillProcessing) {
           clearInterval(interval)
-          void Promise.all([sources.reload(), knowledge.reload()])
+          void Promise.all([sources.reload(), knowledge.reload(), notes.reload()])
         }
       } catch (err) {
         console.error('Failed to poll sources:', err)
@@ -56,7 +59,7 @@ export function LibraryPage() {
     }, 3000)
 
     return () => clearInterval(interval)
-  }, [hasProcessingSource, sourceFilters, sources.reload, knowledge.reload])
+  }, [hasProcessingSource, sourceFilters, sources.reload, knowledge.reload, notes.reload])
 
   async function handleUpload(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? [])
@@ -76,12 +79,23 @@ export function LibraryPage() {
     }
   }
 
+  async function promoteNote(id: string) {
+    setPromotingNoteId(id)
+    try {
+      await libraryService.promoteNoteToSource(id)
+      await Promise.all([notes.reload(), sources.reload(), knowledge.reload()])
+      setTab('sources')
+    } finally {
+      setPromotingNoteId(null)
+    }
+  }
+
   return (
     <PageShell>
       <PageHeader title="Library" description="The center of everything you keep. Raw sources become living knowledge." />
       <SearchInput value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search your library by meaning or words..." aria-label="Search your library" />
       <div className="mt-6">
-        <Tabs tabs={[{ value: 'sources', label: 'Source of Truth' }, { value: 'knowledge', label: 'Knowledge' }]} value={tab} onChange={setTab} />
+        <Tabs tabs={[{ value: 'sources', label: 'Source of Truth' }, { value: 'knowledge', label: 'Knowledge' }, { value: 'notes', label: 'Notes' }]} value={tab} onChange={setTab} />
       </div>
       {tab === 'sources' ? (
         <TabPanel>
@@ -103,7 +117,7 @@ export function LibraryPage() {
           />
           {sources.status === 'loading' ? <Skeleton count={4} className="h-32" /> : <SourceList sources={sources.data} />}
         </TabPanel>
-      ) : (
+      ) : tab === 'knowledge' ? (
         <TabPanel>
           <LibraryControls
             mode="knowledge"
@@ -122,6 +136,26 @@ export function LibraryPage() {
             onSort={setSort}
           />
           {knowledge.status === 'loading' ? <Skeleton count={4} className="h-56" /> : <KnowledgeGrid knowledge={knowledge.data} />}
+        </TabPanel>
+      ) : (
+        <TabPanel>
+          <LibraryControls
+            mode="notes"
+            sourceType={sourceType}
+            category={category}
+            tag={tag}
+            sort={sort}
+            categories={taxonomyData.categories}
+            tags={taxonomyData.tags}
+            uploading={uploading}
+            uploadError={uploadError}
+            onUpload={handleUpload}
+            onSourceType={(value) => setSourceType(value as SourceType | 'All')}
+            onCategory={setCategory}
+            onTag={setTag}
+            onSort={setSort}
+          />
+          {notes.status === 'loading' ? <Skeleton count={4} className="h-28" /> : <NoteList notes={notes.data} promotingNoteId={promotingNoteId} onPromote={promoteNote} />}
         </TabPanel>
       )}
     </PageShell>
@@ -180,17 +214,60 @@ function LibraryControls({
           {uploadError ? <span className="text-xs text-destructive">{uploadError}</span> : null}
           <Dropdown label="Type" options={sourceTypes} selected={[sourceType]} onToggle={onSourceType} showSelectedCount={false} />
         </>
-      ) : (
+      ) : mode === 'knowledge' ? (
         <p className="text-sm text-muted-foreground">Pages generated and maintained from your sources.</p>
+      ) : (
+        <>
+          <Link to={ROUTES.note('new')} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3.5 text-sm text-primary-foreground transition hover:opacity-90">
+            <Plus className="h-4 w-4" />New Note
+          </Link>
+          <p className="text-sm text-muted-foreground">Private notes stay here until you add them as Source of Truth.</p>
+        </>
       )}
       <div className="ml-auto flex flex-wrap items-center gap-2">
-        <Dropdown label="Category" options={['All', ...categories]} selected={[category]} onToggle={onCategory} showSelectedCount={false} />
-        <Dropdown label="Tag" options={['All', ...tags]} selected={[tag]} onToggle={onTag} prefix={tag === 'All' ? '' : '#'} showSelectedCount={false} />
+        {mode !== 'notes' && (
+          <>
+            <Dropdown label="Category" options={['All', ...categories]} selected={[category]} onToggle={onCategory} showSelectedCount={false} />
+            <Dropdown label="Tag" options={['All', ...tags]} selected={[tag]} onToggle={onTag} prefix={tag === 'All' ? '' : '#'} showSelectedCount={false} />
+          </>
+        )}
         <select value={sort} onChange={(event) => onSort(event.target.value as keyof typeof sortLabels)} className="h-8 rounded-lg border border-border bg-card px-3 text-xs text-muted-foreground focus:outline-none">
           {Object.entries(sortLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
         <Button variant="ghost" size="sm" onClick={() => { onSourceType('All'); onCategory('All'); onTag('All'); onSort('updated-desc') }}>Reset</Button>
       </div>
     </div>
+  )
+}
+
+function NoteList({ notes, promotingNoteId, onPromote }: { notes: NoteItem[]; promotingNoteId: string | null; onPromote: (id: string) => Promise<void> }) {
+  if (!notes.length) {
+    return (
+      <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
+        <FileText className="mx-auto h-8 w-8 text-muted-foreground" strokeWidth={1.5} />
+        <h2 className="mt-3 font-serif text-2xl tracking-tight">No notes yet</h2>
+        <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">Create a note for loose thoughts. Nothing is processed unless you add it as Source of Truth.</p>
+        <Link to={ROUTES.note('new')} className="mt-5 inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3.5 text-sm text-primary-foreground transition hover:opacity-90">
+          <Plus className="h-4 w-4" />New Note
+        </Link>
+      </div>
+    )
+  }
+
+  return (
+    <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card elevated">
+      {notes.map((note) => (
+        <li key={note.id} className="grid gap-4 px-5 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+          <Link to={ROUTES.note(note.id)} className="block min-w-0 overflow-hidden">
+            <p className="truncate text-[15px] text-foreground">{note.title}</p>
+            <p className="mt-1 truncate text-sm leading-relaxed text-muted-foreground">{note.excerpt || 'No preview yet.'}</p>
+            <p className="mt-2 text-xs text-muted-foreground">{note.updated} · {note.words} words</p>
+          </Link>
+          <Button type="button" variant="outline" size="sm" className="justify-self-start whitespace-nowrap sm:justify-self-end" onClick={() => { void onPromote(note.id) }} disabled={promotingNoteId === note.id} icon={<ArrowRight className="h-3.5 w-3.5" />}>
+            {promotingNoteId === note.id ? 'Adding...' : 'Add as source of truth'}
+          </Button>
+        </li>
+      ))}
+    </ul>
   )
 }

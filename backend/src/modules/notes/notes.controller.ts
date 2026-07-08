@@ -1,5 +1,6 @@
 import type { Response } from 'express'
 import type { AuthedRequest } from '../../types/request.js'
+import { sourceRow } from '../sources/sources.mapper.js'
 import { notesService } from './notes.service.js'
 
 export const notesController = {
@@ -17,6 +18,9 @@ export const notesController = {
   },
   async update(req: AuthedRequest, res: Response) {
     res.json(await notesService.update(req.user.id, req.params.id, req.body))
+  },
+  async promoteToSource(req: AuthedRequest, res: Response) {
+    res.status(201).json(sourceRow(await notesService.promoteToSource(req.user.id, req.params.id)))
   },
   async remove(req: AuthedRequest, res: Response) {
     await notesService.delete(req.user.id, req.params.id)

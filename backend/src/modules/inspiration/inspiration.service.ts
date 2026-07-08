@@ -1,5 +1,6 @@
 import { getGeminiClient } from '../../config/gemini.js'
 import { getInspirationPrompt } from '../../prompts/index.js'
+import { todayIsoDate } from '../../utils/date.js'
 
 const fallbackQuotes = [
   'Tiny notes become bright paths when you return to them with curiosity.',
@@ -12,16 +13,9 @@ function fallbackQuote(userId: string, date: string) {
   return fallbackQuotes[index]
 }
 
-function todayKey() {
-  const date = new Date()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${date.getFullYear()}-${month}-${day}`
-}
-
 export const inspirationService = {
   async today(userId: string, model: string) {
-    const date = todayKey()
+    const date = todayIsoDate()
     const prompt = getInspirationPrompt()
 
     try {

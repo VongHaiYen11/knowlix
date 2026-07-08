@@ -140,10 +140,17 @@ export function SourceArticlePage({ id }: { id: string }) {
                 ) : (
                   <MarkdownPreview content={originalMarkdown || ''} />
                 )
+              ) : source.type === 'DOCX' ? (
+                <iframe
+                  src={apiUrl(`/api/v1/files/${source.fileId}/preview`)}
+                  className="h-[88vh] w-full rounded-xl border border-border bg-card shadow-sm"
+                  title={`${source.title} preview`}
+                  sandbox=""
+                />
               ) : (
                 <iframe
                   src={apiUrl(`/api/v1/files/${source.fileId}`)}
-                  className="w-full h-[88vh] border border-border rounded-xl bg-card shadow-sm"
+                  className="h-[88vh] w-full rounded-xl border border-border bg-card shadow-sm"
                   title={source.title}
                 />
               )
@@ -153,7 +160,7 @@ export function SourceArticlePage({ id }: { id: string }) {
           </div>
         </article>
         <aside className="lg:sticky lg:top-24 lg:h-fit">
-          <div className="space-y-6">
+          <div className="space-y-3">
             {source.fileId && (
               <Button
                 variant="outline"
@@ -210,7 +217,7 @@ export function SourceArticlePage({ id }: { id: string }) {
       <ConfirmDialog
         open={confirmDeleteOpen}
         title="Delete this source?"
-        message="This will also remove generated knowledge pages and graph links related to this source."
+        message="This will also remove generated knowledge pages related to this source."
         confirmLabel="Delete source"
         error={deleteError}
         loading={deleting}

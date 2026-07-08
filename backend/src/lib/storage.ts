@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import { env } from '../config/env.js'
 import { pool } from '../database/pool.js'
 import { AppError, NotFoundError } from '../errors/index.js'
+import { todayIsoDate } from '../utils/date.js'
 
 export type StorageObjectKind =
   | 'raw_source'
@@ -44,7 +45,7 @@ function safeName(value: string) {
 }
 
 function objectKey(input: { userId: string; kind: StorageObjectKind; originalName: string }) {
-  const date = new Date().toISOString().split('T')[0]
+  const date = todayIsoDate()
   return `${input.userId}/${input.kind}/${date}/${randomUUID()}-${safeName(input.originalName)}`
 }
 

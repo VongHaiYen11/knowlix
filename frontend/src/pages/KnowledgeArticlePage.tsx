@@ -77,12 +77,12 @@ export function KnowledgeArticlePage({ slug }: { slug: string }) {
           <ArticleSection title="Timeline"><TimelineList items={entry.timeline} /></ArticleSection>
         </article>
         <aside className="lg:sticky lg:top-24 lg:h-fit">
-          <div className="space-y-6">
+          <div className="space-y-3">
             <Link to={ROUTES.knowledgeEdit(entry.slug)} className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm text-primary-foreground transition hover:opacity-90">
               <Pencil className="h-4 w-4" />Edit
             </Link>
             <div className="grid grid-cols-2 gap-2">{actions.map((action) => <Button key={action.label} variant="outline" size="sm" icon={<action.icon className="h-3.5 w-3.5" />}>{action.label}</Button>)}</div>
-            <Card className="p-4"><h2 className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground"><Link2 className="h-3.5 w-3.5" />Related knowledge</h2>{entry.related.map((item) => <Link key={item.slug} to={ROUTES.knowledge(item.slug)} className="block rounded-lg px-2 py-1.5 text-sm transition hover:bg-secondary">{item.title}</Link>)}</Card>
+            <Card className="p-4"><h2 className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground"><Link2 className="h-3.5 w-3.5" />Related knowledge</h2>{entry.related.map((item) => <p key={item.slug} className="rounded-lg px-2 py-1.5 text-sm text-foreground">{item.title}</p>)}</Card>
             <Card className="p-4"><h2 className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground"><History className="h-3.5 w-3.5" />Last updated</h2><p className="text-sm text-muted-foreground">{entry.updated}</p></Card>
           </div>
         </aside>

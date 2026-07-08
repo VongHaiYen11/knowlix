@@ -1,14 +1,7 @@
-import { BookOpen, CornerDownLeft, FilePlus2, GitMerge, RefreshCw, Sparkles } from 'lucide-react'
+import { CornerDownLeft, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { MarkdownPreview } from '@/features/editor/MarkdownPreview'
 import type { ResearchMessage } from '@/services/researchService'
-
-const actions = [
-  { label: 'Save as Knowledge', icon: BookOpen },
-  { label: 'Create Note', icon: FilePlus2 },
-  { label: 'Update Existing', icon: RefreshCw },
-  { label: 'Merge with Page', icon: GitMerge },
-]
 
 interface ConversationProps {
   messages: ResearchMessage[]
@@ -32,7 +25,6 @@ export function Conversation({ messages, input, onInput, onSend }: ConversationP
               <div className="font-serif text-xl leading-relaxed text-foreground/90">
                 <MarkdownPreview content={message.content} />
               </div>
-              <div className="mt-4 flex flex-wrap gap-2">{actions.map((action) => <Button key={action.label} variant="outline" size="sm" icon={<action.icon className="h-3.5 w-3.5" />}>{action.label}</Button>)}</div>
             </div>
           ))}
         </div>

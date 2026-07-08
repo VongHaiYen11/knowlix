@@ -1,9 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
-import { researchService, type ResearchScope, type ResearchThread } from '@/services/researchService'
-import type { KnowledgeEntry } from '@/types/knowledge'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { researchService, type ResearchReference, type ResearchMessage, type ResearchScope, type ResearchThread } from '@/services/researchService'
 import { getModelPreference } from '@/utils/modelPreference'
 
-const storageKey = 'knowlix.researchThreads'
 const defaultDateRange = 'Anytime'
 const defaultScope: ResearchScope = { tags: [], categories: [], dateRange: defaultDateRange }
 
@@ -24,42 +22,47 @@ function titleFromQuestion(question: string) {
   return question.trim().split(/\s+/).slice(0, 3).join(' ') || 'Untitled'
 }
 
-function isLegacyInitializedThread(thread: ResearchThread) {
-  return thread.messages.length > 0 && thread.messages.every((message) => message.id.startsWith('seed-'))
-}
-
-const loadThreads = (): ResearchThread[] => {
-  try {
-    const stored = localStorage.getItem(storageKey)
-    if (!stored) return [createThread()]
-    const parsed = JSON.parse(stored) as ResearchThread[]
-    if (!Array.isArray(parsed) || !parsed.length) return [createThread()]
-    const threads = parsed.filter((thread) => !isLegacyInitializedThread(thread)).map((thread) => ({
-      ...thread,
-      title: thread.title === 'Untitled research' ? 'Untitled' : thread.title,
-      titleManuallyEdited: thread.titleManuallyEdited ?? !['Untitled', 'Untitled research'].includes(thread.title),
-      scope: {
-        ...thread.scope,
-        dateRange: thread.scope.dateRange === 'Any time' ? defaultDateRange : thread.scope.dateRange,
-      },
-    }))
-    return threads.length ? threads : [createThread()]
-  } catch {
-    return [createThread()]
+function collectCitedReferences(messages: ResearchMessage[]) {
+  const referencesById = new Map<string, ResearchReference>()
+  for (const message of messages) {
+    if (message.role !== 'assistant') continue
+    for (const reference of message.references ?? []) {
+      const existing = referencesById.get(reference.id)
+      if (!existing) {
+        referencesById.set(reference.id, reference)
+        continue
+      }
+      referencesById.set(reference.id, {
+        ...existing,
+        tags: Array.from(new Set([...(existing.tags ?? []), ...(reference.tags ?? [])])),
+        categories: Array.from(new Set([...(existing.categories ?? []), ...(reference.categories ?? [])])),
+      })
+    }
   }
+  return Array.from(referencesById.values())
 }
 
 export function useResearch(initialQuestion: string) {
-  const [threads, setThreads] = useState<ResearchThread[]>(loadThreads)
-  const [activeThreadId, setActiveThreadId] = useState(() => threads[0]?.id ?? '')
+  const [threads, setThreads] = useState<ResearchThread[]>([])
+  const [activeThreadId, setActiveThreadId] = useState('')
   const [input, setInput] = useState(initialQuestion)
-  const [scopedKnowledge, setScopedKnowledge] = useState<KnowledgeEntry[]>([])
+  const pendingPersistIds = useRef(new Set<string>())
   const activeThread = threads.find((thread) => thread.id === activeThreadId) ?? threads[0]
   const messages = activeThread?.messages ?? []
+  const usedReferences = useMemo(() => collectCitedReferences(messages), [messages])
   const scope = activeThread?.scope ?? defaultScope
 
   useEffect(() => {
-    localStorage.setItem(storageKey, JSON.stringify(threads))
+    if (!pendingPersistIds.current.size) return
+    const ids = Array.from(pendingPersistIds.current)
+    ids.forEach((id) => pendingPersistIds.current.delete(id))
+    for (const id of ids) {
+      const thread = threads.find((item) => item.id === id)
+      if (!thread) continue
+      void researchService.saveThread(thread).catch((err) => {
+        console.warn('[Research] Could not save research thread:', err)
+      })
+    }
   }, [threads])
 
   useEffect(() => {
@@ -70,19 +73,18 @@ export function useResearch(initialQuestion: string) {
         if (cancelled) return
         if (remoteThreads.length) {
           setThreads(remoteThreads)
-          setActiveThreadId(remoteThreads[0].id)
-          localStorage.setItem(storageKey, JSON.stringify(remoteThreads))
+          setActiveThreadId((current) => remoteThreads.some((thread) => thread.id === current) ? current : remoteThreads[0].id)
           return
         }
 
-        const localThreads = loadThreads()
-        await Promise.all(localThreads.map((thread) => researchService.saveThread(thread)))
-        if (!cancelled) {
-          setThreads(localThreads)
-          setActiveThreadId(localThreads[0]?.id ?? '')
-        }
+        setThreads([])
+        setActiveThreadId('')
       } catch (err) {
-        console.warn('[Research] Could not load DB-backed research threads, using local cache:', err)
+        console.warn('[Research] Could not load DB-backed research threads:', err)
+        if (!cancelled) {
+          setThreads([])
+          setActiveThreadId('')
+        }
       }
     }
     void loadServerThreads()
@@ -91,22 +93,19 @@ export function useResearch(initialQuestion: string) {
     }
   }, [])
 
-  useEffect(() => {
-    const lastQuestion = [...messages].reverse().find((message) => message.role === 'user')?.content ?? input
-    void researchService.getScopedKnowledge(scope, lastQuestion).then(setScopedKnowledge)
-  }, [scope, input, messages])
+  const updateThread = useCallback((targetId: string, updater: (thread: ResearchThread) => ResearchThread, persist = true) => {
+    setThreads((current) => current.map((thread) => {
+      if (thread.id !== targetId) return thread
+      const nextThread = { ...updater(thread), updatedAt: new Date().toISOString() }
+      if (persist) pendingPersistIds.current.add(nextThread.id)
+      return nextThread
+    }))
+  }, [])
 
   const updateActiveThread = useCallback((updater: (thread: ResearchThread) => ResearchThread, persist = true) => {
-    let nextThread: ResearchThread | undefined
-    setThreads((current) => current.map((thread) => (
-      thread.id === activeThreadId ? (nextThread = { ...updater(thread), updatedAt: new Date().toISOString() }) : thread
-    )))
-    if (persist && nextThread) {
-      void researchService.saveThread(nextThread).catch((err) => {
-        console.warn('[Research] Could not save research thread:', err)
-      })
-    }
-  }, [activeThreadId])
+    if (!activeThreadId) return
+    updateThread(activeThreadId, updater, persist)
+  }, [activeThreadId, updateThread])
 
   const send = useCallback(async () => {
     const question = input.trim()
@@ -114,16 +113,28 @@ export function useResearch(initialQuestion: string) {
     
     const userMsgId = `u-${Date.now()}`
     const assistantMsgId = `a-${Date.now()}`
+    let threadForResponseId = activeThread?.id ?? ''
     
-    updateActiveThread((thread) => ({
+    const applyQuestion = (thread: ResearchThread): ResearchThread => ({
       ...thread,
       title: !thread.titleManuallyEdited && thread.title === 'Untitled' ? titleFromQuestion(question) : thread.title,
       messages: [
         ...thread.messages,
         { id: userMsgId, role: 'user', content: question },
-        { id: assistantMsgId, role: 'assistant', content: 'Thinking...' },
+        { id: assistantMsgId, role: 'assistant', content: 'Thinking...', references: [] },
       ],
-    }))
+    })
+
+    if (!activeThread) {
+      const thread = applyQuestion(createThread())
+      setThreads([thread])
+      setActiveThreadId(thread.id)
+      pendingPersistIds.current.add(thread.id)
+      threadForResponseId = thread.id
+    } else {
+      updateActiveThread(applyQuestion)
+      threadForResponseId = activeThread.id
+    }
     setInput('')
     
     try {
@@ -137,9 +148,9 @@ export function useResearch(initialQuestion: string) {
         body: JSON.stringify({
           question,
           scope: {
-            tags: scope.tags,
-            categories: scope.categories,
-            dateRange: scope.dateRange,
+            tags: [],
+            categories: [],
+            dateRange: defaultDateRange,
           }
         }),
       })
@@ -151,6 +162,7 @@ export function useResearch(initialQuestion: string) {
       const reader = response.body?.getReader()
       const decoder = new TextDecoder()
       let assistantText = ''
+      let availableReferences: ResearchReference[] = []
 
       if (reader) {
         while (true) {
@@ -165,9 +177,23 @@ export function useResearch(initialQuestion: string) {
               if (data === '[DONE]') continue
               try {
                 const parsed = JSON.parse(data)
+                if (Array.isArray(parsed.references)) {
+                  const validReferences = parsed.references.filter((reference: Partial<ResearchReference>) => (
+                    typeof reference.number === 'number' &&
+                    typeof reference.id === 'string' &&
+                    typeof reference.type === 'string' &&
+                    typeof reference.title === 'string'
+                  )) as ResearchReference[]
+                  availableReferences = validReferences.map((reference) => ({
+                    ...reference,
+                    tags: Array.isArray(reference.tags) ? reference.tags : [],
+                    categories: Array.isArray(reference.categories) ? reference.categories : [],
+                  }))
+                  continue
+                }
                 if (parsed.text) {
                   assistantText += parsed.text
-                  updateActiveThread((thread) => ({
+                  updateThread(threadForResponseId, (thread) => ({
                     ...thread,
                     messages: thread.messages.map((msg) =>
                       msg.id === assistantMsgId ? { ...msg, content: assistantText } : msg
@@ -176,7 +202,7 @@ export function useResearch(initialQuestion: string) {
                 }
               } catch {
                 assistantText += data
-                updateActiveThread((thread) => ({
+                updateThread(threadForResponseId, (thread) => ({
                   ...thread,
                   messages: thread.messages.map((msg) =>
                     msg.id === assistantMsgId ? { ...msg, content: assistantText } : msg
@@ -187,18 +213,25 @@ export function useResearch(initialQuestion: string) {
           }
         }
       }
-      updateActiveThread((thread) => thread)
+      const citedNumbers = new Set(Array.from(assistantText.matchAll(/\[(\d+)\]/g)).map((match) => Number(match[1])))
+      const citedReferences = availableReferences.filter((reference) => citedNumbers.has(reference.number))
+      updateThread(threadForResponseId, (thread) => ({
+        ...thread,
+        messages: thread.messages.map((msg) =>
+          msg.id === assistantMsgId ? { ...msg, references: citedReferences } : msg
+        ),
+      }))
     } catch (err) {
       console.error('[Research] Ingest streaming error:', err)
       const errorMsg = err instanceof Error ? err.message : String(err)
-      updateActiveThread((thread) => ({
+      updateThread(threadForResponseId, (thread) => ({
         ...thread,
         messages: thread.messages.map((msg) =>
           msg.id === assistantMsgId ? { ...msg, content: `Error: Failed to stream research answer. Details: ${errorMsg}` } : msg
         ),
       }))
     }
-  }, [input, scope, activeThreadId, updateActiveThread])
+  }, [activeThread, input, updateActiveThread, updateThread])
 
   const reset = useCallback(() => {
     const thread = createThread()
@@ -231,7 +264,7 @@ export function useResearch(initialQuestion: string) {
     setInput,
     scope,
     setScope,
-    scopedKnowledge,
+    usedReferences,
     send,
     reset,
     renameThread,

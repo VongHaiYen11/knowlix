@@ -31,8 +31,8 @@ export function KnowledgeGrid({ knowledge }: { knowledge: KnowledgeEntry[] }) {
                 <span className="text-xs text-muted-foreground">{entry.readTime}</span>
               </div>
               <h2 className="font-serif text-2xl leading-snug tracking-tight">{entry.title}</h2>
-              <p className="mt-2 line-clamp-3 flex-1 text-sm leading-relaxed text-muted-foreground">{entry.overview}</p>
-              <div className="mt-4 flex flex-wrap items-center gap-1.5">
+              <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-muted-foreground">{entry.overview}</p>
+              <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-4">
                 {entry.tags.slice(0, 3).map((tag, i) => (
                   <Badge key={tag} className={i === 2 ? 'hidden md:inline-flex' : ''}>
                     #{tag}

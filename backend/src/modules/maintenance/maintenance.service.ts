@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { getGeminiClient } from '../../config/gemini.js'
-import { todayLabel } from '../../utils/date.js'
+import { todayIsoDate, todayLabel } from '../../utils/date.js'
 import { slugify } from '../../utils/text.js'
 import { storageService } from '../../lib/storage.js'
 import { maintenanceRepository } from './maintenance.repository.js'
@@ -10,9 +10,12 @@ import { getMaintenancePrompt } from '../../prompts/index.js'
 export const maintenanceService = {
   async lint(user: { id: string; name: string }, model: string) {
     const knowledge = await maintenanceRepository.knowledge(user.id)
-    const links = await maintenanceRepository.links(user.id)
     const incomingLinks = new Set<string>()
-    for (const link of links) incomingLinks.add(link.target)
+    for (const row of knowledge) {
+      for (const related of row.related ?? []) {
+        if (related?.slug) incomingLinks.add(related.slug)
+      }
+    }
     const orphanedSlugs = knowledge.filter((row) => !incomingLinks.has(row.slug)).map((row) => row.slug)
 
     const existingSlugs = new Set(knowledge.map((row) => row.slug))
@@ -35,8 +38,6 @@ export const maintenanceService = {
 
     const missingDetails: string[] = []
     for (const [missingSlug, referringSlugs] of missingConceptsMap.entries()) {
-      await maintenanceRepository.addSuggestedNode(user.id, missingSlug)
-      for (const refSlug of referringSlugs) await maintenanceRepository.addLink(user.id, refSlug, missingSlug)
       missingDetails.push(`- **${missingSlug}** (referenced by: ${referringSlugs.map((slug) => `[[${slug}]]`).join(', ')})`)
     }
 
@@ -65,7 +66,7 @@ export const maintenanceService = {
     }
 
     const dateStr = todayLabel()
-    const isoDate = new Date().toISOString().split('T')[0]
+    const isoDate = todayIsoDate()
     const report = `# Knowledge Base Lint Maintenance Report
 **Date:** ${dateStr} (${isoDate})
 **User:** ${user.name}
@@ -80,7 +81,7 @@ ${orphanedSlugs.length > 0 ? orphanedSlugs.map((slug) => `- [[${slug}]]`).join('
 
 ## Missing Links / Suggested Concepts
 Identify concepts referenced by \`[[wikilinks]]\` but not created.
-*Action Taken: Automatically upserted suggested placeholder nodes and links into the knowledge graph.*
+*Action Taken: Reported missing concepts for review.*
 
 ${missingDetails.length > 0 ? missingDetails.join('\n') : '*No missing links detected.*'}
 
@@ -96,7 +97,7 @@ ${contradictionDetails.length > 0 ? contradictionDetails.join('\n\n') : '*No log
 
 ## Maintenance Summary
 - **Orphaned Pages:** ${orphanedSlugs.length}
-- **Missing Concepts Added to Graph:** ${missingConceptsMap.size}
+- **Missing Concepts Reported:** ${missingConceptsMap.size}
 - **Contradictions Flagged:** ${contradictions.length}
 `
     const outputsDir = path.resolve('outputs')

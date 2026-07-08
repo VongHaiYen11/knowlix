@@ -4,7 +4,6 @@ export const ROUTES = {
   signup: '/signup',
   library: '/library',
   research: '/research',
-  graph: '/graph',
   journal: '/journal',
   settings: '/settings',
   knowledge: (slug: string) => `/library/knowledge/${slug}`,

@@ -17,7 +17,6 @@ export interface KnowledgeEntry {
   category: string
   tags: string[]
   knowledgeTags?: string[]
-  workspaceLabels?: string[]
   created: string
   updated: string
   readTime: string
@@ -41,7 +40,6 @@ export interface Source {
   summaryStorageObjectId?: string
   tags: string[]
   knowledgeTags?: string[]
-  workspaceLabels?: string[]
   category: string
   created: string
   status: ProcessingStatus
@@ -62,32 +60,18 @@ export interface NoteItem {
 }
 
 export interface JournalEntry {
+  id: string
   time: string
-  kind: string
   text: string
+  tags: string[]
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface JournalDay {
   date: string
   weekday: string
-  summary: string
   entries: JournalEntry[]
-  learnings: string[]
-  connections: string[]
-}
-
-export interface GraphNode {
-  id: string
-  label: string
-  category: string
-  tags: string[]
-  x: number
-  y: number
-}
-
-export interface GraphLink {
-  source: string
-  target: string
 }
 
 export interface LibrarySearchResult {

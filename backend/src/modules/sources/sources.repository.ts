@@ -12,8 +12,8 @@ export const sourcesRepository = {
   },
   async create(input: any) {
     const { rows } = await pool.query(
-      `INSERT INTO sources (id,user_id,type,title,content,tags,category,created,status,meta,excerpt,file_id,raw_storage_object_id,extracted_storage_object_id,summary_storage_object_id,knowledge_tags,workspace_labels)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
+      `INSERT INTO sources (id,user_id,type,title,content,tags,category,created,status,meta,excerpt,file_id,raw_storage_object_id,extracted_storage_object_id,summary_storage_object_id,knowledge_tags)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
       [
         input.id,
         input.userId,
@@ -31,7 +31,6 @@ export const sourcesRepository = {
         input.extractedStorageObjectId,
         input.summaryStorageObjectId,
         input.knowledgeTags ?? input.tags ?? [],
-        input.workspaceLabels ?? [],
       ],
     )
     return rows[0]
@@ -39,8 +38,8 @@ export const sourcesRepository = {
   async update(input: any) {
     const { rows } = await pool.query(
       `UPDATE sources SET type=$1,title=$2,content=$3,tags=$4,category=$5,status=$6,meta=$7,excerpt=$8,file_id=$9,
-        raw_storage_object_id=$10,extracted_storage_object_id=$11,summary_storage_object_id=$12,knowledge_tags=$13,workspace_labels=$14,updated_at=now()
-       WHERE user_id=$15 AND id=$16 RETURNING *`,
+        raw_storage_object_id=$10,extracted_storage_object_id=$11,summary_storage_object_id=$12,knowledge_tags=$13,updated_at=now()
+       WHERE user_id=$14 AND id=$15 RETURNING *`,
       [
         input.type,
         input.title,
@@ -55,7 +54,6 @@ export const sourcesRepository = {
         input.extractedStorageObjectId,
         input.summaryStorageObjectId,
         input.knowledgeTags ?? input.tags ?? [],
-        input.workspaceLabels ?? [],
         input.userId,
         input.id,
       ],
@@ -84,27 +82,7 @@ export const sourcesRepository = {
   },
   async deleteRelatedKnowledge(userId: string, slugs: string[]) {
     if (!slugs.length) return
-    await pool.query('DELETE FROM graph_links WHERE user_id=$1 AND (source = ANY($2::text[]) OR target = ANY($2::text[]))', [userId, slugs])
-    await pool.query('DELETE FROM graph_nodes WHERE user_id=$1 AND id = ANY($2::text[])', [userId, slugs])
     await pool.query('DELETE FROM knowledge_entries WHERE user_id=$1 AND slug = ANY($2::text[])', [userId, slugs])
-    await pool.query(
-      `DELETE FROM graph_links
-       WHERE user_id=$1
-         AND source NOT IN (SELECT slug FROM knowledge_entries WHERE user_id=$1)
-         AND target NOT IN (SELECT slug FROM knowledge_entries WHERE user_id=$1)`,
-      [userId],
-    )
-    await pool.query(
-      `DELETE FROM graph_nodes
-       WHERE user_id=$1
-         AND id NOT IN (SELECT slug FROM knowledge_entries WHERE user_id=$1)
-         AND id NOT IN (
-           SELECT DISTINCT source FROM graph_links WHERE user_id=$1
-           UNION
-           SELECT DISTINCT target FROM graph_links WHERE user_id=$1
-         )`,
-      [userId],
-    )
   },
   async delete(userId: string, id: string) {
     await pool.query('DELETE FROM sources WHERE user_id=$1 AND id=$2', [userId, id])

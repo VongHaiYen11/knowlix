@@ -55,7 +55,6 @@ CREATE TABLE IF NOT EXISTS sources (
   extracted_storage_object_id TEXT REFERENCES storage_objects(id) ON DELETE SET NULL,
   summary_storage_object_id TEXT REFERENCES storage_objects(id) ON DELETE SET NULL,
   knowledge_tags TEXT[] NOT NULL DEFAULT '{}',
-  workspace_labels TEXT[] NOT NULL DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -63,10 +62,9 @@ CREATE TABLE IF NOT EXISTS sources (
 CREATE INDEX IF NOT EXISTS sources_user_updated_idx ON sources (user_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS sources_tags_idx ON sources USING gin (tags);
 CREATE INDEX IF NOT EXISTS sources_knowledge_tags_idx ON sources USING gin (knowledge_tags);
-CREATE INDEX IF NOT EXISTS sources_workspace_labels_idx ON sources USING gin (workspace_labels);
 
 CREATE TABLE IF NOT EXISTS knowledge_entries (
-  slug TEXT PRIMARY KEY,
+  slug TEXT NOT NULL,
   user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   content TEXT,
@@ -86,18 +84,16 @@ CREATE TABLE IF NOT EXISTS knowledge_entries (
   timeline JSONB NOT NULL DEFAULT '[]',
   markdown_storage_object_id TEXT REFERENCES storage_objects(id) ON DELETE SET NULL,
   knowledge_tags TEXT[] NOT NULL DEFAULT '{}',
-  workspace_labels TEXT[] NOT NULL DEFAULT '{}',
   search_vector TSVECTOR,
   embedding VECTOR(768),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (user_id, slug)
+  PRIMARY KEY (user_id, slug)
 );
 
 CREATE INDEX IF NOT EXISTS knowledge_user_updated_idx ON knowledge_entries (user_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS knowledge_tags_idx ON knowledge_entries USING gin (tags);
 CREATE INDEX IF NOT EXISTS knowledge_knowledge_tags_idx ON knowledge_entries USING gin (knowledge_tags);
-CREATE INDEX IF NOT EXISTS knowledge_workspace_labels_idx ON knowledge_entries USING gin (workspace_labels);
 CREATE INDEX IF NOT EXISTS knowledge_search_vector_idx ON knowledge_entries USING gin (search_vector);
 CREATE INDEX IF NOT EXISTS knowledge_embedding_idx ON knowledge_entries USING hnsw (embedding vector_cosine_ops);
 
@@ -106,7 +102,7 @@ CREATE TABLE IF NOT EXISTS knowledge_revisions (
   user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
   slug TEXT NOT NULL,
   storage_object_id TEXT NOT NULL REFERENCES storage_objects(id) ON DELETE RESTRICT,
-  revision_type TEXT NOT NULL CHECK (revision_type IN ('create', 'update', 'merge', 'proposal', 'manual_import')),
+  revision_type TEXT NOT NULL CHECK (revision_type IN ('create', 'update', 'merge', 'replace', 'proposal', 'manual_import')),
   model TEXT NOT NULL DEFAULT '',
   reason TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -139,37 +135,19 @@ CREATE TABLE IF NOT EXISTS notes (
 
 CREATE INDEX IF NOT EXISTS notes_user_updated_idx ON notes (user_id, updated_at DESC);
 
-CREATE TABLE IF NOT EXISTS journal_days (
-  date TEXT NOT NULL,
-  user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
-  weekday TEXT NOT NULL DEFAULT '',
-  summary TEXT NOT NULL DEFAULT '',
-  entries JSONB NOT NULL DEFAULT '[]',
-  learnings JSONB NOT NULL DEFAULT '[]',
-  connections JSONB NOT NULL DEFAULT '[]',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  PRIMARY KEY (user_id, date)
-);
-
-CREATE TABLE IF NOT EXISTS graph_nodes (
+CREATE TABLE IF NOT EXISTS journal_entries (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
-  label TEXT NOT NULL,
-  category TEXT NOT NULL DEFAULT '',
+  entry_date DATE NOT NULL,
+  entry_time TEXT NOT NULL DEFAULT '',
+  text TEXT NOT NULL,
   tags TEXT[] NOT NULL DEFAULT '{}',
-  x DOUBLE PRECISION NOT NULL DEFAULT 0.5,
-  y DOUBLE PRECISION NOT NULL DEFAULT 0.5,
-  UNIQUE (user_id, id)
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS graph_links (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
-  source TEXT NOT NULL,
-  target TEXT NOT NULL,
-  UNIQUE (user_id, source, target)
-);
+CREATE INDEX IF NOT EXISTS journal_entries_user_date_idx ON journal_entries (user_id, entry_date DESC, created_at ASC);
+CREATE INDEX IF NOT EXISTS journal_entries_tags_idx ON journal_entries USING gin (tags);
 
 CREATE TABLE IF NOT EXISTS research_threads (
   id TEXT PRIMARY KEY,
@@ -190,6 +168,7 @@ CREATE TABLE IF NOT EXISTS research_messages (
   id TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
   content TEXT NOT NULL DEFAULT '',
+  reference_list JSONB NOT NULL DEFAULT '[]',
   position INTEGER NOT NULL DEFAULT 0 CHECK (position >= 0),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (thread_id, id)
@@ -202,10 +181,8 @@ ALTER TABLE sources ADD COLUMN IF NOT EXISTS raw_storage_object_id TEXT REFERENC
 ALTER TABLE sources ADD COLUMN IF NOT EXISTS extracted_storage_object_id TEXT REFERENCES storage_objects(id) ON DELETE SET NULL;
 ALTER TABLE sources ADD COLUMN IF NOT EXISTS summary_storage_object_id TEXT REFERENCES storage_objects(id) ON DELETE SET NULL;
 ALTER TABLE sources ADD COLUMN IF NOT EXISTS knowledge_tags TEXT[] NOT NULL DEFAULT '{}';
-ALTER TABLE sources ADD COLUMN IF NOT EXISTS workspace_labels TEXT[] NOT NULL DEFAULT '{}';
 ALTER TABLE knowledge_entries ADD COLUMN IF NOT EXISTS markdown_storage_object_id TEXT REFERENCES storage_objects(id) ON DELETE SET NULL;
 ALTER TABLE knowledge_entries ADD COLUMN IF NOT EXISTS knowledge_tags TEXT[] NOT NULL DEFAULT '{}';
-ALTER TABLE knowledge_entries ADD COLUMN IF NOT EXISTS workspace_labels TEXT[] NOT NULL DEFAULT '{}';
 ALTER TABLE knowledge_entries ADD COLUMN IF NOT EXISTS search_vector TSVECTOR;
 ALTER TABLE knowledge_entries ADD COLUMN IF NOT EXISTS embedding VECTOR(768);
 ALTER TABLE notes ADD COLUMN IF NOT EXISTS storage_object_id TEXT REFERENCES storage_objects(id) ON DELETE SET NULL;

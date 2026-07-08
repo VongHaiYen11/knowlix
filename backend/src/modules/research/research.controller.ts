@@ -18,17 +18,14 @@ export const researchController = {
     res.status(204).send()
   },
 
-  async retrievalPreview(req: AuthedRequest, res: Response) {
-    res.json(await researchService.retrievalPreview(req.user.id, req.body))
-  },
-
   async message(req: AuthedRequest, res: Response) {
     res.setHeader('Content-Type', 'text/event-stream')
     res.setHeader('Cache-Control', 'no-cache')
     res.setHeader('Connection', 'keep-alive')
     try {
-      const responseStream = await researchService.streamAnswer(req.user.id, req.body, requestedModel(req))
-      for await (const chunk of responseStream) {
+      const { stream, references } = await researchService.streamAnswer(req.user.id, req.body, requestedModel(req))
+      res.write(`data: ${JSON.stringify({ references })}\n\n`)
+      for await (const chunk of stream) {
         const text = chunk.text
         if (text) res.write(`data: ${JSON.stringify({ text })}\n\n`)
       }

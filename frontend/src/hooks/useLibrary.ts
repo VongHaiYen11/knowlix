@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { libraryService, type LibraryFilters } from '@/services/libraryService'
-import type { KnowledgeEntry, Source } from '@/types/knowledge'
+import type { KnowledgeEntry, NoteItem, Source } from '@/types/knowledge'
 import { useAsync } from './useAsync'
 
 export function useHomeData() {
@@ -18,6 +18,11 @@ export function useLibraryKnowledge(filters: LibraryFilters) {
   return useAsync(loader, [])
 }
 
+export function useLibraryNotes(filters: Pick<LibraryFilters, 'query' | 'sort'>) {
+  const loader = useCallback<() => Promise<NoteItem[]>>(() => libraryService.getNotes(filters), [filters])
+  return useAsync(loader, [])
+}
+
 export function useKnowledgeArticle(slug: string) {
   const loader = useCallback(() => libraryService.getKnowledgeBySlug(slug), [slug])
   return useAsync(loader, undefined)
@@ -31,11 +36,6 @@ export function useSourceArticle(id: string) {
 export function useJournal() {
   const loader = useCallback(() => libraryService.getJournal(), [])
   return useAsync(loader, [])
-}
-
-export function useGraphData() {
-  const loader = useCallback(() => libraryService.getGraph(), [])
-  return useAsync(loader, { nodes: [], links: [] })
 }
 
 export function useTaxonomy() {
