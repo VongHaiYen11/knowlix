@@ -25,7 +25,8 @@ export function ResearchPage() {
     return research.threads.find((thread) => thread.id === summaryThreadId)
   }, [research.threads, summaryThreadId])
   const assistantThinking = research.messages.some((message) => message.role === 'assistant' && message.content === 'Thinking...')
-  const canSummarizeCurrent = Boolean(research.activeThread) && research.messages.length > 3 && !assistantThinking
+  const hasEnoughMessagesForSummary = Boolean(research.activeThread) && research.messages.length > 3
+  const canSummarizeCurrent = hasEnoughMessagesForSummary && !assistantThinking
 
   async function openCurrentSummary() {
     const thread = research.activeThread
@@ -108,15 +109,17 @@ export function ResearchPage() {
                   <span>{research.messages.length} messages</span>
                   <span>{research.usedReferences.length} references used</span>
                 </div>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={<Brain className="h-4 w-4" />}
-                  onClick={openCurrentSummary}
-                  disabled={!canSummarizeCurrent || research.summaryLoadingThreadId === research.activeThread?.id}
-                >
-                  {research.summaryLoadingThreadId === research.activeThread?.id ? 'Summarizing...' : 'Summary'}
-                </Button>
+                {hasEnoughMessagesForSummary ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<Brain className="h-4 w-4" />}
+                    onClick={openCurrentSummary}
+                    disabled={!canSummarizeCurrent || research.summaryLoadingThreadId === research.activeThread?.id}
+                  >
+                    {research.summaryLoadingThreadId === research.activeThread?.id ? 'Summarizing...' : 'Summary'}
+                  </Button>
+                ) : null}
               </div>
             </div>
             <Conversation messages={research.messages} input={research.input} onInput={research.setInput} onSend={research.send} />

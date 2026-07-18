@@ -109,7 +109,7 @@ export function ResearchHistoryPanel({ threads, activeThreadId, tags, categories
                       <span className="text-muted-foreground/40">·</span>
                       <span className="text-xs text-muted-foreground">{thread.messages.length} messages</span>
                       <span className="ml-auto inline-flex items-center gap-1.5">
-                        {thread.summary ? (
+                        {thread.summary && thread.messages.length > 3 ? (
                           <span
                             role="button"
                             tabIndex={0}
