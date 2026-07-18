@@ -1,4 +1,4 @@
-import { CalendarDays, Feather, Home, Library, LogOut, PanelLeftClose, PanelLeftOpen, Settings, Sparkles, X } from 'lucide-react'
+import { CalendarDays, Feather, Home, Library, LogOut, PanelLeftClose, PanelLeftOpen, Settings, SlidersHorizontal, Sparkles, X } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router'
 import { useAuth } from '@/auth/useAuth'
@@ -13,6 +13,7 @@ const navItems = [
   { label: 'Home', href: ROUTES.home, icon: Home },
   { label: 'Library', href: ROUTES.library, icon: Library },
   { label: 'Research', href: ROUTES.research, icon: Sparkles },
+  { label: 'Customization', href: ROUTES.customization, icon: SlidersHorizontal },
   { label: 'Journal', href: ROUTES.journal, icon: CalendarDays },
   { label: 'Settings', href: ROUTES.settings, icon: Settings },
 ]

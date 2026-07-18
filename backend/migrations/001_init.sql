@@ -10,6 +10,21 @@ CREATE TABLE IF NOT EXISTS app_users (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS user_ai_customizations (
+  user_id TEXT PRIMARY KEY REFERENCES app_users(id) ON DELETE CASCADE,
+  ingest_model TEXT NOT NULL DEFAULT '',
+  research_model TEXT NOT NULL DEFAULT '',
+  ingest_reasoning TEXT NOT NULL DEFAULT 'auto' CHECK (ingest_reasoning IN ('auto', 'low', 'balanced', 'high')),
+  research_reasoning TEXT NOT NULL DEFAULT 'auto' CHECK (research_reasoning IN ('auto', 'low', 'balanced', 'high')),
+  ingest_temperature NUMERIC(3,2) CHECK (ingest_temperature IS NULL OR (ingest_temperature >= 0 AND ingest_temperature <= 1)),
+  research_temperature NUMERIC(3,2) CHECK (research_temperature IS NULL OR (research_temperature >= 0 AND research_temperature <= 1)),
+  knowledge_definition TEXT NOT NULL DEFAULT '',
+  knowledge_extraction_instructions TEXT NOT NULL DEFAULT '',
+  research_answer_instructions TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS uploaded_files (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
@@ -155,6 +170,10 @@ CREATE TABLE IF NOT EXISTS research_threads (
   title TEXT NOT NULL DEFAULT 'Untitled',
   scope JSONB NOT NULL DEFAULT '{"tags":[],"categories":[],"dateRange":"Anytime"}',
   title_manually_edited BOOLEAN NOT NULL DEFAULT false,
+  summary_markdown TEXT NOT NULL DEFAULT '',
+  summary_generated_at TIMESTAMPTZ,
+  summary_model TEXT NOT NULL DEFAULT '',
+  summary_message_count INTEGER NOT NULL DEFAULT 0 CHECK (summary_message_count >= 0),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (user_id, id)
@@ -186,3 +205,7 @@ ALTER TABLE knowledge_entries ADD COLUMN IF NOT EXISTS knowledge_tags TEXT[] NOT
 ALTER TABLE knowledge_entries ADD COLUMN IF NOT EXISTS search_vector TSVECTOR;
 ALTER TABLE knowledge_entries ADD COLUMN IF NOT EXISTS embedding VECTOR(768);
 ALTER TABLE notes ADD COLUMN IF NOT EXISTS storage_object_id TEXT REFERENCES storage_objects(id) ON DELETE SET NULL;
+ALTER TABLE research_threads ADD COLUMN IF NOT EXISTS summary_markdown TEXT NOT NULL DEFAULT '';
+ALTER TABLE research_threads ADD COLUMN IF NOT EXISTS summary_generated_at TIMESTAMPTZ;
+ALTER TABLE research_threads ADD COLUMN IF NOT EXISTS summary_model TEXT NOT NULL DEFAULT '';
+ALTER TABLE research_threads ADD COLUMN IF NOT EXISTS summary_message_count INTEGER NOT NULL DEFAULT 0 CHECK (summary_message_count >= 0);

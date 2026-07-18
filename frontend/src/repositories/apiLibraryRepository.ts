@@ -1,6 +1,6 @@
 import { apiClient, getAllPages } from '@/repositories/apiClient'
 import type { LibraryRepository } from '@/repositories/libraryRepository'
-import type { JournalDay, KnowledgeEntry, NoteItem, Source } from '@/types/knowledge'
+import type { JournalDay, KnowledgeEntry, KnowledgeMergeApplyInput, KnowledgeMergeDraft, KnowledgeMergePreviewInput, NoteItem, Source } from '@/types/knowledge'
 
 export const apiLibraryRepository: LibraryRepository = {
   getKnowledge: () => getAllPages<KnowledgeEntry>('/api/v1/knowledge'),
@@ -23,6 +23,8 @@ export const apiLibraryRepository: LibraryRepository = {
     }
     await apiClient.post<KnowledgeEntry>('/api/v1/knowledge', entry)
   },
+  previewKnowledgeMerge: (input: KnowledgeMergePreviewInput) => apiClient.post<KnowledgeMergeDraft>('/api/v1/knowledge/merge/preview', input),
+  applyKnowledgeMerge: (input: KnowledgeMergeApplyInput) => apiClient.post<KnowledgeEntry>('/api/v1/knowledge/merge/apply', input),
   getSources: () => getAllPages<Source>('/api/v1/sources'),
   getSourceById: async (id) => {
     try {

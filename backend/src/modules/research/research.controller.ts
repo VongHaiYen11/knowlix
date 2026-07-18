@@ -1,5 +1,4 @@
 import type { Response } from 'express'
-import { requestedModel } from '../../config/model.js'
 import type { AuthedRequest } from '../../types/request.js'
 import { researchService } from './research.service.js'
 
@@ -18,12 +17,16 @@ export const researchController = {
     res.status(204).send()
   },
 
+  async summarizeThread(req: AuthedRequest, res: Response) {
+    res.json(await researchService.summarizeThread(req.user.id, req.params.id))
+  },
+
   async message(req: AuthedRequest, res: Response) {
     res.setHeader('Content-Type', 'text/event-stream')
     res.setHeader('Cache-Control', 'no-cache')
     res.setHeader('Connection', 'keep-alive')
     try {
-      const { stream, references } = await researchService.streamAnswer(req.user.id, req.body, requestedModel(req))
+      const { stream, references } = await researchService.streamAnswer(req.user.id, req.body)
       res.write(`data: ${JSON.stringify({ references })}\n\n`)
       for await (const chunk of stream) {
         const text = chunk.text

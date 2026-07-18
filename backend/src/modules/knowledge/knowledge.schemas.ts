@@ -29,3 +29,30 @@ export const knowledgePatchSchema = z.object({
   sources: jsonArray.optional(),
   timeline: jsonArray.optional(),
 })
+
+const mergeStyleSchema = z.enum(['balanced', 'bullet', 'paragraph', 'course_notes']).default('balanced')
+
+export const knowledgeMergePreviewSchema = z.object({
+  sourceSlugs: z.array(z.string().trim().min(1)).min(2).max(8),
+  mode: z.enum(['automatic', 'manual']),
+  targetTitle: z.string().trim().min(1).max(160).optional(),
+  context: z.string().trim().max(4000).optional(),
+  style: mergeStyleSchema.optional(),
+})
+
+export const knowledgeMergeApplySchema = z.object({
+  sourceSlugs: z.array(z.string().trim().min(1)).min(2).max(8),
+  draft: z.object({
+    title: z.string().trim().min(1).max(160),
+    slug: z.string().trim().min(1).max(100).optional(),
+    overview: z.string().trim().default(''),
+    category: z.string().trim().min(1),
+    tags: tagsSchema,
+    content: z.string().trim().min(1),
+    sources: jsonArray.optional(),
+    related: jsonArray.optional(),
+    references: jsonArray.optional(),
+    timeline: jsonArray.optional(),
+    reason: z.string().trim().max(1000).optional(),
+  }),
+})

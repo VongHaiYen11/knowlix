@@ -4,6 +4,7 @@ export const ROUTES = {
   signup: '/signup',
   library: '/library',
   research: '/research',
+  customization: '/customization',
   journal: '/journal',
   settings: '/settings',
   knowledge: (slug: string) => `/library/knowledge/${slug}`,

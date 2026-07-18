@@ -1,12 +1,14 @@
 import { deleteFromStore, getAllFromStore, getFromStore, putInStore, STORE_NAMES } from '@/repositories/indexedDbClient'
 import { apiLibraryRepository } from '@/repositories/apiLibraryRepository'
 import { isApiRepositoryEnabled } from '@/repositories/apiClient'
-import type { JournalDay, KnowledgeEntry, NoteItem, Source } from '@/types/knowledge'
+import type { JournalDay, KnowledgeEntry, KnowledgeMergeApplyInput, KnowledgeMergeDraft, KnowledgeMergePreviewInput, NoteItem, Source } from '@/types/knowledge'
 
 export interface LibraryRepository {
   getKnowledge(): Promise<KnowledgeEntry[]>
   getKnowledgeBySlug(slug: string): Promise<KnowledgeEntry | undefined>
   saveKnowledge(entry: KnowledgeEntry): Promise<void>
+  previewKnowledgeMerge(input: KnowledgeMergePreviewInput): Promise<KnowledgeMergeDraft>
+  applyKnowledgeMerge(input: KnowledgeMergeApplyInput): Promise<KnowledgeEntry>
   getSources(): Promise<Source[]>
   getSourceById(id: string): Promise<Source | undefined>
   saveSource(source: Source): Promise<void>
@@ -24,6 +26,12 @@ export const indexedDbLibraryRepository: LibraryRepository = {
   getKnowledge: () => getAllFromStore(STORE_NAMES.knowledge),
   getKnowledgeBySlug: (slug) => getFromStore(STORE_NAMES.knowledge, slug),
   saveKnowledge: (entry) => putInStore(STORE_NAMES.knowledge, entry),
+  previewKnowledgeMerge: async () => {
+    throw new Error('Merge requires API mode. Set VITE_API_URL in frontend/.env.local.')
+  },
+  applyKnowledgeMerge: async () => {
+    throw new Error('Merge requires API mode. Set VITE_API_URL in frontend/.env.local.')
+  },
   getSources: () => getAllFromStore(STORE_NAMES.sources),
   getSourceById: async (id) => {
     const source = await getFromStore(STORE_NAMES.sources, id)

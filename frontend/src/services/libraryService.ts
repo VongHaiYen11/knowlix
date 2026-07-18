@@ -1,6 +1,6 @@
 import { apiClient, isApiRepositoryEnabled } from '@/repositories/apiClient'
 import { libraryRepository, type LibraryRepository } from '@/repositories/libraryRepository'
-import type { JournalDay, KnowledgeEntry, NoteItem, Source, SourceType } from '@/types/knowledge'
+import type { JournalDay, KnowledgeEntry, KnowledgeMergeApplyInput, KnowledgeMergeDraft, KnowledgeMergePreviewInput, NoteItem, Source, SourceType } from '@/types/knowledge'
 import { vietnamDateString, vietnamTimeString } from '@/utils/vietnamTime'
 
 export interface LibraryFilters {
@@ -73,6 +73,14 @@ export class LibraryService {
 
   getKnowledgeBySlug(slug: string): Promise<KnowledgeEntry | undefined> {
     return this.repository.getKnowledgeBySlug(slug)
+  }
+
+  previewKnowledgeMerge(input: KnowledgeMergePreviewInput): Promise<KnowledgeMergeDraft> {
+    return this.repository.previewKnowledgeMerge(input)
+  }
+
+  applyKnowledgeMerge(input: KnowledgeMergeApplyInput): Promise<KnowledgeEntry> {
+    return this.repository.applyKnowledgeMerge(input)
   }
 
   getSourceById(id: string): Promise<Source | undefined> {

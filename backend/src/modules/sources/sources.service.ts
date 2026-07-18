@@ -11,6 +11,7 @@ import { sourceRow } from './sources.mapper.js'
 import { binarySourceTypes, type sourceCreateSchema, type sourcePatchSchema } from './sources.schemas.js'
 import { sourcesRepository } from './sources.repository.js'
 import { runBackgroundIngest } from './sources.ingest-service.js'
+import { aiCustomizationService } from '../ai-customization/ai-customization.service.js'
 
 function sourceTypeFromUpload(mimeType: string, filename: string) {
   const extension = filename.toLowerCase().split('.').pop()
@@ -191,7 +192,8 @@ export const sourcesService = {
       knowledgeTags: [],
     })
 
-    runBackgroundIngest({ userId, fileId, sourceId, rawStorageObjectId: rawObject.id, rawStorageUrl: rawObject.url, originalName: file.originalname, created, uploadedType }).catch((err) => {
+    const customization = await aiCustomizationService.effectiveProfile(userId)
+    runBackgroundIngest({ userId, fileId, sourceId, rawStorageObjectId: rawObject.id, rawStorageUrl: rawObject.url, originalName: file.originalname, created, uploadedType, customization }).catch((err) => {
       console.error('[Ingest] Unhandled background ingest rejection:', err)
     })
 

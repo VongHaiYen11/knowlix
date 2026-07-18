@@ -1,6 +1,6 @@
 import { type ChangeEvent, useEffect, useMemo, useState } from 'react'
-import { ArrowRight, FileText, Plus, Upload } from 'lucide-react'
-import { Link } from 'react-router'
+import { ArrowRight, FileText, GitMerge, Plus, Upload, X } from 'lucide-react'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { PageHeader } from '@/components/common/PageHeader'
 import { PageShell } from '@/components/common/PageShell'
 import { Button } from '@/components/ui/Button'
@@ -9,17 +9,20 @@ import { SearchInput } from '@/components/ui/SearchInput'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { TabPanel, Tabs } from '@/components/ui/Tabs'
 import { KnowledgeGrid } from '@/features/library/KnowledgeGrid'
+import { KnowledgeMergeModal } from '@/features/library/KnowledgeMergeModal'
 import { SourceList } from '@/features/library/SourceList'
 import { ROUTES } from '@/constants/routes'
 import { useLibraryKnowledge, useLibraryNotes, useLibrarySources, useTaxonomy } from '@/hooks/useLibrary'
 import { libraryService } from '@/services/libraryService'
-import type { NoteItem, SourceType } from '@/types/knowledge'
+import type { KnowledgeEntry, NoteItem, SourceType } from '@/types/knowledge'
 
 type LibraryTab = 'sources' | 'knowledge' | 'notes'
 
 const sourceTypes: Array<SourceType | 'All'> = ['All', 'PDF', 'DOCX', 'TXT', 'Markdown']
 
 export function LibraryPage() {
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [tab, setTab] = useState<LibraryTab>('sources')
   const [query, setQuery] = useState('')
   const [sourceType, setSourceType] = useState<SourceType | 'All'>('All')
@@ -37,6 +40,19 @@ export function LibraryPage() {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [promotingNoteId, setPromotingNoteId] = useState<string | null>(null)
+  const [mergeSelectionMode, setMergeSelectionMode] = useState(false)
+  const [selectedKnowledgeSlugs, setSelectedKnowledgeSlugs] = useState<string[]>([])
+  const [mergeModalOpen, setMergeModalOpen] = useState(false)
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab')
+    const mergeSlug = searchParams.get('merge')
+    if (tabParam === 'knowledge' || mergeSlug) setTab('knowledge')
+    if (mergeSlug) {
+      setMergeSelectionMode(true)
+      setSelectedKnowledgeSlugs([mergeSlug])
+    }
+  }, [searchParams])
 
   const hasProcessingSource = useMemo(() => {
     return sources.data?.some((source) => source.status === 'Processing') ?? false
@@ -90,6 +106,27 @@ export function LibraryPage() {
     }
   }
 
+  function toggleKnowledgeSelection(slug: string) {
+    setSelectedKnowledgeSlugs((current) => current.includes(slug) ? current.filter((item) => item !== slug) : [...current, slug])
+  }
+
+  function cancelMergeSelection() {
+    setMergeSelectionMode(false)
+    setSelectedKnowledgeSlugs([])
+    setMergeModalOpen(false)
+  }
+
+  async function handleMergeApplied(entry: KnowledgeEntry) {
+    cancelMergeSelection()
+    await Promise.all([knowledge.reload(), taxonomy.reload()])
+    navigate(ROUTES.knowledge(entry.slug))
+  }
+
+  const selectedKnowledge = useMemo(() => {
+    const selected = new Set(selectedKnowledgeSlugs)
+    return knowledge.data.filter((entry) => selected.has(entry.slug))
+  }, [knowledge.data, selectedKnowledgeSlugs])
+
   return (
     <PageShell>
       <PageHeader title="Library" description="The center of everything you keep. Raw sources become living knowledge." />
@@ -121,6 +158,8 @@ export function LibraryPage() {
         <TabPanel>
           <LibraryControls
             mode="knowledge"
+            mergeSelectionMode={mergeSelectionMode}
+            selectedKnowledgeCount={selectedKnowledgeSlugs.length}
             sourceType={sourceType}
             category={category}
             tag={tag}
@@ -134,8 +173,24 @@ export function LibraryPage() {
             onCategory={setCategory}
             onTag={setTag}
             onSort={setSort}
+            onStartMerge={() => setMergeSelectionMode(true)}
+            onOpenMerge={() => setMergeModalOpen(true)}
+            onCancelMerge={cancelMergeSelection}
           />
-          {knowledge.status === 'loading' ? <Skeleton count={4} className="h-56" /> : <KnowledgeGrid knowledge={knowledge.data} />}
+          {knowledge.status === 'loading' ? <Skeleton count={4} className="h-56" /> : (
+            <KnowledgeGrid
+              knowledge={knowledge.data}
+              selectionMode={mergeSelectionMode}
+              selectedSlugs={selectedKnowledgeSlugs}
+              onToggleSelection={toggleKnowledgeSelection}
+            />
+          )}
+          <KnowledgeMergeModal
+            open={mergeModalOpen}
+            selectedKnowledge={selectedKnowledge}
+            onClose={() => setMergeModalOpen(false)}
+            onApplied={handleMergeApplied}
+          />
         </TabPanel>
       ) : (
         <TabPanel>
@@ -171,6 +226,8 @@ const sortLabels = {
 
 function LibraryControls({
   mode,
+  mergeSelectionMode = false,
+  selectedKnowledgeCount = 0,
   sourceType,
   category,
   tag,
@@ -184,8 +241,13 @@ function LibraryControls({
   onCategory,
   onTag,
   onSort,
+  onStartMerge,
+  onOpenMerge,
+  onCancelMerge,
 }: {
   mode: LibraryTab
+  mergeSelectionMode?: boolean
+  selectedKnowledgeCount?: number
   sourceType: SourceType | 'All'
   category: string
   tag: string
@@ -199,6 +261,9 @@ function LibraryControls({
   onCategory: (value: string) => void
   onTag: (value: string) => void
   onSort: (value: keyof typeof sortLabels) => void
+  onStartMerge?: () => void
+  onOpenMerge?: () => void
+  onCancelMerge?: () => void
 }) {
   return (
     <div className="mb-5 flex flex-wrap items-center gap-2">
@@ -215,7 +280,20 @@ function LibraryControls({
           <Dropdown label="Type" options={sourceTypes} selected={[sourceType]} onToggle={onSourceType} showSelectedCount={false} />
         </>
       ) : mode === 'knowledge' ? (
-        <p className="text-sm text-muted-foreground">Pages generated and maintained from your sources.</p>
+        mergeSelectionMode ? (
+          <>
+            <div className="inline-flex h-10 items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3.5 text-sm text-primary">
+              <GitMerge className="h-4 w-4" />{selectedKnowledgeCount} selected
+            </div>
+            <Button size="sm" onClick={onOpenMerge} disabled={selectedKnowledgeCount < 2} icon={<GitMerge className="h-4 w-4" />}>Merge</Button>
+            <Button variant="ghost" size="sm" onClick={onCancelMerge} icon={<X className="h-4 w-4" />}>Cancel</Button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-muted-foreground">Pages generated and maintained from your sources.</p>
+            <Button variant="outline" size="sm" onClick={onStartMerge} icon={<GitMerge className="h-4 w-4" />}>Select to merge</Button>
+          </>
+        )
       ) : (
         <>
           <Link to={ROUTES.note('new')} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3.5 text-sm text-primary-foreground transition hover:opacity-90">

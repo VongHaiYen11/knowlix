@@ -1,10 +1,23 @@
 import type { z } from 'zod'
 import { getGeminiClient } from '../../config/gemini.js'
+import { AppError, NotFoundError } from '../../errors/index.js'
 import type { researchSchema, researchThreadSchema } from './research.schemas.js'
 import { researchRepository } from './research.repository.js'
 import { storageService } from '../../lib/storage.js'
 import { embedText } from '../../lib/embeddings.js'
-import { getResearchSelectionPrompt, getResearchAnswerPrompt } from '../../prompts/index.js'
+import { getResearchSelectionPrompt, getResearchAnswerPrompt, getResearchSummaryPrompt } from '../../prompts/index.js'
+import { aiCustomizationService } from '../ai-customization/ai-customization.service.js'
+import { geminiConfig } from '../ai-customization/ai-customization.defaults.js'
+
+function summaryRow(row: any) {
+  if (!row.summary_markdown) return undefined
+  return {
+    content: row.summary_markdown,
+    generatedAt: row.summary_generated_at ? new Date(row.summary_generated_at).toISOString() : '',
+    model: row.summary_model ?? '',
+    messageCount: Number(row.summary_message_count ?? 0),
+  }
+}
 
 function threadRow(row: any) {
   return {
@@ -19,6 +32,7 @@ function threadRow(row: any) {
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
     titleManuallyEdited: row.title_manually_edited,
+    summary: summaryRow(row),
   }
 }
 
@@ -35,7 +49,38 @@ export const researchService = {
 
   deleteThread: researchRepository.deleteThread,
 
-  async streamAnswer(userId: string, body: z.infer<typeof researchSchema>, model: string) {
+  async summarizeThread(userId: string, id: string) {
+    const thread = await researchRepository.threadWithMessages(userId, id)
+    if (!thread) throw new NotFoundError('Research thread not found')
+    if ((thread.messages ?? []).length <= 3) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'A conversation needs more than 3 messages before it can be summarized')
+    }
+
+    const customization = await aiCustomizationService.effectiveProfile(userId)
+    const prompt = getResearchSummaryPrompt({
+      title: thread.title,
+      messages: thread.messages,
+    })
+    const response = await getGeminiClient().models.generateContent({
+      model: customization.researchModel,
+      contents: prompt,
+      config: geminiConfig({
+        reasoning: customization.researchReasoning,
+        temperature: customization.researchTemperature,
+      }),
+    })
+    const content = response.text?.trim()
+    if (!content) throw new AppError(502, 'INTERNAL_ERROR', 'Gemini returned an empty research summary response')
+    const row = await researchRepository.updateSummary(userId, id, {
+      content,
+      model: customization.researchModel,
+      messageCount: thread.messages.length,
+    })
+    return summaryRow(row)
+  },
+
+  async streamAnswer(userId: string, body: z.infer<typeof researchSchema>) {
+    const customization = await aiCustomizationService.effectiveProfile(userId)
     const queryEmbedding = await embedText(body.question).catch(() => [])
     const knowledge = (await researchRepository.retrieveCandidates(userId, {
       question: body.question,
@@ -55,9 +100,9 @@ export const researchService = {
     if (knowledge.length) {
       try {
         const selection = await getGeminiClient().models.generateContent({
-          model,
+          model: customization.researchModel,
           contents: selectionPrompt,
-          config: { responseMimeType: 'application/json' }
+          config: geminiConfig({ responseMimeType: 'application/json', reasoning: 'low', temperature: 0 })
         })
         const cleanText = selection.text ? selection.text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim() : '[]'
         const parsed = JSON.parse(cleanText)
@@ -84,9 +129,13 @@ export const researchService = {
       categories: row.category ? [row.category] : [],
     }))
     const knowledgeReferencesStr = references.map((reference) => `[${reference.number}] ${reference.title} (${reference.type})`).join('\n')
-    const prompt = getResearchAnswerPrompt(body.question, context, knowledgeReferencesStr)
+    const prompt = getResearchAnswerPrompt(body.question, context, knowledgeReferencesStr, customization.researchAnswerInstructions)
 
-    const stream = await getGeminiClient().models.generateContentStream({ model, contents: prompt })
+    const stream = await getGeminiClient().models.generateContentStream({
+      model: customization.researchModel,
+      contents: prompt,
+      config: geminiConfig({ reasoning: customization.researchReasoning, temperature: customization.researchTemperature }),
+    })
     return { stream, references }
   },
 }

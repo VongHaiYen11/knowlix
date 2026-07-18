@@ -267,7 +267,7 @@ after a note is converted into a Markdown source.
 #### 5. Start background ingest
 
 - **Module:** `sources.service.ts`, `sources.ingest-service.ts`
-- **What happens:** `runBackgroundIngest` is called without awaiting it.
+- **What happens:** the backend reads the user's effective AI customization, passes that immutable snapshot to `runBackgroundIngest`, and does not await the job.
 - **Design choice:**
   - **What was chosen:** in-process fire-and-forget background processing.
   - **Why it was chosen:** keeps upload latency low without adding a queue dependency.
@@ -296,7 +296,7 @@ after a note is converted into a Markdown source.
 #### 8. Generate AI Summary
 
 - **Module:** `generateIngestSummary`, `getIngestSummaryPrompt`
-- **What happens:** Gemini receives extracted text and generates a source-level summary JSON (category, tags, excerpt, body).
+- **What happens:** Gemini receives extracted text plus the user's Knowledge definition/extraction preferences and generates a source-level summary JSON (category, tags, excerpt, body).
 - **Why this step exists:** Extract a semantic summary before candidate search to vastly improve the quality of vector embedding.
 
 #### 9. Embed source summary excerpt for candidate search
@@ -326,6 +326,7 @@ after a note is converted into a Markdown source.
   - extracted file kind
   - raw storage URL
   - candidate Knowledge metadata
+  - the user's Knowledge definition and extraction instructions
   - extracted text
 - **External calls:** Gemini content generation with JSON response MIME type
 - **Expected response:** source summary plus pages with actions.
@@ -377,7 +378,7 @@ after a note is converted into a Markdown source.
 - **What happens:** the backend stores:
   - source materials in `source_list`
   - timeline events like generated, updated, merged, replaced, or linked
-  - revision rows with model and reason
+  - revision rows with the customization snapshot's ingest model and reason
   - relation rows in `knowledge_source_links`
 - **Why this step exists:** Knowledge pages remain explainable and traceable to source materials.
 
@@ -426,12 +427,11 @@ Response type:
 - **Failure cases:** invalid session or empty question is rejected before retrieval.
 - **Why this step exists:** research must only search the signed-in user’s Knowledge pages.
 
-#### 2. Resolve model choice
+#### 2. Resolve AI customization
 
-- **Module:** `requestedModel`
-- **What happens:** the backend reads `X-Knowlix-Model` if it matches an allowed safe string pattern; otherwise it uses `GEMINI_MODEL`.
-- **Why this step exists:** the frontend can choose a Gemini model while the server keeps a default fallback.
-- **Trade-off:** the backend validates only header shape, not membership in a fixed allowlist.
+- **Module:** `aiCustomizationService.effectiveProfile`
+- **What happens:** the backend loads the user's research model, reasoning level, temperature, and answer instructions from PostgreSQL, falling back to server defaults when no row exists.
+- **Why this step exists:** research behavior is server-owned and user-scoped instead of controlled by a browser-only header.
 
 #### 3. Embed the user question
 
@@ -482,6 +482,7 @@ Response type:
   - strict instruction to answer only from Knowledge Context
   - selected Knowledge Markdown
   - numbered Knowledge reference list
+  - user research answer instructions from Customization
   - citation rules
   - user question
 - **Guardrail:** if the answer is not in context, the model is instructed to say so and not speculate.
@@ -510,6 +511,7 @@ The database is PostgreSQL with the `vector` extension enabled.
 | Table | Purpose |
 |---|---|
 | `app_users` | User identity, email, password hash, name, initials |
+| `user_ai_customizations` | Per-user AI behavior, model, reasoning, temperature, and prompt customizations |
 | `uploaded_files` | Upload metadata and ingest status |
 | `storage_objects` | Supabase bucket/key/url metadata for stored file bodies |
 | `sources` | Source of Truth metadata and summary pointers |
@@ -559,9 +561,35 @@ PostgreSQL stores the storage object IDs and metadata. This keeps rows compact w
 
 ### Models
 
-- `GEMINI_MODEL` is the default content generation model.
+- `GEMINI_MODEL` is the fallback default content generation model.
 - `GEMINI_EMBEDDING_MODEL` is used for embeddings.
-- `X-Knowlix-Model` can override the generation model per request.
+- User-facing model choice lives in `user_ai_customizations` and is validated against the backend model catalog.
+- Maintenance and Inspiration still use `GEMINI_MODEL` in the current implementation.
+
+### Customization Defaults
+
+If a user has not saved a customization row, the backend uses these defaults:
+
+```text
+Knowledge definition:
+A Knowledge is a durable, self-contained knowledge page extracted from a source. It should capture one coherent concept, topic, procedure, decision, or reusable fact cluster, and should be useful independently of the original uploaded file.
+
+Knowledge extraction instructions:
+Extract Knowledge pages only when the source contains reusable information. Prefer fewer, high-quality pages over many thin pages. Merge or update existing Knowledge when the new source overlaps with existing content. Skip content that is trivial, duplicated, temporary, or not useful as long-term knowledge.
+
+Research answer instructions:
+Answer using the retrieved Knowledge content, cite sources with numbered references, keep the answer direct and grounded, and clearly say when the available Knowledge is insufficient.
+```
+
+Customization is inserted after protected prompt rules. Users can guide behavior, but cannot change JSON output contracts, citation format, grounding rules, action enums, or safety constraints.
+
+### Cost Estimator
+
+`POST /api/v1/ai-customization/estimate-cost` estimates cost without creating `sources`, `knowledge_entries`, `uploaded_files`, `storage_objects`, `research_threads`, or `research_messages`.
+
+- `workflow=ingestion` accepts a multipart trial file, extracts text in memory, estimates ingest calls, output tokens, thinking tokens, and embedding tokens, then discards the file.
+- `workflow=research` accepts a question and estimates retrieval/selection/final-answer usage.
+- The result is relative. Real billing can vary with provider pricing, retries, cached tokens, and thinking tokens.
 
 ### Prompt Modules
 
@@ -587,6 +615,7 @@ Prompts are centralized under `src/prompts`:
 - If the answer is unavailable in context, the prompt instructs the model not to speculate.
 - Citation output must use bracketed reference numbers, not URLs.
 - Ingest prompts ask for standalone Knowledge pages, normalized headings, source summaries, and explicit merge/replace reasons.
+- Ingest and research prompts include a bounded user customization block after protected rules.
 
 ## 🔐 Authentication & Authorization
 
@@ -678,6 +707,15 @@ All protected endpoints require a valid session cookie unless noted.
 | `DELETE` | `/api/v1/research/threads/:id` | Delete a research thread |
 | `POST` | `/api/v1/research/messages` | Stream research answer as SSE |
 
+### AI Customization
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/v1/ai-customization` | Return effective customization, defaults, model catalog, and pricing metadata |
+| `PATCH` | `/api/v1/ai-customization` | Save partial user AI customization |
+| `DELETE` | `/api/v1/ai-customization` | Reset customization to defaults |
+| `POST` | `/api/v1/ai-customization/estimate-cost` | Estimate relative ingestion or research cost without persisting trial data |
+
 ### Maintenance and Inspiration
 
 | Method | Path | Purpose |
@@ -713,12 +751,13 @@ backend/
 ├── src/
 │   ├── app.ts                    # Express app, middleware, route mounting
 │   ├── server.ts                 # HTTP server startup
-│   ├── config/                   # env, cookies, Gemini, model helpers
+│   ├── config/                   # env, cookies, Gemini client
 │   ├── database/                 # pg pool and migration runner
 │   ├── errors/                   # AppError classes and global handler
 │   ├── lib/                      # JWT, embeddings, storage integrations
 │   ├── middleware/               # auth-independent middleware utilities
 │   ├── modules/
+│   │   ├── ai-customization/     # AI profile, defaults, model catalog, cost estimates
 │   │   ├── auth/                 # signup/login/logout
 │   │   ├── users/                # current user profile/password
 │   │   ├── sources/              # source CRUD, upload, ingest, file preview
@@ -882,4 +921,4 @@ These are suggestions based on current code shape, not implemented features:
 - Add observability around Gemini latency, storage failures, and retrieval quality.
 - Add an evaluation harness for retrieval ranking and answer citation quality.
 - Add admin or maintenance dashboards for failed ingests and low-confidence Knowledge pages.
-- Add more explicit model allowlisting for `X-Knowlix-Model`.
+- Add usage capture from real Gemini responses to compare actual spend with estimator results.

@@ -16,6 +16,7 @@ Knowlix helps users extract and organize information from raw documents (PDF, DO
 
 - **Multi-Format Document Ingestion:** Upload and process PDFs, Word documents (DOCX), Text files, and Markdown.
 - **AI-Powered Summarization & Extraction:** Automatically extract key ideas, summaries, and structured knowledge using Google Gemini AI.
+- **AI Customization:** Tune Knowledge ingestion prompts, research behavior, model choice, reasoning level, and estimate relative AI cost before uploading or asking.
 - **Semantic Vector Search:** Find relevant information quickly using pgvector-powered semantic embeddings.
 - **Rich Markdown Rendering:** Support for complex Markdown elements, including math equations (KaTeX) and diagrams (Mermaid).
 - **Secure File Storage:** Raw documents and extracted text are securely managed via Supabase Storage.
@@ -39,7 +40,7 @@ This architecture ensures a clear separation of concerns, allowing the frontend 
 1. **Upload:** The user uploads a document via the React frontend.
 2. **Storage:** The backend receives the file, uploads the raw source to Supabase Storage, and records the metadata in the database.
 3. **Extraction:** The backend parses the file's contents (using tools like `pdf-parse` or `mammoth` for DOCX) to extract raw text.
-4. **AI Processing:** The extracted text is sent to the Google Gemini API to generate summaries, extract key ideas, and create semantic vector embeddings.
+4. **AI Processing:** The backend applies the user's Customization profile, sends extracted text to Google Gemini to generate summaries and Knowledge pages, and creates semantic vector embeddings.
 5. **Persist:** The processed data and vectors are stored in PostgreSQL, and any large markdown assets are saved to Supabase Storage.
 6. **Query & Display:** The user can now seamlessly search their knowledge base, and the frontend will fetch and render the rich Markdown entries.
 
@@ -56,7 +57,7 @@ This architecture ensures a clear separation of concerns, allowing the frontend 
 ## 🗄 Database Overview
 
 - **Database Used:** PostgreSQL with the `pgvector` extension.
-- **Data Stored:** User accounts (`app_users`), document metadata (`sources`, `uploaded_files`, `storage_objects`), and processed content (`knowledge_entries`, `knowledge_revisions`). The vector representations of the knowledge are stored in `vector(768)` columns.
+- **Data Stored:** User accounts (`app_users`), AI customization (`user_ai_customizations`), document metadata (`sources`, `uploaded_files`, `storage_objects`), and processed content (`knowledge_entries`, `knowledge_revisions`). The vector representations of the knowledge are stored in `vector(768)` columns.
 - **Why Chosen:** PostgreSQL provides robust relational data guarantees, while `pgvector` allows for native semantic similarity search within the same database, eliminating the need for a separate specialized vector database.
 
 ## 📁 Project Structure
@@ -131,12 +132,14 @@ Detailed implementation instructions and architecture details are available in:
 - `frontend/README.md`
 - `backend/README.md`
 
+See those files for the `/customization` route, `/api/v1/ai-customization` API, default prompt behavior, and cost estimator details.
+
 ## 💡 Design Decisions
 
 - **React 19 & Vite:** Chosen for the frontend for blazing-fast development speeds, modern React features, and a lightweight build process.
 - **Node.js & Express:** Provides a simple, unopinionated, and highly extensible backend to handle REST API endpoints and integrate seamlessly with JavaScript/TypeScript tooling.
 - **PostgreSQL + pgvector:** Consolidates standard relational data and AI embeddings into a single system, simplifying infrastructure and deployment compared to maintaining a separate vector database.
-- **Google Gemini API:** Selected for its state-of-the-art multimodal capabilities, strong text summarization, and cost-effective embedding generation.
+- **Google Gemini API:** Selected for text summarization, Knowledge extraction, grounded research answers, and cost-effective embedding generation.
 - **Supabase Storage:** Chosen for object storage due to its excellent developer experience, simple SDK, and seamless integration with modern web stacks.
 
 ## 🌱 Future Improvements

@@ -1,11 +1,12 @@
-import { History, MessageSquarePlus, PanelRightClose, PanelRightOpen, PencilLine } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { Brain, History, MessageSquarePlus, PencilLine } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { PageHeader } from '@/components/common/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { Conversation } from '@/features/research/Conversation'
 import { EvidencePanel } from '@/features/research/EvidencePanel'
 import { ResearchHistoryPanel } from '@/features/research/ResearchHistoryPanel'
+import { ResearchSummaryModal } from '@/features/research/ResearchSummaryModal'
 import { useTaxonomy } from '@/hooks/useLibrary'
 import { useResearch } from '@/hooks/useResearch'
 
@@ -14,10 +15,40 @@ export function ResearchPage() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [scopeOpen, setScopeOpen] = useState(true)
   const [renaming, setRenaming] = useState(false)
+  const [summaryThreadId, setSummaryThreadId] = useState<string | null>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const taxonomy = useTaxonomy()
   const taxonomyData = taxonomy.data
   const research = useResearch(searchParams.get('q') ?? '')
+  const summaryThread = useMemo(() => {
+    if (!summaryThreadId) return undefined
+    return research.threads.find((thread) => thread.id === summaryThreadId)
+  }, [research.threads, summaryThreadId])
+  const assistantThinking = research.messages.some((message) => message.role === 'assistant' && message.content === 'Thinking...')
+  const canSummarizeCurrent = Boolean(research.activeThread) && research.messages.length > 3 && !assistantThinking
+
+  async function openCurrentSummary() {
+    const thread = research.activeThread
+    if (!thread || !canSummarizeCurrent) return
+    research.clearSummaryError()
+    setSummaryThreadId(thread.id)
+    if (!thread.summary) {
+      try {
+        await research.generateSummary(thread.id)
+      } catch {
+        // Error is surfaced inside the summary modal.
+      }
+    }
+  }
+
+  async function regenerateSummary() {
+    if (!summaryThread) return
+    try {
+      await research.generateSummary(summaryThread.id)
+    } catch {
+      // Error is surfaced inside the summary modal.
+    }
+  }
 
   useEffect(() => {
     const desktopQuery = window.matchMedia('(min-width: 1280px)')
@@ -77,6 +108,15 @@ export function ResearchPage() {
                   <span>{research.messages.length} messages</span>
                   <span>{research.usedReferences.length} references used</span>
                 </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<Brain className="h-4 w-4" />}
+                  onClick={openCurrentSummary}
+                  disabled={!canSummarizeCurrent || research.summaryLoadingThreadId === research.activeThread?.id}
+                >
+                  {research.summaryLoadingThreadId === research.activeThread?.id ? 'Summarizing...' : 'Summary'}
+                </Button>
               </div>
             </div>
             <Conversation messages={research.messages} input={research.input} onInput={research.setInput} onSend={research.send} />
@@ -91,6 +131,10 @@ export function ResearchPage() {
               onSelectThread={(id) => {
                 research.selectThread(id)
                 setHistoryOpen(false)
+              }}
+              onOpenSummary={(id) => {
+                research.clearSummaryError()
+                setSummaryThreadId(id)
               }}
             />
           </div>
@@ -107,6 +151,14 @@ export function ResearchPage() {
           onCollapsedChange={(collapsed) => setScopeOpen(!collapsed)}
         />
       )}
+      <ResearchSummaryModal
+        open={Boolean(summaryThreadId)}
+        thread={summaryThread}
+        loading={Boolean(summaryThread && research.summaryLoadingThreadId === summaryThread.id)}
+        error={research.summaryError}
+        onClose={() => setSummaryThreadId(null)}
+        onRegenerate={regenerateSummary}
+      />
     </div>
   )
 }

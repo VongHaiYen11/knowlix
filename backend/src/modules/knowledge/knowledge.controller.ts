@@ -15,6 +15,12 @@ export const knowledgeController = {
   async create(req: AuthedRequest, res: Response) {
     res.status(201).json(await knowledgeService.create(req.user.id, req.body))
   },
+  async mergePreview(req: AuthedRequest, res: Response) {
+    res.json(await knowledgeService.mergePreview(req.user.id, req.body))
+  },
+  async mergeApply(req: AuthedRequest, res: Response) {
+    res.status(201).json(await knowledgeService.mergeApply(req.user.id, req.body))
+  },
   async propose(req: AuthedRequest, res: Response) {
     res.json(await knowledgeService.propose(req.user.id, req.params.slug, req.body))
   },

@@ -6,6 +6,7 @@ import { storageService } from '../../lib/storage.js'
 import { todayLabel } from '../../utils/date.js'
 import { sourcesRepository } from '../sources/sources.repository.js'
 import { runBackgroundIngest } from '../sources/sources.ingest-service.js'
+import { aiCustomizationService } from '../ai-customization/ai-customization.service.js'
 import { noteRow } from './notes.mapper.js'
 import { notesRepository } from './notes.repository.js'
 import type { noteCreateSchema, notePatchSchema } from './notes.schemas.js'
@@ -122,7 +123,8 @@ export const notesService = {
     })
 
     await notesRepository.delete(userId, id)
-    runBackgroundIngest({ userId, fileId, sourceId, rawStorageObjectId: rawObject.id, rawStorageUrl: rawObject.url, originalName, created, uploadedType: 'Markdown' }).catch((err) => {
+    const customization = await aiCustomizationService.effectiveProfile(userId)
+    runBackgroundIngest({ userId, fileId, sourceId, rawStorageObjectId: rawObject.id, rawStorageUrl: rawObject.url, originalName, created, uploadedType: 'Markdown', customization }).catch((err) => {
       console.error('[Ingest] Unhandled note promotion ingest rejection:', err)
     })
 

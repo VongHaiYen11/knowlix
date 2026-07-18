@@ -24,7 +24,8 @@
 - 📝 Note editor with split Markdown preview, explicit save/cancel controls, and “Add as source of truth”.
 - 🔎 Research workspace with chat history, cited Knowledge references, filters, and collapsible side panels.
 - 📓 Journal page for dated quick notes with optional tags.
-- ⚙️ Settings for account profile, password, theme, and LLM model preference.
+- 🎛️ Customization tab for Knowledge ingestion prompts, research behavior, model choice, reasoning level, and relative AI cost estimates.
+- ⚙️ Settings for account profile, password, and theme.
 - 🌗 Light/dark theme support.
 - 🇻🇳 Vietnam-time date helpers for user-facing daily behavior.
 
@@ -118,6 +119,7 @@ Routes are defined in `src/App.tsx` and `src/constants/routes.ts`.
 | `/library/knowledge/:slug/edit` | Knowledge editor |
 | `/library/note/:id` | Note editor |
 | `/research` | Research workspace |
+| `/customization` | AI customization and cost estimator |
 | `/journal` | Journal |
 | `/settings` | Settings |
 
@@ -154,7 +156,7 @@ API access is centralized in `src/repositories/apiClient.ts`.
 
 - Requests use `VITE_API_URL`, defaulting to `http://127.0.0.1:4000`.
 - Requests include credentials for cookie-based auth.
-- The selected model preference is sent through the `X-Knowlix-Model` header.
+- AI defaults, model catalog, pricing metadata, and user customization are loaded from `/api/v1/ai-customization`.
 - Paginated API lists are collected with `getAllPages`.
 
 Implemented API-backed repositories cover:
@@ -165,6 +167,7 @@ Implemented API-backed repositories cover:
 - Notes and note promotion to source of truth
 - Journal entries
 - Research threads and chat
+- AI customization and cost estimation
 - Daily inspiration
 
 IndexedDB fallback stores are declared in `src/repositories/indexedDbClient.ts`:

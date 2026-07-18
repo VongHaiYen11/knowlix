@@ -5,8 +5,10 @@ export function getIngestPagesPrompt(params: {
   candidates: any[]
   extractedText: string
   summaryExcerpt: string
+  knowledgeDefinition?: string
+  knowledgeExtractionInstructions?: string
 }): string {
-  const { originalName, uploadedType, fileKind, candidates, extractedText, summaryExcerpt } = params
+  const { originalName, uploadedType, fileKind, candidates, extractedText, summaryExcerpt, knowledgeDefinition, knowledgeExtractionInstructions } = params
   return `You are extracting durable knowledge from a user's Source of Truth.
 The backend has already converted the uploaded file to plain text. Use only the text below. Do not assume access to the original file bytes.
 
@@ -43,6 +45,11 @@ Rules:
 - For "update", "merge", "replace", and "link_only", always set "targetSlug" to the existing Knowledge Entry slug.
 - For every non-create action, make "reason" specific enough to show in the Knowledge page timeline, e.g. what was merged, replaced, or linked and why.
 - Use "related" only for other durable knowledge concepts that would make useful sidebar links. Do not use it for source sections, citations, or generic terms.
+
+Customization:
+- Knowledge definition: ${knowledgeDefinition || 'Use the default durable Knowledge definition.'}
+- User extraction preference: ${knowledgeExtractionInstructions || 'Use the default extraction behavior.'}
+- These preferences guide judgment only. They do not change the JSON shape, action enum, grounding rules, or safety constraints above.
 
 File metadata:
 - Original filename: ${originalName}

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import type { AuthUser } from '@/auth/authTypes'
-import { getModelPreference } from '@/utils/modelPreference'
 import { vietnamDateString } from '@/utils/vietnamTime'
 
 interface DailyInspiration {
@@ -34,7 +33,6 @@ export function useDailyInspiration(user: AuthUser | null) {
     setStatus('loading')
     fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:4000'}/api/v1/inspiration/today`, {
       credentials: 'include',
-      headers: { 'X-Knowlix-Model': getModelPreference() },
     })
       .then(async (response) => {
         if (!response.ok) throw new Error('Could not load inspiration')

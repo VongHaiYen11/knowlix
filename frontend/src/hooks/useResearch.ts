@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { researchService, type ResearchReference, type ResearchMessage, type ResearchScope, type ResearchThread } from '@/services/researchService'
-import { getModelPreference } from '@/utils/modelPreference'
 
 const defaultDateRange = 'Anytime'
 const defaultScope: ResearchScope = { tags: [], categories: [], dateRange: defaultDateRange }
@@ -46,6 +45,8 @@ export function useResearch(initialQuestion: string) {
   const [threads, setThreads] = useState<ResearchThread[]>([])
   const [activeThreadId, setActiveThreadId] = useState('')
   const [input, setInput] = useState(initialQuestion)
+  const [summaryLoadingThreadId, setSummaryLoadingThreadId] = useState<string | null>(null)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
   const pendingPersistIds = useRef(new Set<string>())
   const activeThread = threads.find((thread) => thread.id === activeThreadId) ?? threads[0]
   const messages = activeThread?.messages ?? []
@@ -142,7 +143,6 @@ export function useResearch(initialQuestion: string) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Knowlix-Model': getModelPreference(),
         },
         credentials: 'include',
         body: JSON.stringify({
@@ -256,6 +256,26 @@ export function useResearch(initialQuestion: string) {
     setInput('')
   }, [])
 
+  const generateSummary = useCallback(async (id = activeThreadId) => {
+    const thread = threads.find((item) => item.id === id)
+    if (!thread) throw new Error('Research thread not found')
+    if (thread.messages.length <= 3) throw new Error('A conversation needs more than 3 messages before it can be summarized')
+    setSummaryLoadingThreadId(id)
+    setSummaryError(null)
+    try {
+      await researchService.saveThread(thread)
+      const summary = await researchService.generateThreadSummary(id)
+      setThreads((current) => current.map((item) => item.id === id ? { ...item, summary, updatedAt: new Date().toISOString() } : item))
+      return summary
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not generate summary'
+      setSummaryError(message)
+      throw error
+    } finally {
+      setSummaryLoadingThreadId(null)
+    }
+  }, [activeThreadId, threads])
+
   return {
     activeThread,
     threads,
@@ -269,5 +289,9 @@ export function useResearch(initialQuestion: string) {
     reset,
     renameThread,
     selectThread,
+    generateSummary,
+    summaryLoadingThreadId,
+    summaryError,
+    clearSummaryError: () => setSummaryError(null),
   }
 }

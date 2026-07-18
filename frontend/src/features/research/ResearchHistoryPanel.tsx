@@ -1,4 +1,4 @@
-import { ArrowDownUp, CalendarDays, Clock, Layers, MessageSquareText, Search, Tag } from 'lucide-react'
+import { ArrowDownUp, Brain, CalendarDays, Clock, Layers, MessageSquareText, Search, Tag } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
@@ -15,6 +15,7 @@ interface ResearchHistoryPanelProps {
   tags: string[]
   categories: string[]
   onSelectThread: (id: string) => void
+  onOpenSummary: (id: string) => void
 }
 
 const formatDate = (value: string) => new Intl.DateTimeFormat('en', {
@@ -24,7 +25,7 @@ const formatDate = (value: string) => new Intl.DateTimeFormat('en', {
   minute: '2-digit',
 }).format(new Date(value))
 
-export function ResearchHistoryPanel({ threads, activeThreadId, tags, categories, onSelectThread }: ResearchHistoryPanelProps) {
+export function ResearchHistoryPanel({ threads, activeThreadId, tags, categories, onSelectThread, onOpenSummary }: ResearchHistoryPanelProps) {
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState(sortOptions[0])
   const [selectedTags, setSelectedTags] = useState<string[]>([])
@@ -88,10 +89,17 @@ export function ResearchHistoryPanel({ threads, activeThreadId, tags, categories
           <ul className="grid gap-4 md:grid-cols-2">
             {filteredThreads.map((thread) => (
               <li key={thread.id}>
-                <button
+                <div
+                  role="button"
+                  tabIndex={0}
                   onClick={() => onSelectThread(thread.id)}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' && event.key !== ' ') return
+                    event.preventDefault()
+                    onSelectThread(thread.id)
+                  }}
                   className={cn(
-                    'group block h-full w-full text-left',
+                    'group block h-full w-full cursor-pointer text-left',
                     thread.id === activeThreadId && 'text-accent-foreground',
                   )}
                 >
@@ -100,7 +108,29 @@ export function ResearchHistoryPanel({ threads, activeThreadId, tags, categories
                       <span className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted-foreground"><MessageSquareText className="h-3.5 w-3.5" />Research chat</span>
                       <span className="text-muted-foreground/40">·</span>
                       <span className="text-xs text-muted-foreground">{thread.messages.length} messages</span>
-                      <Badge tone="accent" className="ml-auto">{thread.scope.dateRange}</Badge>
+                      <span className="ml-auto inline-flex items-center gap-1.5">
+                        {thread.summary ? (
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              onOpenSummary(thread.id)
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key !== 'Enter' && event.key !== ' ') return
+                              event.preventDefault()
+                              event.stopPropagation()
+                              onOpenSummary(thread.id)
+                            }}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-background text-primary transition hover:border-ring/40"
+                            aria-label={`Open summary for ${thread.title || 'Untitled'}`}
+                          >
+                            <Brain className="h-3.5 w-3.5" />
+                          </span>
+                        ) : null}
+                        <Badge tone="accent">{thread.scope.dateRange}</Badge>
+                      </span>
                     </div>
                     <h2 className="font-serif text-2xl leading-snug tracking-tight">{thread.title || 'Untitled'}</h2>
                     <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-muted-foreground">
@@ -112,7 +142,7 @@ export function ResearchHistoryPanel({ threads, activeThreadId, tags, categories
                       <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-muted-foreground"><Clock className="h-3 w-3" />{formatDate(thread.updatedAt)}</span>
                     </div>
                   </Card>
-                </button>
+                </div>
               </li>
             ))}
           </ul>

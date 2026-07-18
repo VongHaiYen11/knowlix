@@ -1,5 +1,3 @@
-import { getModelPreference } from '@/utils/modelPreference'
-
 const apiBaseUrl = (import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:4000').replace(/\/$/, '')
 
 export const isApiRepositoryEnabled = Boolean(apiBaseUrl)
@@ -16,7 +14,6 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   const headers = new Headers(init.headers)
   if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json')
-  headers.set('X-Knowlix-Model', getModelPreference())
 
   const response = await fetch(`${apiBaseUrl}${path}`, { ...init, headers, credentials: 'include' })
   if (response.status === 204) return undefined as T
@@ -32,9 +29,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 async function requestText(path: string): Promise<string> {
   if (!apiBaseUrl) throw new Error('VITE_API_URL is not configured')
-  const headers = new Headers()
-  headers.set('X-Knowlix-Model', getModelPreference())
-  const response = await fetch(`${apiBaseUrl}${path}`, { headers, credentials: 'include' })
+  const response = await fetch(`${apiBaseUrl}${path}`, { credentials: 'include' })
   if (!response.ok) throw new Error(`API request failed with status ${response.status}`)
   return response.text()
 }

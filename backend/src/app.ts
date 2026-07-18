@@ -14,6 +14,7 @@ import { journalRouter } from './modules/journal/journal.routes.js'
 import { researchRouter } from './modules/research/research.routes.js'
 import { maintenanceRouter } from './modules/maintenance/maintenance.routes.js'
 import { inspirationRouter } from './modules/inspiration/inspiration.routes.js'
+import { aiCustomizationRouter } from './modules/ai-customization/ai-customization.routes.js'
 
 export const app = express()
 
@@ -31,6 +32,7 @@ app.use('/api/v1/files', filesRouter)
 app.use('/api/v1/notes', notesRouter)
 app.use('/api/v1/journal', journalRouter)
 app.use('/api/v1/research', researchRouter)
+app.use('/api/v1/ai-customization', aiCustomizationRouter)
 app.use('/api/v1/maintenance', maintenanceRouter)
 app.use('/api/v1/inspiration', inspirationRouter)
 

@@ -1,10 +1,10 @@
 import path from 'node:path'
 import mammoth from 'mammoth'
 import pdf from 'pdf-parse/lib/pdf-parse.js'
-import { env } from '../config/env.js'
 import { getGeminiClient } from '../config/gemini.js'
 import { excerpt } from '../utils/text.js'
 import { getIngestSummaryPrompt, getIngestPagesPrompt } from '../prompts/index.js'
+import { defaultAiCustomization, geminiConfig, type AiCustomizationProfile } from '../modules/ai-customization/ai-customization.defaults.js'
 
 export type IngestAction = 'create' | 'update' | 'merge' | 'replace' | 'link_only' | 'skip'
 
@@ -43,6 +43,7 @@ export interface IngestRawFileOptions {
   originalName?: string
   uploadedType?: string
   rawStorageUrl?: string
+  customization?: AiCustomizationProfile
   candidates?: Array<{
     slug: string
     title: string
@@ -176,19 +177,20 @@ export async function generateIngestSummary(buffer: Buffer, options: IngestRawFi
   }
 
   const title = titleFromName(originalName, extension)
+  const customization = options.customization ?? defaultAiCustomization()
   const prompt = getIngestSummaryPrompt({
     originalName,
     uploadedType: options.uploadedType ?? 'File',
     fileKind: extracted.fileKind,
     extractedText,
+    knowledgeDefinition: customization.knowledgeDefinition,
+    knowledgeExtractionInstructions: customization.knowledgeExtractionInstructions,
   })
 
   const response = await getGeminiClient().models.generateContent({
-    model: env.geminiModel,
+    model: customization.ingestModel,
     contents: prompt,
-    config: {
-      responseMimeType: 'application/json'
-    }
+    config: geminiConfig({ responseMimeType: 'application/json', reasoning: customization.ingestReasoning, temperature: customization.ingestTemperature }),
   })
   const responseText = response.text ? cleanJsonText(response.text) : ''
   if (!responseText) throw new Error('Gemini returned an empty ingest summary response')
@@ -224,6 +226,7 @@ export async function extractKnowledgePages(
     category: candidate.category,
     tags: candidate.tags,
   }))
+  const customization = options.customization ?? defaultAiCustomization()
   
   const prompt = getIngestPagesPrompt({
     originalName,
@@ -232,14 +235,14 @@ export async function extractKnowledgePages(
     candidates,
     extractedText,
     summaryExcerpt: summary.excerpt,
+    knowledgeDefinition: customization.knowledgeDefinition,
+    knowledgeExtractionInstructions: customization.knowledgeExtractionInstructions,
   })
 
   const response = await getGeminiClient().models.generateContent({
-    model: env.geminiModel,
+    model: customization.ingestModel,
     contents: prompt,
-    config: {
-      responseMimeType: 'application/json'
-    }
+    config: geminiConfig({ responseMimeType: 'application/json', reasoning: customization.ingestReasoning, temperature: customization.ingestTemperature }),
   })
   const responseText = response.text ? cleanJsonText(response.text) : ''
   if (!responseText) throw new Error('Gemini returned an empty ingest pages response')

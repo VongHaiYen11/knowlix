@@ -16,6 +16,15 @@ export interface ResearchThreadInput {
   titleManuallyEdited: boolean
 }
 
+function messageRow(message: any) {
+  return {
+    id: message.id,
+    role: message.role,
+    content: message.content,
+    references: Array.isArray(message.reference_list) ? message.reference_list : [],
+  }
+}
+
 export const researchRepository = {
   async retrieveCandidates(userId: string, input: { question: string; scope: { tags: string[]; categories: string[] }; queryEmbedding: number[]; limit?: number }) {
     const tags = uniqueCleanStrings(input.scope.tags)
@@ -49,7 +58,7 @@ export const researchRepository = {
 
   async threads(userId: string) {
     const threadResult = await pool.query(
-      `SELECT id,title,scope,title_manually_edited,created_at,updated_at
+      `SELECT id,title,scope,title_manually_edited,summary_markdown,summary_generated_at,summary_model,summary_message_count,created_at,updated_at
        FROM research_threads
        WHERE user_id=$1
        ORDER BY updated_at DESC`,
@@ -68,18 +77,35 @@ export const researchRepository = {
     const messagesByThread = new Map<string, any[]>()
     for (const message of messageResult.rows) {
       const current = messagesByThread.get(message.thread_id) ?? []
-      current.push({
-        id: message.id,
-        role: message.role,
-        content: message.content,
-        references: Array.isArray(message.reference_list) ? message.reference_list : [],
-      })
+      current.push(messageRow(message))
       messagesByThread.set(message.thread_id, current)
     }
     return threadResult.rows.map((row) => ({
       ...row,
       messages: messagesByThread.get(row.id) ?? [],
     }))
+  },
+
+  async threadWithMessages(userId: string, id: string) {
+    const threadResult = await pool.query(
+      `SELECT id,title,scope,title_manually_edited,summary_markdown,summary_generated_at,summary_model,summary_message_count,created_at,updated_at
+       FROM research_threads
+       WHERE user_id=$1 AND id=$2`,
+      [userId, id],
+    )
+    const thread = threadResult.rows[0]
+    if (!thread) return undefined
+    const messageResult = await pool.query(
+      `SELECT thread_id,id,role,content,reference_list
+       FROM research_messages
+       WHERE user_id=$1 AND thread_id=$2
+       ORDER BY position ASC, created_at ASC`,
+      [userId, id],
+    )
+    return {
+      ...thread,
+      messages: messageResult.rows.map(messageRow),
+    }
   },
 
   async upsertThread(userId: string, thread: ResearchThreadInput) {
@@ -128,5 +154,16 @@ export const researchRepository = {
 
   async deleteThread(userId: string, id: string) {
     await pool.query('DELETE FROM research_threads WHERE user_id=$1 AND id=$2', [userId, id])
+  },
+
+  async updateSummary(userId: string, id: string, summary: { content: string; model: string; messageCount: number }) {
+    const { rows } = await pool.query(
+      `UPDATE research_threads
+       SET summary_markdown=$1, summary_generated_at=now(), summary_model=$2, summary_message_count=$3, updated_at=now()
+       WHERE user_id=$4 AND id=$5
+       RETURNING summary_markdown,summary_generated_at,summary_model,summary_message_count`,
+      [summary.content, summary.model, summary.messageCount, userId, id],
+    )
+    return rows[0]
   },
 }

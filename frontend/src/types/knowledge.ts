@@ -29,6 +29,36 @@ export interface KnowledgeEntry {
   timeline: Array<{ date: string; event: string }>
 }
 
+export type KnowledgeMergeMode = 'automatic' | 'manual'
+export type KnowledgeMergeStyle = 'balanced' | 'bullet' | 'paragraph' | 'course_notes'
+
+export interface KnowledgeMergePreviewInput {
+  sourceSlugs: string[]
+  mode: KnowledgeMergeMode
+  targetTitle?: string
+  context?: string
+  style?: KnowledgeMergeStyle
+}
+
+export interface KnowledgeMergeDraft {
+  title: string
+  slug: string
+  overview: string
+  category: string
+  tags: string[]
+  content: string
+  sources: KnowledgeSource[]
+  related: Array<{ slug: string; title: string }>
+  references: Array<{ label: string; source: string }>
+  timeline: Array<{ date: string; event: string }>
+  reason?: string
+}
+
+export interface KnowledgeMergeApplyInput {
+  sourceSlugs: string[]
+  draft: KnowledgeMergeDraft
+}
+
 export interface Source {
   id: string
   type: SourceType

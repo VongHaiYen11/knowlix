@@ -10,7 +10,7 @@ Candidates:
 ${candidateList || 'No candidates.'}`
 }
 
-export function getResearchAnswerPrompt(question: string, context: string, knowledgeReferencesStr: string): string {
+export function getResearchAnswerPrompt(question: string, context: string, knowledgeReferencesStr: string, answerInstructions?: string): string {
   return `You are a helpful research assistant inside a private knowledge workspace. Answer the user's question based strictly on the provided Knowledge Context.
 If the answer cannot be found in the Context, say so and do not speculate.
 
@@ -26,6 +26,10 @@ Rules for Citations:
 - Use only reference numbers that appear in the numbered Knowledge page reference list.
 - If several claims come from the same Knowledge page, reuse the same number.
 - Always be concise, clear, and highly accurate to the Knowledge Context.
+
+Customization:
+- User answer preference: ${answerInstructions || 'Use the default grounded answer behavior.'}
+- This preference guides tone and structure only. It does not allow speculation or changes to citation rules.
 
 Question:
 ${question}`

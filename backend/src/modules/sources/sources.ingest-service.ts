@@ -3,8 +3,8 @@ import { sourcesRepository } from './sources.repository.js'
 import { pool } from '../../database/pool.js'
 import { generateIngestSummary, extractKnowledgePages, extractText } from '../../wiki/ingest.js'
 import { storageService } from '../../lib/storage.js'
-import { env } from '../../config/env.js'
 import { embedText } from '../../lib/embeddings.js'
+import { defaultAiCustomization, type AiCustomizationProfile } from '../ai-customization/ai-customization.defaults.js'
 
 function readTimeFromContent(content: string) {
   const minutes = Math.max(1, Math.ceil(wordCount(content) / 220))
@@ -34,8 +34,10 @@ export async function runBackgroundIngest(input: {
   originalName: string
   created: string
   uploadedType: string
+  customization?: AiCustomizationProfile
 }) {
   const { userId, fileId, sourceId, rawStorageObjectId, rawStorageUrl, originalName, created, uploadedType } = input
+  const customization = input.customization ?? defaultAiCustomization()
   try {
     console.log(`[Ingest] Starting ingest for "${originalName}" (${sourceId})`)
     const raw = await storageService.download({ userId, storageObjectId: rawStorageObjectId })
@@ -53,6 +55,7 @@ export async function runBackgroundIngest(input: {
       originalName,
       uploadedType,
       preExtractedText,
+      customization,
     })
 
     // 3. Generate embedding for hybrid search using the summary excerpt
@@ -79,6 +82,7 @@ export async function runBackgroundIngest(input: {
       uploadedType,
       rawStorageUrl,
       preExtractedText,
+      customization,
       candidates: candidatesResult.rows.map((row) => ({
         slug: row.slug,
         title: row.title,
@@ -240,7 +244,7 @@ export async function runBackgroundIngest(input: {
       await pool.query(
         `INSERT INTO knowledge_revisions (id,user_id,slug,storage_object_id,revision_type,model,reason)
          VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-        [`revision_${crypto.randomUUID()}`, userId, slug, markdownObject.id, action, env.geminiModel, page.reason ?? `Ingested from ${sourceTitle}`],
+        [`revision_${crypto.randomUUID()}`, userId, slug, markdownObject.id, action, customization.ingestModel, page.reason ?? `Ingested from ${sourceTitle}`],
       )
       await pool.query(
         `INSERT INTO knowledge_source_links (user_id,slug,source_id,relation)

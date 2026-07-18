@@ -1,4 +1,4 @@
-import { KeyRound, Moon, Palette, Sparkles, Sun, UserRound } from 'lucide-react'
+import { KeyRound, Moon, Palette, Sun, UserRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/auth/useAuth'
 import { PageHeader } from '@/components/common/PageHeader'
@@ -6,7 +6,6 @@ import { PageShell } from '@/components/common/PageShell'
 import { useThemeContext } from '@/components/layout/ThemeProvider'
 import { Button } from '@/components/ui/Button'
 import { SettingsFooter, SettingsGroup, SettingsRow } from '@/features/settings/SettingsGroup'
-import { getModelPreference, MODEL_OPTIONS, setModelPreference, type ModelPreference } from '@/utils/modelPreference'
 import { cn } from '@/utils/cn'
 
 export function SettingsPage() {
@@ -16,7 +15,6 @@ export function SettingsPage() {
   const [email, setEmail] = useState(user?.email ?? '')
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
-  const [model, setModel] = useState<ModelPreference>(() => getModelPreference())
   const [savingProfile, setSavingProfile] = useState(false)
   const [savingPassword, setSavingPassword] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
@@ -57,16 +55,9 @@ export function SettingsPage() {
     }
   }
 
-  function chooseModel(nextModel: ModelPreference) {
-    setModel(nextModel)
-    setModelPreference(nextModel)
-    setNotice('Model preference saved.')
-    setError(null)
-  }
-
   return (
     <PageShell variant="readable">
-      <PageHeader title="Settings" description="Manage your account, theme, and model preference." />
+      <PageHeader title="Settings" description="Manage your account and theme." />
       <div className="space-y-8">
         {(notice || error) && (
           <div className={cn('rounded-2xl border px-5 py-3 text-sm', error ? 'border-destructive/30 bg-destructive/5 text-destructive' : 'border-primary/20 bg-accent text-accent-foreground')}>
@@ -101,17 +92,6 @@ export function SettingsPage() {
         <SettingsGroup icon={Palette} title="Appearance">
           <SettingsRow label="Theme" hint="Choose light or dark mode.">
             <IconSegmented value={theme} onChange={setTheme} />
-          </SettingsRow>
-        </SettingsGroup>
-
-        <SettingsGroup icon={Sparkles} title="Model">
-          <SettingsRow label="LLM model" hint="Used by research, inspiration, and maintenance requests.">
-            <select value={model} onChange={(event) => chooseModel(event.target.value as ModelPreference)} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:outline-none sm:w-72">
-              {MODEL_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
-          </SettingsRow>
-          <SettingsRow label="Current model" hint={MODEL_OPTIONS.find((option) => option.value === model)?.hint ?? 'Selected model for LLM requests.'}>
-            <span className="text-sm text-muted-foreground">{model}</span>
           </SettingsRow>
         </SettingsGroup>
       </div>

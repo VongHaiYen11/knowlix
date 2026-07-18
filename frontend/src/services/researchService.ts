@@ -22,6 +22,13 @@ export interface ResearchScope {
   dateRange: string
 }
 
+export interface ResearchSummary {
+  content: string
+  generatedAt: string
+  model: string
+  messageCount: number
+}
+
 export interface ResearchThread {
   id: string
   title: string
@@ -30,6 +37,7 @@ export interface ResearchThread {
   createdAt: string
   updatedAt: string
   titleManuallyEdited?: boolean
+  summary?: ResearchSummary
 }
 
 export class ResearchService {
@@ -43,6 +51,10 @@ export class ResearchService {
 
   async deleteThread(id: string): Promise<void> {
     return apiClient.delete<void>(`/api/v1/research/threads/${encodeURIComponent(id)}`)
+  }
+
+  async generateThreadSummary(id: string): Promise<ResearchSummary> {
+    return apiClient.post<ResearchSummary>(`/api/v1/research/threads/${encodeURIComponent(id)}/summary`, {})
   }
 }
 
