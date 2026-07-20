@@ -46,8 +46,8 @@ export const maintenanceService = {
 
     const response = await getGeminiClient().models.generateContent({
       model,
-      contents: prompt,
-      config: { responseMimeType: 'application/json' }
+      contents: prompt.contents,
+      config: { responseMimeType: 'application/json', systemInstruction: prompt.systemInstruction }
     })
     let contradictions: Array<{ slugs: string[]; explanation: string }> = []
     try {

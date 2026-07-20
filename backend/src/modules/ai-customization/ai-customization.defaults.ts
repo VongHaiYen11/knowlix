@@ -15,11 +15,11 @@ export interface AiCustomizationProfile {
   researchAnswerInstructions: string
 }
 
-export const DEFAULT_KNOWLEDGE_DEFINITION = 'A Knowledge is a durable, self-contained knowledge page extracted from a source. It should capture one coherent concept, topic, procedure, decision, or reusable fact cluster, and should be useful independently of the original uploaded file.'
+export const DEFAULT_KNOWLEDGE_DEFINITION = 'A Knowledge is a durable, self-contained knowledge page that captures one coherent concept, topic, procedure, decision, or reusable body of information. It is synthesized from one or more sources, organized to be understandable on its own, and designed to evolve as new information becomes available rather than remaining tied to a single uploaded document.'
 
-export const DEFAULT_KNOWLEDGE_EXTRACTION_INSTRUCTIONS = 'Extract Knowledge pages only when the source contains reusable information. Prefer fewer, high-quality pages over many thin pages. Merge or update existing Knowledge when the new source overlaps with existing content. Skip content that is trivial, duplicated, temporary, or not useful as long-term knowledge.'
+export const DEFAULT_KNOWLEDGE_EXTRACTION_INSTRUCTIONS = 'Extract Knowledge pages only when the source contains durable, reusable information. Prefer fewer comprehensive pages over many fragmented ones. Update or expand existing Knowledge whenever new content refines, extends, or overlaps with it, instead of creating duplicate pages. Do not create Knowledge for temporary information, isolated examples, boilerplate text, duplicated content, or details that have little long-term value.'
 
-export const DEFAULT_RESEARCH_ANSWER_INSTRUCTIONS = 'Answer using the retrieved Knowledge content, cite sources with numbered references, keep the answer direct and grounded, and clearly say when the available Knowledge is insufficient.'
+export const DEFAULT_RESEARCH_ANSWER_INSTRUCTIONS = 'Answer the user directly using the retrieved Knowledge and numbered references. Clearly distinguish supported synthesis from explicitly documented facts. If the available Knowledge is insufficient or conflicting, state that instead of guessing.'
 
 export const modelCatalog = [
   {
@@ -77,9 +77,10 @@ export function thinkingBudget(reasoning: AiReasoning): number | undefined {
   return 8192
 }
 
-export function geminiConfig(options: { responseMimeType?: string; reasoning: AiReasoning; temperature: number | null }) {
+export function geminiConfig(options: { responseMimeType?: string; reasoning: AiReasoning; temperature: number | null; systemInstruction?: string }) {
   const config: Record<string, unknown> = {}
   if (options.responseMimeType) config.responseMimeType = options.responseMimeType
+  if (options.systemInstruction) config.systemInstruction = options.systemInstruction
   if (options.temperature !== null) config.temperature = options.temperature
   const budget = thinkingBudget(options.reasoning)
   if (budget !== undefined) config.thinkingConfig = { thinkingBudget: budget }

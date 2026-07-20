@@ -214,15 +214,18 @@ export const knowledgeService = {
       targetTitle: body.targetTitle,
       context: body.context,
       style: body.style ?? 'balanced',
+      knowledgeDefinition: customization.knowledgeDefinition,
+      knowledgeExtractionInstructions: customization.knowledgeExtractionInstructions,
       sources,
     })
     const response = await getGeminiClient().models.generateContent({
       model: customization.ingestModel,
-      contents: prompt,
+      contents: prompt.contents,
       config: geminiConfig({
         responseMimeType: 'application/json',
         reasoning: customization.ingestReasoning,
         temperature: customization.ingestTemperature,
+        systemInstruction: prompt.systemInstruction,
       }),
     })
 

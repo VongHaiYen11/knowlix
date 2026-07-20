@@ -1,3 +1,4 @@
+export * from './prompt.types.js'
 export * from './ingest-summary.prompt.js'
 export * from './ingest-pages.prompt.js'
 export * from './maintenance.prompt.js'

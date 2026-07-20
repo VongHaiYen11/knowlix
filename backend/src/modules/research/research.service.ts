@@ -60,13 +60,15 @@ export const researchService = {
     const prompt = getResearchSummaryPrompt({
       title: thread.title,
       messages: thread.messages,
+      answerInstructions: customization.researchAnswerInstructions,
     })
     const response = await getGeminiClient().models.generateContent({
       model: customization.researchModel,
-      contents: prompt,
+      contents: prompt.contents,
       config: geminiConfig({
         reasoning: customization.researchReasoning,
         temperature: customization.researchTemperature,
+        systemInstruction: prompt.systemInstruction,
       }),
     })
     const content = response.text?.trim()
@@ -101,8 +103,8 @@ export const researchService = {
       try {
         const selection = await getGeminiClient().models.generateContent({
           model: customization.researchModel,
-          contents: selectionPrompt,
-          config: geminiConfig({ responseMimeType: 'application/json', reasoning: 'low', temperature: 0 })
+          contents: selectionPrompt.contents,
+          config: geminiConfig({ responseMimeType: 'application/json', reasoning: 'low', temperature: 0, systemInstruction: selectionPrompt.systemInstruction })
         })
         const cleanText = selection.text ? selection.text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim() : '[]'
         const parsed = JSON.parse(cleanText)
@@ -133,8 +135,8 @@ export const researchService = {
 
     const stream = await getGeminiClient().models.generateContentStream({
       model: customization.researchModel,
-      contents: prompt,
-      config: geminiConfig({ reasoning: customization.researchReasoning, temperature: customization.researchTemperature }),
+      contents: prompt.contents,
+      config: geminiConfig({ reasoning: customization.researchReasoning, temperature: customization.researchTemperature, systemInstruction: prompt.systemInstruction }),
     })
     return { stream, references }
   },

@@ -95,7 +95,7 @@ export function CustomizationPage() {
     if (draft) {
       const next = { ...draft, [promptEditor.key]: promptEditor.value }
       setDraft(next)
-      void persist(next, 'Prompt saved.')
+      void persist(next, 'Requirements saved.')
     }
     setPromptEditor(null)
   }

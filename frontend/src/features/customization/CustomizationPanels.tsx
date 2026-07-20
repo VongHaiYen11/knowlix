@@ -9,15 +9,15 @@ export type PromptKey = 'knowledgeDefinition' | 'knowledgeExtractionInstructions
 export const promptMeta: Record<PromptKey, { title: string; hint: string }> = {
   knowledgeDefinition: {
     title: 'Knowledge definition',
-    hint: 'Defines what should become a durable Knowledge page.',
+    hint: 'A required definition used by ingestion and Knowledge merge.',
   },
   knowledgeExtractionInstructions: {
-    title: 'Extraction instructions',
-    hint: 'Guides how Knowlix splits, merges, skips, or updates Knowledge during ingest.',
+    title: 'Knowledge requirements',
+    hint: 'Required rules for summaries, extraction, updates, replacements, and merges.',
   },
   researchAnswerInstructions: {
-    title: 'Answer instructions',
-    hint: 'Guides answer tone and structure while keeping citations and grounding locked.',
+    title: 'Research requirements',
+    hint: 'Required rules for research answers and conversation summaries, within grounding and citation constraints.',
   },
 }
 
@@ -40,7 +40,7 @@ export function PromptPreviewRow({ meta, value, onEdit }: { meta: { title: strin
         <Button size="sm" variant="outline" icon={<Pencil className="h-3.5 w-3.5" />} onClick={onEdit}>Edit</Button>
       </div>
       <div className="rounded-xl border border-border bg-background px-4 py-3">
-        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Current prompt</p>
+        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Current requirements</p>
         <p className="line-clamp-4 whitespace-pre-wrap text-sm leading-relaxed text-foreground">{value}</p>
       </div>
     </div>
@@ -68,7 +68,7 @@ export function PromptEditModal({ editor, onChange, onCancel, onSave }: { editor
         </div>
         <div className="flex justify-end gap-2 border-t border-border px-5 py-4">
           <Button variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
-          <Button size="sm" onClick={onSave}>Save prompt</Button>
+          <Button size="sm" onClick={onSave}>Save requirements</Button>
         </div>
       </div>
     </div>

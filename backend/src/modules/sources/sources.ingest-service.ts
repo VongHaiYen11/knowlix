@@ -25,6 +25,117 @@ function timelineEvent(action: string, sourceTitle: string, reason?: string) {
   return detail ? `${prefix} from ${sourceTitle}: ${detail}` : `${prefix} from ${sourceTitle}`
 }
 
+function jsonArray(value: unknown): any[] {
+  return Array.isArray(value) ? value : []
+}
+
+function uniqueJson(values: any[], key: (value: any) => string): any[] {
+  const seen = new Set<string>()
+  return values.filter((value) => {
+    const id = key(value)
+    if (!id || seen.has(id)) return false
+    seen.add(id)
+    return true
+  })
+}
+
+async function collapseMergedKnowledge(input: {
+  userId: string
+  targetSlug: string
+  targetTitle: string
+  mergedSlugs: string[]
+}) {
+  const obsoleteSlugs = input.mergedSlugs.filter((slug) => slug !== input.targetSlug)
+  if (!obsoleteSlugs.length) return
+
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const { rows } = await client.query(
+      `SELECT slug,tags,knowledge_tags,source_list,reference_list,timeline
+       FROM knowledge_entries
+       WHERE user_id=$1 AND slug = ANY($2::text[])
+       FOR UPDATE`,
+      [input.userId, input.mergedSlugs],
+    )
+    const foundSlugs = new Set(rows.map((row) => row.slug))
+    if (!foundSlugs.has(input.targetSlug) || obsoleteSlugs.some((slug) => !foundSlugs.has(slug))) {
+      throw new Error('One or more Knowledge pages selected by the ingest merge no longer exist')
+    }
+
+    const tags = uniqueCleanStrings(rows.flatMap((row) => row.tags ?? []))
+    const knowledgeTags = uniqueCleanStrings(rows.flatMap((row) => row.knowledge_tags ?? []))
+    const sources = uniqueJson(rows.flatMap((row) => jsonArray(row.source_list)), (value) => String(value?.id ?? value?.source ?? value?.title ?? ''))
+    const references = uniqueJson(rows.flatMap((row) => jsonArray(row.reference_list)), (value) => `${String(value?.label ?? '')}::${String(value?.source ?? value?.id ?? '')}`)
+    const timeline = uniqueJson(rows.flatMap((row) => jsonArray(row.timeline)), (value) => `${String(value?.date ?? '')}::${String(value?.event ?? '')}`)
+
+    await client.query(
+      `UPDATE knowledge_entries
+       SET tags=$1,knowledge_tags=$2,source_list=$3,reference_list=$4,timeline=$5,updated_at=now()
+       WHERE user_id=$6 AND slug=$7`,
+      [
+        tags,
+        knowledgeTags,
+        JSON.stringify(sources),
+        JSON.stringify(references),
+        JSON.stringify(timeline),
+        input.userId,
+        input.targetSlug,
+      ],
+    )
+
+    await client.query(
+      `INSERT INTO knowledge_source_links (user_id,slug,source_id,relation)
+       SELECT user_id,$3,source_id,'merged_from'
+       FROM knowledge_source_links
+       WHERE user_id=$1 AND slug = ANY($2::text[])
+       ON CONFLICT (user_id,slug,source_id) DO UPDATE SET relation='merged_from'`,
+      [input.userId, input.mergedSlugs, input.targetSlug],
+    )
+    await client.query(
+      'UPDATE knowledge_revisions SET slug=$1 WHERE user_id=$2 AND slug = ANY($3::text[])',
+      [input.targetSlug, input.userId, obsoleteSlugs],
+    )
+
+    const relatedRows = await client.query(
+      'SELECT slug,related FROM knowledge_entries WHERE user_id=$1 AND jsonb_array_length(related) > 0 FOR UPDATE',
+      [input.userId],
+    )
+    for (const row of relatedRows.rows) {
+      const nextRelated = uniqueJson(
+        jsonArray(row.related)
+          .map((related) => obsoleteSlugs.includes(String(related?.slug ?? ''))
+            ? { slug: input.targetSlug, title: input.targetTitle }
+            : related)
+          .filter((related) => String(related?.slug ?? '') !== row.slug)
+          .filter((related) => !obsoleteSlugs.includes(String(related?.slug ?? ''))),
+        (related) => String(related?.slug ?? ''),
+      )
+      if (JSON.stringify(nextRelated) !== JSON.stringify(jsonArray(row.related))) {
+        await client.query(
+          'UPDATE knowledge_entries SET related=$1,updated_at=now() WHERE user_id=$2 AND slug=$3',
+          [JSON.stringify(nextRelated), input.userId, row.slug],
+        )
+      }
+    }
+
+    await client.query(
+      'DELETE FROM knowledge_source_links WHERE user_id=$1 AND slug = ANY($2::text[])',
+      [input.userId, obsoleteSlugs],
+    )
+    await client.query(
+      'DELETE FROM knowledge_entries WHERE user_id=$1 AND slug = ANY($2::text[])',
+      [input.userId, obsoleteSlugs],
+    )
+    await client.query('COMMIT')
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
 export async function runBackgroundIngest(input: {
   userId: string
   fileId: string
@@ -65,16 +176,27 @@ export async function runBackgroundIngest(input: {
     
     // 4. Find candidates using Hybrid Search (FTS + Vector)
     const candidatesResult = await pool.query(
-      `SELECT slug,title,overview,category,knowledge_tags AS tags
+      `SELECT slug,title,overview,category,knowledge_tags AS tags,markdown_storage_object_id
        FROM knowledge_entries
        WHERE user_id=$1
        ORDER BY GREATEST(
           ts_rank_cd(COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))), plainto_tsquery('simple', $2)),
           1 - (embedding <=> $3::vector)
        ) DESC, updated_at DESC
-       LIMIT 20`,
+       LIMIT 5`,
       [userId, originalName, embeddingStr],
     )
+
+    const candidates = await Promise.all(candidatesResult.rows.map(async (row) => ({
+      slug: row.slug,
+      title: row.title,
+      overview: row.overview,
+      category: row.category,
+      tags: row.tags ?? [],
+      content: row.markdown_storage_object_id
+        ? await storageService.readText({ userId, storageObjectId: row.markdown_storage_object_id }).then((result) => result.text).catch(() => '')
+        : '',
+    })))
     
     // 5. Extract knowledge pages using candidates and summary
     const ingest = await extractKnowledgePages(raw.buffer, summary, {
@@ -83,13 +205,7 @@ export async function runBackgroundIngest(input: {
       rawStorageUrl,
       preExtractedText,
       customization,
-      candidates: candidatesResult.rows.map((row) => ({
-        slug: row.slug,
-        title: row.title,
-        overview: row.overview,
-        category: row.category,
-        tags: row.tags ?? [],
-      })),
+      candidates,
     })
 
     const extractedObject = ingest.extractedText
@@ -116,7 +232,7 @@ export async function runBackgroundIngest(input: {
       })
       : undefined
     const sourceExcerpt = summary.excerpt || excerpt(summaryMarkdown || originalName)
-    const sourceStatus = ingest.skipped ? 'Queued' : 'Processed'
+    const sourceStatus = 'Processed'
 
     await pool.query(
       `UPDATE sources
@@ -140,13 +256,34 @@ export async function runBackgroundIngest(input: {
 
     const sourceReference = { id: sourceId, type: uploadedType, title: sourceTitle }
     const writtenObjects = [extractedObject?.url, summaryObject?.url].filter(Boolean)
+    const candidateSlugs = new Set(candidates.map((candidate) => candidate.slug))
     for (const page of ingest.pages) {
-      const action = page.action ?? 'create'
+      let action = page.action ?? 'create'
       if (action === 'skip') continue
       const targetSlug = page.targetSlug ? slugify(page.targetSlug) : ''
-      const slug = action === 'update' || action === 'merge' || action === 'replace' || action === 'link_only'
+      if (action !== 'create' && !candidateSlugs.has(targetSlug)) {
+        if (action === 'link_only') continue
+        action = 'create'
+      }
+      const requestedMergedSlugs = uniqueCleanStrings((page.mergedSlugs ?? []).map(slugify))
+        .filter((slug) => candidateSlugs.has(slug))
+      const mergedSlugs = action === 'merge'
+        ? uniqueCleanStrings([targetSlug, ...requestedMergedSlugs]).filter((slug) => candidateSlugs.has(slug))
+        : []
+      if (action === 'merge' && (!targetSlug || mergedSlugs.length < 2)) {
+        action = targetSlug && candidateSlugs.has(targetSlug) ? 'update' : 'create'
+      }
+      let slug = action === 'update' || action === 'merge' || action === 'replace' || action === 'link_only'
         ? targetSlug || slugify(page.filename.replace(/\.md$/i, '') || page.title)
         : slugify(page.filename.replace(/\.md$/i, '') || page.title)
+      if (action === 'create' && slug) {
+        const baseSlug = slug
+        let suffix = 2
+        while ((await pool.query('SELECT 1 FROM knowledge_entries WHERE user_id=$1 AND slug=$2', [userId, slug])).rowCount) {
+          slug = `${baseSlug}-${suffix}`
+          suffix += 1
+        }
+      }
       if (!slug) continue
       if (action === 'link_only') {
         await pool.query(
@@ -204,7 +341,14 @@ export async function runBackgroundIngest(input: {
           read_time=EXCLUDED.read_time,
           explanation=EXCLUDED.explanation,
           related=EXCLUDED.related,
-          reference_list=EXCLUDED.reference_list,
+          reference_list=(
+            SELECT COALESCE(jsonb_agg(reference_item), '[]'::jsonb)
+            FROM (
+              SELECT DISTINCT ON (reference_item->>'source', reference_item->>'label') reference_item
+              FROM jsonb_array_elements(knowledge_entries.reference_list || EXCLUDED.reference_list) AS reference_items(reference_item)
+              ORDER BY reference_item->>'source', reference_item->>'label'
+            ) deduped_references
+          ),
           source_list=(
             SELECT COALESCE(jsonb_agg(source_item), '[]'::jsonb)
             FROM (
@@ -252,6 +396,14 @@ export async function runBackgroundIngest(input: {
          ON CONFLICT (user_id, slug, source_id) DO UPDATE SET relation=EXCLUDED.relation`,
         [userId, slug, sourceId, action === 'merge' ? 'merged_from' : action === 'replace' ? 'replaced_from' : 'supports'],
       )
+      if (action === 'merge') {
+        await collapseMergedKnowledge({
+          userId,
+          targetSlug: slug,
+          targetTitle: page.title,
+          mergedSlugs,
+        })
+      }
     }
 
     await sourcesRepository.updateUploadedFileStatus(fileId, ingest.skipped ? 'skipped' : 'completed', writtenObjects)

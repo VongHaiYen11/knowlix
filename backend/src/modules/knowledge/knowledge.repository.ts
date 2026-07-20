@@ -1,5 +1,9 @@
 import { pool } from '../../database/pool.js'
 
+function jsonArray(value: unknown): any[] {
+  return Array.isArray(value) ? value : []
+}
+
 export const knowledgeRepository = {
   async list(input: { userId: string; where: string; params: unknown[]; pageSize: number; offset: number }) {
     const count = await pool.query(`SELECT count(*)::int AS total FROM knowledge_entries WHERE ${input.where}`, input.params)
@@ -122,6 +126,10 @@ export const knowledgeRepository = {
     const client = await pool.connect()
     try {
       await client.query('BEGIN')
+      const relatedRows = await client.query(
+        'SELECT slug,related FROM knowledge_entries WHERE user_id=$1 AND jsonb_array_length(related) > 0 FOR UPDATE',
+        [input.userId],
+      )
       await client.query('DELETE FROM knowledge_source_links WHERE user_id=$1 AND slug = ANY($2::text[])', [input.userId, input.sourceSlugs])
       await client.query('DELETE FROM knowledge_entries WHERE user_id=$1 AND slug = ANY($2::text[])', [input.userId, input.sourceSlugs])
       const created = await client.query(
@@ -163,6 +171,31 @@ export const knowledgeRepository = {
            ON CONFLICT (user_id, slug, source_id) DO UPDATE SET relation=EXCLUDED.relation`,
           [input.userId, input.slug, source.id, 'merged_from'],
         )
+      }
+      await client.query(
+        'UPDATE knowledge_revisions SET slug=$1 WHERE user_id=$2 AND slug = ANY($3::text[])',
+        [input.slug, input.userId, input.sourceSlugs],
+      )
+      const removedSlugs = new Set(input.sourceSlugs)
+      for (const row of relatedRows.rows) {
+        if (removedSlugs.has(row.slug)) continue
+        const seen = new Set<string>()
+        const nextRelated = jsonArray(row.related)
+          .map((related) => removedSlugs.has(String(related?.slug ?? ''))
+            ? { slug: input.slug, title: input.title }
+            : related)
+          .filter((related) => {
+            const slug = String(related?.slug ?? '')
+            if (!slug || slug === row.slug || seen.has(slug)) return false
+            seen.add(slug)
+            return true
+          })
+        if (JSON.stringify(nextRelated) !== JSON.stringify(jsonArray(row.related))) {
+          await client.query(
+            'UPDATE knowledge_entries SET related=$1,updated_at=now() WHERE user_id=$2 AND slug=$3',
+            [JSON.stringify(nextRelated), input.userId, row.slug],
+          )
+        }
       }
       await client.query(
         `INSERT INTO knowledge_revisions (id,user_id,slug,storage_object_id,revision_type,model,reason)

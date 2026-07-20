@@ -302,7 +302,7 @@ after a note is converted into a Markdown source.
 #### 9. Embed source summary excerpt for candidate search
 
 - **Module:** `sources.ingest-service.ts`, `embedText`
-- **What happens:** the backend embeds the first 1000 characters of extracted text, falling back to the filename.
+- **What happens:** the backend embeds the generated source excerpt, falling back to the summary body, extracted-text prefix, then filename.
 - **External calls:** Gemini embedding model from `GEMINI_EMBEDDING_MODEL`
 - **Failure behavior:** embedding failure falls back to an empty vector in candidate selection.
 - **Why this step exists:** candidate Knowledge pages help the ingest prompt decide whether to create, update, merge, replace, link, or skip.
@@ -325,8 +325,8 @@ after a note is converted into a Markdown source.
   - uploaded source type
   - extracted file kind
   - raw storage URL
-  - candidate Knowledge metadata
-  - the user's Knowledge definition and extraction instructions
+  - up to eight candidate Knowledge entries with their current Markdown
+  - the user's mandatory Knowledge definition and extraction requirements
   - extracted text
 - **External calls:** Gemini content generation with JSON response MIME type
 - **Expected response:** source summary plus pages with actions.
@@ -336,7 +336,7 @@ after a note is converted into a Markdown source.
 #### 12. Normalize LLM output
 
 - **Module:** `normalizeIngestPages`
-- **What happens:** backend cleans title numbering, ensures Markdown starts with one H1, normalizes action names, extracts tags, and falls back to a generated page if no pages are returned.
+- **What happens:** backend cleans title numbering, ensures Markdown starts with one H1, normalizes actions and `mergedSlugs`, and treats an empty page list as a skip instead of inventing a fallback Knowledge page.
 - **Why this step exists:** LLM output must be normalized before persistence.
 - **Trade-off:** normalization is defensive, not a full schema validator for every nested field.
 
@@ -352,7 +352,7 @@ after a note is converted into a Markdown source.
 - **Module:** `sources.ingest-service.ts`
 - **What happens:** the source gets its generated title, category, tags, excerpt, storage object IDs, and status.
 - **Tables written:** `sources`
-- **Status behavior:** `Processed` when ingest succeeds; `Queued` when skipped or when a failure fallback writes an error excerpt.
+- **Status behavior:** `Processed` when ingest completes, including a deliberate no-Knowledge result; `Queued` when a failure fallback writes an error excerpt.
 
 #### 15. Upsert Knowledge pages
 
@@ -361,6 +361,8 @@ after a note is converted into a Markdown source.
   - `skip` does nothing
   - `link_only` updates source provenance and timeline
   - `create`, `update`, `merge`, and `replace` upload Knowledge Markdown and upsert `knowledge_entries`
+  - `create` resolves slug collisions with a numeric suffix instead of overwriting an existing page
+  - `merge` keeps `targetSlug` as canonical, transfers provenance and revisions, rewrites inbound related links, then deletes every other validated slug in `mergedSlugs`
 - **Tables written:** `knowledge_entries`, `knowledge_revisions`, `knowledge_source_links`, `storage_objects`
 - **Conflict target:** `(user_id, slug)`
 - **Why this step exists:** one user can revise a canonical Knowledge page while another user can independently own the same slug.
@@ -566,22 +568,22 @@ PostgreSQL stores the storage object IDs and metadata. This keeps rows compact w
 - User-facing model choice lives in `user_ai_customizations` and is validated against the backend model catalog.
 - Maintenance and Inspiration still use `GEMINI_MODEL` in the current implementation.
 
-### Customization Defaults
+### User Requirement Defaults
 
 If a user has not saved a customization row, the backend uses these defaults:
 
 ```text
 Knowledge definition:
-A Knowledge is a durable, self-contained knowledge page extracted from a source. It should capture one coherent concept, topic, procedure, decision, or reusable fact cluster, and should be useful independently of the original uploaded file.
+A Knowledge is a durable, self-contained knowledge page that captures one coherent concept, topic, procedure, decision, or reusable body of information. It is synthesized from one or more sources, organized to be understandable on its own, and designed to evolve as new information becomes available rather than remaining tied to a single uploaded document.
 
 Knowledge extraction instructions:
-Extract Knowledge pages only when the source contains reusable information. Prefer fewer, high-quality pages over many thin pages. Merge or update existing Knowledge when the new source overlaps with existing content. Skip content that is trivial, duplicated, temporary, or not useful as long-term knowledge.
+Extract Knowledge pages only when the source contains durable, reusable information. Prefer fewer comprehensive pages over many fragmented ones. Update or expand existing Knowledge whenever new content refines, extends, or overlaps with it, instead of creating duplicate pages. Do not create Knowledge for temporary information, isolated examples, boilerplate text, duplicated content, or details that have little long-term value.
 
 Research answer instructions:
-Answer using the retrieved Knowledge content, cite sources with numbered references, keep the answer direct and grounded, and clearly say when the available Knowledge is insufficient.
+Answer the user directly using the retrieved Knowledge and numbered references. Clearly distinguish supported synthesis from explicitly documented facts. If the available Knowledge is insufficient or conflicting, state that instead of guessing.
 ```
 
-Customization is inserted after protected prompt rules. Users can guide behavior, but cannot change JSON output contracts, citation format, grounding rules, action enums, or safety constraints.
+These values are mandatory user requirements in ingest summary, Knowledge extraction/merge, research answers, and research summaries. They cannot override protected JSON contracts, citation format, grounding rules, action enums, or safety constraints.
 
 ### Cost Estimator
 
@@ -597,9 +599,12 @@ Prompts are centralized under `src/prompts`:
 
 - `ingest-summary.prompt.ts` for source summarization
 - `ingest-pages.prompt.ts` for source-to-Knowledge extraction
+- `knowledge-merge.prompt.ts` for explicit multi-page merge
 - `research.prompt.ts` for candidate selection and grounded answer generation
+- `research-summary.prompt.ts` for conversation summaries
 - `maintenance.prompt.ts` for linting Knowledge entries
 - `inspiration.prompt.ts` for daily inspiration
+- `prompt.types.ts` for the shared `systemInstruction` and dynamic `contents` contract
 
 ### Retrieval-Augmented Generation
 
@@ -615,7 +620,8 @@ Prompts are centralized under `src/prompts`:
 - If the answer is unavailable in context, the prompt instructs the model not to speculate.
 - Citation output must use bracketed reference numbers, not URLs.
 - Ingest prompts ask for standalone Knowledge pages, normalized headings, source summaries, and explicit merge/replace reasons.
-- Ingest and research prompts include a bounded user customization block after protected rules.
+- Fixed rules are sent as Gemini `systemInstruction`; source text, candidate content, questions, and transcripts are sent separately as dynamic `contents`.
+- User requirements are mandatory within the protected grounding, output, citation, and safety boundaries.
 
 ## 🔐 Authentication & Authorization
 

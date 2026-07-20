@@ -16,6 +16,7 @@ export interface IngestPage {
   related: string[]
   action?: IngestAction
   targetSlug?: string
+  mergedSlugs?: string[]
   reason?: string
 }
 
@@ -50,6 +51,7 @@ export interface IngestRawFileOptions {
     overview: string
     category: string
     tags: string[]
+    content: string
   }>
 }
 
@@ -110,6 +112,7 @@ function normalizePage(value: unknown, fallbackTitle: string): IngestPage | null
     related: asStringArray(page.related),
     action,
     targetSlug: typeof page.targetSlug === 'string' ? page.targetSlug.trim() : undefined,
+    mergedSlugs: asStringArray(page.mergedSlugs),
     reason: typeof page.reason === 'string' ? page.reason.trim() : undefined,
   }
 }
@@ -141,7 +144,15 @@ export function normalizeIngestPages(input: unknown, summary: IngestSummary): In
     : []
 
   if (pages.length === 0) {
-    pages.push({ filename: `${summary.title}.md`, title: summary.title, overview: summary.excerpt, body: summary.body, related: [], action: 'create' })
+    pages.push({
+      filename: '',
+      title: '',
+      overview: '',
+      body: '',
+      related: [],
+      action: 'skip',
+      reason: 'The model returned no durable Knowledge pages.',
+    })
   }
 
   return pages
@@ -189,8 +200,8 @@ export async function generateIngestSummary(buffer: Buffer, options: IngestRawFi
 
   const response = await getGeminiClient().models.generateContent({
     model: customization.ingestModel,
-    contents: prompt,
-    config: geminiConfig({ responseMimeType: 'application/json', reasoning: customization.ingestReasoning, temperature: customization.ingestTemperature }),
+    contents: prompt.contents,
+    config: geminiConfig({ responseMimeType: 'application/json', reasoning: customization.ingestReasoning, temperature: customization.ingestTemperature, systemInstruction: prompt.systemInstruction }),
   })
   const responseText = response.text ? cleanJsonText(response.text) : ''
   if (!responseText) throw new Error('Gemini returned an empty ingest summary response')
@@ -225,6 +236,7 @@ export async function extractKnowledgePages(
     overview: candidate.overview,
     category: candidate.category,
     tags: candidate.tags,
+    content: candidate.content,
   }))
   const customization = options.customization ?? defaultAiCustomization()
   
@@ -241,15 +253,18 @@ export async function extractKnowledgePages(
 
   const response = await getGeminiClient().models.generateContent({
     model: customization.ingestModel,
-    contents: prompt,
-    config: geminiConfig({ responseMimeType: 'application/json', reasoning: customization.ingestReasoning, temperature: customization.ingestTemperature }),
+    contents: prompt.contents,
+    config: geminiConfig({ responseMimeType: 'application/json', reasoning: customization.ingestReasoning, temperature: customization.ingestTemperature, systemInstruction: prompt.systemInstruction }),
   })
   const responseText = response.text ? cleanJsonText(response.text) : ''
   if (!responseText) throw new Error('Gemini returned an empty ingest pages response')
 
   try {
     const pages = normalizeIngestPages(JSON.parse(responseText), summary)
-    return { sourcePath: options.rawStorageUrl ?? '', written: [], pages, summary, extractedText, fileKind: extracted.fileKind }
+    const skipped = pages.every((page) => page.action === 'skip')
+      ? pages.map((page) => page.reason).filter(Boolean).join(' ') || 'No durable Knowledge contribution found.'
+      : undefined
+    return { sourcePath: options.rawStorageUrl ?? '', written: [], pages, summary, extractedText, fileKind: extracted.fileKind, skipped }
   } catch (error) {
     throw new Error(`Failed to parse Gemini ingest pages JSON: ${error instanceof Error ? error.message : 'invalid JSON'}`)
   }

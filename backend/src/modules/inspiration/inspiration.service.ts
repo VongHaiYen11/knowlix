@@ -19,7 +19,11 @@ export const inspirationService = {
     const prompt = getInspirationPrompt()
 
     try {
-      const response = await getGeminiClient().models.generateContent({ model, contents: prompt })
+      const response = await getGeminiClient().models.generateContent({
+        model,
+        contents: prompt.contents,
+        config: { systemInstruction: prompt.systemInstruction },
+      })
       const quote = response.text?.trim().replace(/^["']|["']$/g, '')
       return { date, quote: quote || fallbackQuote(userId, date) }
     } catch (error) {
