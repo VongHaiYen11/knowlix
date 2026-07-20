@@ -4,7 +4,24 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import { MermaidDiagram } from './MermaidDiagram'
 
-export function MarkdownPreview({ content }: { content: string }) {
+function normalizeTitle(value: string) {
+  return value
+    .replace(/^#+\s*/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
+}
+
+function withoutDuplicateLeadingTitle(content: string, hiddenTitle?: string) {
+  if (!hiddenTitle?.trim()) return content
+  const match = content.match(/^\s*#\s+(.+?)(?:\n+|$)/)
+  if (!match) return content
+  if (normalizeTitle(match[1]) !== normalizeTitle(hiddenTitle)) return content
+  return content.slice(match[0].length).replace(/^\s+/, '')
+}
+
+export function MarkdownPreview({ content, hiddenTitle }: { content: string; hiddenTitle?: string }) {
+  const previewContent = withoutDuplicateLeadingTitle(content, hiddenTitle)
   return (
     <div className="max-w-none text-foreground">
       <ReactMarkdown
@@ -31,7 +48,7 @@ export function MarkdownPreview({ content }: { content: string }) {
           img: ({ src, alt }) => <img src={typeof src === 'string' ? src : ''} alt={alt ?? ''} loading="lazy" className="my-5 w-full rounded-xl border border-border elevated" />,
         }}
       >
-        {content}
+        {previewContent}
       </ReactMarkdown>
     </div>
   )

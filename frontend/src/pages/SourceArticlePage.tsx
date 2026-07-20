@@ -138,7 +138,7 @@ export function SourceArticlePage({ id }: { id: string }) {
                 loadingMarkdown ? (
                   <div className="h-96 animate-pulse rounded-xl border border-border bg-card" />
                 ) : (
-                  <MarkdownPreview content={originalMarkdown || ''} />
+                  <MarkdownPreview content={originalMarkdown || ''} hiddenTitle={source.title} />
                 )
               ) : source.type === 'DOCX' ? (
                 <iframe
@@ -155,7 +155,7 @@ export function SourceArticlePage({ id }: { id: string }) {
                 />
               )
             ) : (
-              <MarkdownPreview content={source.content || 'No summary available.'} />
+              <MarkdownPreview content={source.content || 'No summary available.'} hiddenTitle={source.title} />
             )}
           </div>
         </article>
