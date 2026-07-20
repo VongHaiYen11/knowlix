@@ -23,6 +23,13 @@ export const apiLibraryRepository: LibraryRepository = {
     }
     await apiClient.post<KnowledgeEntry>('/api/v1/knowledge', entry)
   },
+  regenerateKnowledge: async (slug) => {
+    const entry = await apiClient.post<KnowledgeEntry>(`/api/v1/knowledge/${encodeURIComponent(slug)}/regenerate`, {})
+    if (entry.contentUrl) {
+      entry.content = await apiClient.text(entry.contentUrl)
+    }
+    return entry
+  },
   previewKnowledgeMerge: (input: KnowledgeMergePreviewInput) => apiClient.post<KnowledgeMergeDraft>('/api/v1/knowledge/merge/preview', input),
   applyKnowledgeMerge: (input: KnowledgeMergeApplyInput) => apiClient.post<KnowledgeEntry>('/api/v1/knowledge/merge/apply', input),
   getSources: () => getAllPages<Source>('/api/v1/sources'),

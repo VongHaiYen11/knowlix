@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { ArrowLeft, Clock, Download, FileStack, GitMerge, History, Link2, Pencil, RefreshCw, Sparkles } from 'lucide-react'
 import { Link } from 'react-router'
 import { PageHeader } from '@/components/common/PageHeader'
@@ -15,12 +16,26 @@ import { useKnowledgeArticle } from '@/hooks/useLibrary'
 
 const actions = [
   { label: 'View Sources', icon: FileStack },
-  { label: 'Regenerate', icon: RefreshCw },
   { label: 'Export', icon: Download },
 ]
 
 export function KnowledgeArticlePage({ slug }: { slug: string }) {
-  const { data: entry, status } = useKnowledgeArticle(slug)
+  const { data: entry, status, regenerate } = useKnowledgeArticle(slug)
+  const [regenerating, setRegenerating] = useState(false)
+  const [regenerateError, setRegenerateError] = useState('')
+  async function handleRegenerate() {
+    if (regenerating) return
+    setRegenerating(true)
+    setRegenerateError('')
+    try {
+      await regenerate()
+    } catch (error) {
+      setRegenerateError(error instanceof Error ? error.message : 'Could not regenerate this Knowledge page')
+    } finally {
+      setRegenerating(false)
+    }
+  }
+
   if (status === 'loading') return <PageShell variant="wide"><Card className="h-96 animate-pulse" /></PageShell>
   if (!entry) return <PageShell variant="readable"><EmptyState image imageSrc={boredImage} icon={Sparkles} title="Page not found" message="This knowledge page is not in your local library." /></PageShell>
 
@@ -84,6 +99,17 @@ export function KnowledgeArticlePage({ slug }: { slug: string }) {
             <Link to={`${ROUTES.library}?tab=knowledge&merge=${encodeURIComponent(entry.slug)}`} className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 text-sm text-foreground transition hover:border-ring/40">
               <GitMerge className="h-4 w-4" />Merge with another page
             </Link>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              icon={<RefreshCw className={`h-3.5 w-3.5 ${regenerating ? 'animate-spin' : ''}`} />}
+              disabled={regenerating}
+              onClick={handleRegenerate}
+            >
+              {regenerating ? 'Regenerating...' : 'Regenerate'}
+            </Button>
+            {regenerateError && <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{regenerateError}</p>}
             <div className="grid grid-cols-2 gap-2">{actions.map((action) => <Button key={action.label} variant="outline" size="sm" icon={<action.icon className="h-3.5 w-3.5" />}>{action.label}</Button>)}</div>
             <Card className="p-4"><h2 className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground"><Link2 className="h-3.5 w-3.5" />Related knowledge</h2>{entry.related.map((item) => <p key={item.slug} className="rounded-lg px-2 py-1.5 text-sm text-foreground">{item.title}</p>)}</Card>
             <Card className="p-4"><h2 className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground"><History className="h-3.5 w-3.5" />Last updated</h2><p className="text-sm text-muted-foreground">{entry.updated}</p></Card>

@@ -31,6 +31,17 @@ export const knowledgeRepository = {
     return rows
   },
 
+  async sourceRows(userId: string, sourceIds: string[]) {
+    if (!sourceIds.length) return []
+    const { rows } = await pool.query(
+      `SELECT id,type,title,category,tags,knowledge_tags,excerpt,raw_storage_object_id,extracted_storage_object_id,summary_storage_object_id
+       FROM sources
+       WHERE user_id=$1 AND id = ANY($2::text[])`,
+      [userId, sourceIds],
+    )
+    return rows
+  },
+
   async create(input: any) {
     const { rows } = await pool.query(
       `INSERT INTO knowledge_entries

@@ -75,6 +75,10 @@ export class LibraryService {
     return this.repository.getKnowledgeBySlug(slug)
   }
 
+  regenerateKnowledge(slug: string): Promise<KnowledgeEntry> {
+    return this.repository.regenerateKnowledge(slug)
+  }
+
   previewKnowledgeMerge(input: KnowledgeMergePreviewInput): Promise<KnowledgeMergeDraft> {
     return this.repository.previewKnowledgeMerge(input)
   }

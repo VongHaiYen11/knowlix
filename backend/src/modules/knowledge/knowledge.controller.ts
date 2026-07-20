@@ -12,6 +12,9 @@ export const knowledgeController = {
   async content(req: AuthedRequest, res: Response) {
     res.type('text/markdown').send(await knowledgeService.content(req.user.id, req.params.slug))
   },
+  async regenerate(req: AuthedRequest, res: Response) {
+    res.json(await knowledgeService.regenerate(req.user.id, req.params.slug))
+  },
   async create(req: AuthedRequest, res: Response) {
     res.status(201).json(await knowledgeService.create(req.user.id, req.body))
   },

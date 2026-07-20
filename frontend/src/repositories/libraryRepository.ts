@@ -7,6 +7,7 @@ export interface LibraryRepository {
   getKnowledge(): Promise<KnowledgeEntry[]>
   getKnowledgeBySlug(slug: string): Promise<KnowledgeEntry | undefined>
   saveKnowledge(entry: KnowledgeEntry): Promise<void>
+  regenerateKnowledge(slug: string): Promise<KnowledgeEntry>
   previewKnowledgeMerge(input: KnowledgeMergePreviewInput): Promise<KnowledgeMergeDraft>
   applyKnowledgeMerge(input: KnowledgeMergeApplyInput): Promise<KnowledgeEntry>
   getSources(): Promise<Source[]>
@@ -26,6 +27,9 @@ export const indexedDbLibraryRepository: LibraryRepository = {
   getKnowledge: () => getAllFromStore(STORE_NAMES.knowledge),
   getKnowledgeBySlug: (slug) => getFromStore(STORE_NAMES.knowledge, slug),
   saveKnowledge: (entry) => putInStore(STORE_NAMES.knowledge, entry),
+  regenerateKnowledge: async () => {
+    throw new Error('Regenerate requires API mode. Set VITE_API_URL in frontend/.env.local.')
+  },
   previewKnowledgeMerge: async () => {
     throw new Error('Merge requires API mode. Set VITE_API_URL in frontend/.env.local.')
   },

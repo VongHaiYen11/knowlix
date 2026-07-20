@@ -25,7 +25,14 @@ export function useLibraryNotes(filters: Pick<LibraryFilters, 'query' | 'sort'>)
 
 export function useKnowledgeArticle(slug: string) {
   const loader = useCallback(() => libraryService.getKnowledgeBySlug(slug), [slug])
-  return useAsync(loader, undefined)
+  const state = useAsync(loader, undefined)
+  const { setData } = state
+  const regenerate = useCallback(async () => {
+    const entry = await libraryService.regenerateKnowledge(slug)
+    setData(entry)
+    return entry
+  }, [slug, setData])
+  return { ...state, regenerate }
 }
 
 export function useSourceArticle(id: string) {
