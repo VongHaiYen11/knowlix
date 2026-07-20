@@ -20,10 +20,39 @@ function withoutDuplicateLeadingTitle(content: string, hiddenTitle?: string) {
   return content.slice(match[0].length).replace(/^\s+/, '')
 }
 
+function repairJsonEscapedLatex(content: string) {
+  return content
+    .replace(/\f\s*rac/g, '\\frac')
+    .replace(/\u0008\s*ar/g, '\\bar')
+    .replace(/\r\s*ight/g, '\\right')
+    .replace(/\n\s*abla/g, '\\nabla')
+    .replace(/\t\s*heta/g, '\\theta')
+    .replace(/\t\s*imes/g, '\\times')
+    .replace(/\t\s*ext/g, '\\text')
+}
+
+function isFormulaLike(math: string) {
+  return /(?:=|\\frac|\\sum|\\prod|\\int|\\sqrt|\\left|\\right|\\begin|\\lim|\\operatorname|[<>]=?|\\cdot|\\times)/.test(math)
+}
+
+function promoteFormulaMathToBlocks(content: string) {
+  return content
+    .split(/(```[\s\S]*?```)/g)
+    .map((part) => {
+      if (part.startsWith('```')) return part
+      return part.replace(/(^|[^\$])\$([^$\n]+?)\$(?!\$)/g, (match, prefix: string, math: string) => {
+        if (!isFormulaLike(math)) return match
+        return `${prefix.trimEnd()}\n\n$$\n${math.trim()}\n$$\n\n`
+      })
+    })
+    .join('')
+    .replace(/\n{3,}/g, '\n\n')
+}
+
 export function MarkdownPreview({ content, hiddenTitle }: { content: string; hiddenTitle?: string }) {
-  const previewContent = withoutDuplicateLeadingTitle(content, hiddenTitle)
+  const previewContent = promoteFormulaMathToBlocks(repairJsonEscapedLatex(withoutDuplicateLeadingTitle(content, hiddenTitle)))
   return (
-    <div className="max-w-none text-foreground">
+    <div className="max-w-none text-foreground [&_.katex-display]:my-6 [&_.katex-display]:overflow-x-auto [&_.katex-display]:text-center">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex]}

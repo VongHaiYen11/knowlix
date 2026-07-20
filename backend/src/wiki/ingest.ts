@@ -43,6 +43,69 @@ const supportedExtensions = new Set(['.pdf', '.docx', '.txt', '.md', '.markdown'
 const SOURCE_WINDOW_TOKEN_LIMIT = 12000
 const SECTION_TARGET_TOKENS = 900
 const SECTION_OVERLAP_PARAGRAPHS = 1
+const INGEST_SUMMARY_RESPONSE_SCHEMA = {
+  type: 'object',
+  required: ['summary', 'ingestBrief'],
+  properties: {
+    summary: {
+      type: 'object',
+      required: ['title', 'category', 'tags', 'excerpt', 'body'],
+      properties: {
+        title: { type: 'string' },
+        category: { type: 'string' },
+        tags: { type: 'array', items: { type: 'string' } },
+        excerpt: { type: 'string' },
+        body: { type: 'string' },
+      },
+    },
+    ingestBrief: {
+      type: 'object',
+      required: ['durableConcepts', 'knowledgeProposals'],
+      properties: {
+        durableConcepts: { type: 'array', items: { type: 'string' } },
+        knowledgeProposals: {
+          type: 'array',
+          items: {
+            type: 'object',
+            required: ['title', 'conceptType', 'retrievalQueries', 'possibleSectionIds', 'reason'],
+            properties: {
+              title: { type: 'string' },
+              conceptType: { type: 'string' },
+              retrievalQueries: { type: 'array', items: { type: 'string' } },
+              possibleSectionIds: { type: 'array', items: { type: 'string' } },
+              reason: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+  },
+}
+
+const INGEST_PAGES_RESPONSE_SCHEMA = {
+  type: 'object',
+  required: ['pages'],
+  properties: {
+    pages: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['action', 'targetSlug', 'mergedSlugs', 'filename', 'title', 'overview', 'body', 'related', 'reason'],
+        properties: {
+          action: { type: 'string', enum: ['create', 'update', 'merge', 'replace', 'link_only', 'skip'] },
+          targetSlug: { type: 'string' },
+          mergedSlugs: { type: 'array', items: { type: 'string' } },
+          filename: { type: 'string' },
+          title: { type: 'string' },
+          overview: { type: 'string' },
+          body: { type: 'string' },
+          related: { type: 'array', items: { type: 'string' } },
+          reason: { type: 'string' },
+        },
+      },
+    },
+  },
+}
 
 export interface SourceSection {
   id: string
@@ -224,7 +287,7 @@ function cleanLeadingSectionNumber(value: string): string {
 
 function normalizeMarkdownTitle(body: string, title: string): string {
   const cleanTitle = cleanLeadingSectionNumber(title) || title
-  const cleanBody = body.trim()
+  const cleanBody = repairJsonEscapedLatex(body).trim()
   if (!cleanBody) return cleanBody
   if (/^#\s+.+/m.test(cleanBody)) {
     return cleanBody.replace(/^#\s+.+/m, `# ${cleanTitle}`)
@@ -233,7 +296,7 @@ function normalizeMarkdownTitle(body: string, title: string): string {
 }
 
 function normalizeSummaryBody(body: string, title: string): string {
-  const cleanBody = body.trim()
+  const cleanBody = repairJsonEscapedLatex(body).trim()
   if (!cleanBody) return cleanBody
   const leadingTitle = cleanBody.match(/^#\s+(.+?)(?:\n+|$)/)
   if (!leadingTitle) return cleanBody
@@ -243,6 +306,17 @@ function normalizeSummaryBody(body: string, title: string): string {
     return cleanBody.slice(leadingTitle[0].length).trim()
   }
   return cleanBody.replace(/^#\s+/, '## ')
+}
+
+function repairJsonEscapedLatex(content: string) {
+  return content
+    .replace(/\f\s*rac/g, '\\frac')
+    .replace(/\u0008\s*ar/g, '\\bar')
+    .replace(/\r\s*ight/g, '\\right')
+    .replace(/\n\s*abla/g, '\\nabla')
+    .replace(/\t\s*heta/g, '\\theta')
+    .replace(/\t\s*imes/g, '\\times')
+    .replace(/\t\s*ext/g, '\\text')
 }
 
 function normalizeAction(value: unknown): IngestAction {
@@ -409,7 +483,13 @@ export async function generateIngestSummary(buffer: Buffer, options: IngestRawFi
   const response = await getGeminiClient().models.generateContent({
     model: customization.ingestModel,
     contents: prompt.contents,
-    config: geminiConfig({ responseMimeType: 'application/json', reasoning: customization.ingestReasoning, temperature: customization.ingestTemperature, systemInstruction: prompt.systemInstruction }),
+    config: geminiConfig({
+      responseMimeType: 'application/json',
+      responseJsonSchema: INGEST_SUMMARY_RESPONSE_SCHEMA,
+      reasoning: customization.ingestReasoning,
+      temperature: customization.ingestTemperature,
+      systemInstruction: prompt.systemInstruction,
+    }),
   })
   const responseText = response.text ? cleanJsonText(response.text) : ''
   if (!responseText) throw new Error('Gemini returned an empty ingest summary response')
@@ -470,7 +550,13 @@ export async function extractKnowledgePages(
   const response = await getGeminiClient().models.generateContent({
     model: customization.ingestModel,
     contents: prompt.contents,
-    config: geminiConfig({ responseMimeType: 'application/json', reasoning: customization.ingestReasoning, temperature: customization.ingestTemperature, systemInstruction: prompt.systemInstruction }),
+    config: geminiConfig({
+      responseMimeType: 'application/json',
+      responseJsonSchema: INGEST_PAGES_RESPONSE_SCHEMA,
+      reasoning: customization.ingestReasoning,
+      temperature: customization.ingestTemperature,
+      systemInstruction: prompt.systemInstruction,
+    }),
   })
   const responseText = response.text ? cleanJsonText(response.text) : ''
   if (!responseText) throw new Error('Gemini returned an empty ingest pages response')

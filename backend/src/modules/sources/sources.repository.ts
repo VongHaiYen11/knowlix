@@ -76,15 +76,100 @@ export const sourcesRepository = {
     const { rows } = await pool.query('SELECT raw_path, mime_type, name, storage_object_id FROM uploaded_files WHERE user_id=$1 AND id=$2', [userId, id])
     return rows[0]
   },
-  async relatedKnowledgeSlugs(userId: string, sourceId: string) {
-    const { rows } = await pool.query('SELECT slug FROM knowledge_entries WHERE user_id=$1 AND source_list @> $2::jsonb', [userId, JSON.stringify([{ id: sourceId }])])
-    return rows.map((row: any) => row.slug)
-  },
-  async deleteRelatedKnowledge(userId: string, slugs: string[]) {
-    if (!slugs.length) return
-    await pool.query('DELETE FROM knowledge_entries WHERE user_id=$1 AND slug = ANY($2::text[])', [userId, slugs])
-  },
-  async delete(userId: string, id: string) {
-    await pool.query('DELETE FROM sources WHERE user_id=$1 AND id=$2', [userId, id])
+  async deleteWithKnowledgeDetach(userId: string, id: string) {
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      const sourceResult = await client.query(
+        `SELECT sources.id,sources.title,storage_objects.url AS raw_storage_url
+         FROM sources
+         LEFT JOIN storage_objects ON storage_objects.id = sources.raw_storage_object_id
+         WHERE sources.user_id=$1 AND sources.id=$2
+         FOR UPDATE OF sources`,
+        [userId, id],
+      )
+      const source = sourceResult.rows[0]
+      if (!source) {
+        await client.query('COMMIT')
+        return { orphanSlugs: [], detachedSlugs: [] }
+      }
+
+      const relatedResult = await client.query(
+        `WITH related_slugs AS (
+           SELECT slug
+           FROM knowledge_source_links
+           WHERE user_id=$1 AND source_id=$2
+           UNION
+           SELECT slug
+           FROM knowledge_entries
+           WHERE user_id=$1
+             AND jsonb_typeof(source_list) = 'array'
+             AND source_list @> $3::jsonb
+         )
+         SELECT knowledge_entries.slug,knowledge_entries.source_list,
+           (
+             SELECT count(*)::int
+             FROM knowledge_source_links
+             WHERE knowledge_source_links.user_id=knowledge_entries.user_id
+               AND knowledge_source_links.slug=knowledge_entries.slug
+           ) AS linked_source_count
+         FROM knowledge_entries
+         WHERE user_id=$1 AND slug IN (SELECT slug FROM related_slugs)
+         FOR UPDATE`,
+        [userId, id, JSON.stringify([{ id }])],
+      )
+      const orphanSlugs = relatedResult.rows
+        .filter((row: any) => {
+          const linkedSourceCount = Number(row.linked_source_count ?? 0)
+          if (linkedSourceCount > 0) return linkedSourceCount <= 1
+          return Array.isArray(row.source_list) && row.source_list.filter((item: any) => item?.id).length <= 1
+        })
+        .map((row: any) => row.slug)
+      const detachedSlugs = relatedResult.rows
+        .filter((row: any) => !orphanSlugs.includes(row.slug))
+        .map((row: any) => row.slug)
+
+      if (orphanSlugs.length) {
+        await client.query('DELETE FROM knowledge_source_links WHERE user_id=$1 AND slug = ANY($2::text[])', [userId, orphanSlugs])
+        await client.query('DELETE FROM knowledge_entries WHERE user_id=$1 AND slug = ANY($2::text[])', [userId, orphanSlugs])
+      }
+
+      if (detachedSlugs.length) {
+        await client.query(
+          `UPDATE knowledge_entries
+           SET source_list=(
+              SELECT COALESCE(jsonb_agg(source_item), '[]'::jsonb)
+              FROM jsonb_array_elements(
+                CASE WHEN jsonb_typeof(source_list) = 'array' THEN source_list ELSE '[]'::jsonb END
+              ) AS source_items(source_item)
+              WHERE source_item->>'id' <> $1
+           ),
+           reference_list=(
+              SELECT COALESCE(jsonb_agg(reference_item), '[]'::jsonb)
+              FROM jsonb_array_elements(
+                CASE WHEN jsonb_typeof(reference_list) = 'array' THEN reference_list ELSE '[]'::jsonb END
+              ) AS reference_items(reference_item)
+              WHERE NOT (
+                ($2 <> '' AND reference_item->>'source' = $2)
+                OR ($3 <> '' AND reference_item->>'label' = $3)
+                OR reference_item->>'id' = $1
+              )
+           ),
+           updated_at=now()
+           WHERE user_id=$4 AND slug = ANY($5::text[])`,
+          [id, source.raw_storage_url ?? '', source.title ?? '', userId, detachedSlugs],
+        )
+      }
+
+      await client.query('DELETE FROM knowledge_source_links WHERE user_id=$1 AND source_id=$2', [userId, id])
+      await client.query('DELETE FROM sources WHERE user_id=$1 AND id=$2', [userId, id])
+      await client.query('COMMIT')
+      return { orphanSlugs, detachedSlugs }
+    } catch (error) {
+      await client.query('ROLLBACK')
+      throw error
+    } finally {
+      client.release()
+    }
   },
 }

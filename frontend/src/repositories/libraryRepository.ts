@@ -41,19 +41,27 @@ export const indexedDbLibraryRepository: LibraryRepository = {
   },
   saveSource: (source) => putInStore(STORE_NAMES.sources, source),
   deleteSource: async (id) => {
+    const source = await indexedDbLibraryRepository.getSourceById(id)
     const knowledge = await indexedDbLibraryRepository.getKnowledge()
     const relatedEntries = knowledge.filter(entry => 
       entry.sources?.some(s => s.id === id) || 
       (entry as any).sourceList?.some((s: any) => s.id === id)
     )
-    const slugs = relatedEntries.map(e => e.slug)
-    
-    if (slugs.length > 0) {
-      for (const slug of slugs) {
-        await deleteFromStore(STORE_NAMES.knowledge, slug)
+
+    for (const entry of relatedEntries) {
+      const nextSources = (entry.sources ?? []).filter((item) => item.id !== id)
+      if (nextSources.length === 0) {
+        await deleteFromStore(STORE_NAMES.knowledge, entry.slug)
+      } else {
+        await putInStore(STORE_NAMES.knowledge, {
+          ...entry,
+          sources: nextSources,
+          references: (entry.references ?? []).filter((item) => item.label !== source?.title && item.source !== source?.rawStorageObjectId),
+          timeline: (entry.timeline ?? []).filter((item) => !item.event.includes(source?.title ?? '')),
+        })
       }
     }
-    
+
     await deleteFromStore(STORE_NAMES.sources, id)
   },
   getNotes: () => getAllFromStore(STORE_NAMES.notes),

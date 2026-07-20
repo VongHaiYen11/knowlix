@@ -217,7 +217,7 @@ export function SourceArticlePage({ id }: { id: string }) {
       <ConfirmDialog
         open={confirmDeleteOpen}
         title="Delete this source?"
-        message="This will also remove generated knowledge pages related to this source."
+        message="Knowledge pages backed only by this source will be removed. Pages with other sources will stay, with this source detached."
         confirmLabel="Delete source"
         error={deleteError}
         loading={deleting}

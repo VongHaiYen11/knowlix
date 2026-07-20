@@ -31,30 +31,24 @@ export function KnowledgeGrid({
     )
   }
   return (
-    <>
-      <div className="grid gap-4 md:grid-cols-2">
-        {knowledge.map((entry) => {
-          const selected = selectedSlugs.includes(entry.slug)
-          const card = <KnowledgeCard entry={entry} selected={selected} selectionMode={selectionMode} />
-          if (selectionMode) {
-            return (
-              <button key={entry.slug} type="button" className="group block h-full text-left" onClick={() => onToggleSelection?.(entry.slug)}>
-                {card}
-              </button>
-            )
-          }
+    <div className="grid gap-4 md:grid-cols-2">
+      {knowledge.map((entry) => {
+        const selected = selectedSlugs.includes(entry.slug)
+        const card = <KnowledgeCard entry={entry} selected={selected} selectionMode={selectionMode} />
+        if (selectionMode) {
           return (
-            <Link key={entry.slug} to={ROUTES.knowledge(entry.slug)} className="group block">
+            <button key={entry.slug} type="button" className="group block h-full text-left" onClick={() => onToggleSelection?.(entry.slug)}>
               {card}
-            </Link>
+            </button>
           )
-        })}
-      </div>
-      {!selectionMode && <div className="mt-6 flex items-center gap-3 rounded-2xl border border-dashed border-border bg-secondary/40 p-6">
-        <Sparkles className="h-5 w-5 shrink-0 text-primary" strokeWidth={1.75} />
-        <p className="text-sm leading-relaxed text-muted-foreground">Your assistant is drafting a page on <span className="text-foreground">Memory Palaces</span> from a recent article.</p>
-      </div>}
-    </>
+        }
+        return (
+          <Link key={entry.slug} to={ROUTES.knowledge(entry.slug)} className="group block">
+            {card}
+          </Link>
+        )
+      })}
+    </div>
   )
 }
 

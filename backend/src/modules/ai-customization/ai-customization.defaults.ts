@@ -15,9 +15,23 @@ export interface AiCustomizationProfile {
   researchAnswerInstructions: string
 }
 
-export const DEFAULT_KNOWLEDGE_DEFINITION = 'A Knowledge is a durable, self-contained knowledge page that captures one coherent concept, topic, procedure, decision, or reusable body of information. It is synthesized from one or more sources, organized to be understandable on its own, and designed to evolve as new information becomes available rather than remaining tied to a single uploaded document.'
+export const DEFAULT_KNOWLEDGE_DEFINITION = `A Knowledge is a durable, self-contained knowledge page that captures one coherent concept, topic, procedure, decision, or reusable body of information. It is synthesized from one or more sources, organized to be understandable on its own, and designed to evolve as new information becomes available rather than remaining tied to a single uploaded document.
 
-export const DEFAULT_KNOWLEDGE_EXTRACTION_INSTRUCTIONS = 'Extract Knowledge pages only when the source contains durable, reusable information. Prefer fewer comprehensive pages over many fragmented ones. Update or expand existing Knowledge whenever new content refines, extends, or overlaps with it, instead of creating duplicate pages. Do not create Knowledge for temporary information, isolated examples, boilerplate text, duplicated content, or details that have little long-term value.'
+A Knowledge page must be a synthesis, not a reproduction of the source. It should not preserve the source's original wording, sequence, lecture flow, or document structure unless that structure is essential to understanding the topic. The final page should contain enough detail to be useful on its own, but it should be substantially more compact, conceptual, and structured than the original source.`
+
+export const DEFAULT_KNOWLEDGE_EXTRACTION_INSTRUCTIONS = `Extract Knowledge pages only when the source contains durable, reusable information.
+
+Prefer broader, well-organized Knowledge pages over many fragmented pages. If several subtopics belong naturally to the same general topic, combine them into one Knowledge page and organize them as sections within that page. For example, if a source discusses decision trees, including fundamentals, pruning, advantages, limitations, and implementation, create one Knowledge page titled "Decision Tree" rather than separate pages for each subsection.
+
+Create separate Knowledge pages only when the source contains clearly unrelated major topics. For example, if a lecture note contains substantial content about both "Romeo and Juliet" and "Large Language Models", create two separate Knowledge pages.
+
+Extract and retain only durable, reusable information, such as core definitions and concepts, important principles and relationships, meaningful procedures or decision rules, important examples that clarify the concept, and limitations, conditions, or trade-offs.
+
+Remove or heavily compress repeated explanations, introductory or transitional language, classroom narration, conversational remarks, administrative information, long examples that do not add distinct knowledge, duplicated definitions, source-specific wording or formatting, and details that are temporary or only relevant to the uploaded document.
+
+Reorganize the retained information into a clear conceptual structure. Combine overlapping statements, resolve repetition, and rewrite the content in concise, independent language. Do not include every detail merely because it appears in the source; include a detail only when it materially improves the reader's understanding of the Knowledge topic.
+
+Update or expand existing Knowledge whenever new content refines, extends, or overlaps with it, instead of creating duplicate pages. When deciding whether to create one page or multiple pages, prioritize conceptual cohesion rather than the number of headings in the source.`
 
 export const DEFAULT_RESEARCH_ANSWER_INSTRUCTIONS = 'Answer the user directly using the retrieved Knowledge and numbered references. Clearly distinguish supported synthesis from explicitly documented facts. If the available Knowledge is insufficient or conflicting, state that instead of guessing.'
 
@@ -77,9 +91,16 @@ export function thinkingBudget(reasoning: AiReasoning): number | undefined {
   return 8192
 }
 
-export function geminiConfig(options: { responseMimeType?: string; reasoning: AiReasoning; temperature: number | null; systemInstruction?: string }) {
+export function geminiConfig(options: {
+  responseMimeType?: string
+  responseJsonSchema?: unknown
+  reasoning: AiReasoning
+  temperature: number | null
+  systemInstruction?: string
+}) {
   const config: Record<string, unknown> = {}
   if (options.responseMimeType) config.responseMimeType = options.responseMimeType
+  if (options.responseJsonSchema) config.responseJsonSchema = options.responseJsonSchema
   if (options.systemInstruction) config.systemInstruction = options.systemInstruction
   if (options.temperature !== null) config.temperature = options.temperature
   const budget = thinkingBudget(options.reasoning)
