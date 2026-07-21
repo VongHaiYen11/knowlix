@@ -5,11 +5,33 @@ function jsonArray(value: unknown): any[] {
 }
 
 export const knowledgeRepository = {
-  async list(input: { userId: string; where: string; params: unknown[]; pageSize: number; offset: number }) {
-    const count = await pool.query(`SELECT count(*)::int AS total FROM knowledge_entries WHERE ${input.where}`, input.params)
+  async list(input: {
+    userId: string
+    query?: string
+    category?: string
+    tags: string[]
+    pageSize: number
+    offset: number
+  }) {
+    const filters = ['user_id = $1']
+    const params: unknown[] = [input.userId]
+    if (input.query) {
+      params.push(`%${input.query}%`)
+      filters.push(`(title ILIKE $${params.length} OR overview ILIKE $${params.length})`)
+    }
+    if (input.category) {
+      params.push(input.category)
+      filters.push(`category = $${params.length}`)
+    }
+    if (input.tags.length) {
+      params.push(input.tags)
+      filters.push(`tags && $${params.length}::text[]`)
+    }
+    const where = filters.join(' AND ')
+    const count = await pool.query(`SELECT count(*)::int AS total FROM knowledge_entries WHERE ${where}`, params)
     const data = await pool.query(
-      `SELECT * FROM knowledge_entries WHERE ${input.where} ORDER BY updated_at DESC LIMIT $${input.params.length + 1} OFFSET $${input.params.length + 2}`,
-      [...input.params, input.pageSize, input.offset],
+      `SELECT * FROM knowledge_entries WHERE ${where} ORDER BY updated_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, input.pageSize, input.offset],
     )
     return { rows: data.rows, total: count.rows[0].total }
   },

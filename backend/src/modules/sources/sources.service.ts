@@ -14,14 +14,8 @@ import { aiCustomizationService } from '../ai-customization/ai-customization.ser
 import { IngestSourceFileUseCase } from './use-cases/IngestSourceFile.usecase.js'
 import { DeleteSourceUseCase } from './use-cases/DeleteSource.usecase.js'
 
-function sourceTypeFromUpload(mimeType: string, filename: string) {
-  const extension = filename.toLowerCase().split('.').pop()
-  if (mimeType === 'application/pdf' || extension === 'pdf') return 'PDF'
-  if (extension === 'docx') return 'DOCX'
-  if (extension === 'txt') return 'TXT'
-  if (extension === 'md' || extension === 'markdown') return 'Markdown'
-  throw new AppError(415, 'UNSUPPORTED_MEDIA_TYPE', 'Unsupported file type. Upload PDF, DOCX, TXT, or Markdown files only.')
-}
+const ingestSourceFile = new IngestSourceFileUseCase()
+const deleteSource = new DeleteSourceUseCase()
 
 function escapeHtml(value: string) {
   return value
@@ -73,19 +67,15 @@ function previewHtml(title: string, body: string) {
 export const sourcesService = {
   async list(userId: string, query: Record<string, unknown>) {
     const { page, pageSize, offset } = parsePagination(query)
-    const filters = ['user_id = $1']
-    const params: unknown[] = [userId]
-    for (const key of ['type', 'status', 'category'] as const) {
-      if (query[key]) {
-        params.push(String(query[key]))
-        filters.push(`${key} = $${params.length}`)
-      }
-    }
-    if (query.q) {
-      params.push(`%${String(query.q)}%`)
-      filters.push(`(title ILIKE $${params.length} OR excerpt ILIKE $${params.length})`)
-    }
-    const result = await sourcesRepository.list(filters.join(' AND '), params, pageSize, offset)
+    const result = await sourcesRepository.list({
+      userId,
+      type: query.type ? String(query.type) : undefined,
+      status: query.status ? String(query.status) : undefined,
+      category: query.category ? String(query.category) : undefined,
+      query: query.q ? String(query.q) : undefined,
+      pageSize,
+      offset,
+    })
     return { items: result.rows.map(sourceRow), page, pageSize, total: result.total }
   },
 
@@ -160,7 +150,7 @@ export const sourcesService = {
   },
 
   async upload(userId: string, file: Express.Multer.File) {
-    return new IngestSourceFileUseCase().execute(userId, file)
+    return ingestSourceFile.execute(userId, file)
   },
 
   async file(userId: string, id: string) {
@@ -193,6 +183,6 @@ export const sourcesService = {
   },
 
   async delete(userId: string, id: string) {
-    await new DeleteSourceUseCase().execute(userId, id)
+    await deleteSource.execute(userId, id)
   },
 }

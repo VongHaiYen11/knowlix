@@ -1,9 +1,30 @@
 import { pool } from '../../database/pool.js'
 
 export const sourcesRepository = {
-  async list(where: string, params: unknown[], pageSize: number, offset: number) {
+  async list(input: {
+    userId: string
+    type?: string
+    status?: string
+    category?: string
+    query?: string
+    pageSize: number
+    offset: number
+  }) {
+    const filters = ['user_id = $1']
+    const params: unknown[] = [input.userId]
+    for (const key of ['type', 'status', 'category'] as const) {
+      if (input[key]) {
+        params.push(input[key])
+        filters.push(`${key} = $${params.length}`)
+      }
+    }
+    if (input.query) {
+      params.push(`%${input.query}%`)
+      filters.push(`(title ILIKE $${params.length} OR excerpt ILIKE $${params.length})`)
+    }
+    const where = filters.join(' AND ')
     const count = await pool.query(`SELECT count(*)::int AS total FROM sources WHERE ${where}`, params)
-    const data = await pool.query(`SELECT * FROM sources WHERE ${where} ORDER BY updated_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`, [...params, pageSize, offset])
+    const data = await pool.query(`SELECT * FROM sources WHERE ${where} ORDER BY updated_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`, [...params, input.pageSize, input.offset])
     return { rows: data.rows, total: count.rows[0].total }
   },
   async find(userId: string, id: string) {

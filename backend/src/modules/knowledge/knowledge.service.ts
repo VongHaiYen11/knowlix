@@ -94,21 +94,14 @@ export const knowledgeService = {
   async list(userId: string, query: Record<string, unknown>) {
     const { page, pageSize, offset } = parsePagination(query)
     const tags = queryList(query.tags)
-    const filters: string[] = ['user_id = $1']
-    const params: unknown[] = [userId]
-    if (query.q) {
-      params.push(`%${String(query.q)}%`)
-      filters.push(`(title ILIKE $${params.length} OR overview ILIKE $${params.length})`)
-    }
-    if (query.category) {
-      params.push(String(query.category))
-      filters.push(`category = $${params.length}`)
-    }
-    if (tags.length) {
-      params.push(tags)
-      filters.push(`tags && $${params.length}::text[]`)
-    }
-    const result = await knowledgeRepository.list({ userId, where: filters.join(' AND '), params, pageSize, offset })
+    const result = await knowledgeRepository.list({
+      userId,
+      query: query.q ? String(query.q) : undefined,
+      category: query.category ? String(query.category) : undefined,
+      tags,
+      pageSize,
+      offset,
+    })
     return { items: result.rows.map(knowledgeRow), page, pageSize, total: result.total }
   },
 

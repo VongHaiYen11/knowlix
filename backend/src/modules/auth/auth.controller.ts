@@ -1,10 +1,7 @@
 import type { Request, Response } from 'express'
-import bcrypt from 'bcryptjs'
 import { env } from '../../config/env.js'
 import { sessionCookieOptions } from '../../config/cookies.js'
 import { authService } from './auth.service.js'
-import { authRepository } from './auth.repository.js'
-import { AppError, UnauthorizedError } from '../../errors/index.js'
 import type { AuthedRequest } from '../../types/request.js'
 
 export const authController = {
@@ -14,10 +11,7 @@ export const authController = {
   },
 
   async verifyEmail(req: Request, res: Response) {
-    const token = req.query.token
-    if (typeof token !== 'string') {
-      return res.redirect(`${env.frontendOrigin}/login?error=invalid_token`)
-    }
+    const token = String(req.query.token)
 
     try {
       await authService.verifyEmail(token)
@@ -41,42 +35,19 @@ export const authController = {
 
   async forgotPassword(req: Request, res: Response) {
     const { email } = req.body
-    if (!email || typeof email !== 'string') {
-      throw new AppError(400, 'VALIDATION_ERROR', 'Email is required')
-    }
     await authService.forgotPassword(email)
     res.json({ ok: true, message: 'If the email exists, a password reset link has been sent' })
   },
 
   async resetPassword(req: Request, res: Response) {
     const { token, password } = req.body
-    if (!token || typeof token !== 'string') {
-      throw new AppError(400, 'VALIDATION_ERROR', 'Token is required')
-    }
-    if (!password || typeof password !== 'string' || password.length < 8) {
-      throw new AppError(400, 'VALIDATION_ERROR', 'Password must be at least 8 characters long')
-    }
-
-    try {
-      await authService.resetPassword(token, password)
-      res.json({ ok: true, message: 'Password reset successful' })
-    } catch (err: any) {
-      const errorMsg = err?.message === 'expired_token'
-        ? 'The verification link has expired. Please sign up again.'
-        : 'The verification link is invalid or has already been used.'
-      throw new AppError(400, 'VALIDATION_ERROR', errorMsg)
-    }
+    await authService.resetPassword(token, password)
+    res.json({ ok: true, message: 'Password reset successful' })
   },
 
   async verifyPassword(req: AuthedRequest, res: Response) {
     const { password } = req.body
-    if (!password || typeof password !== 'string') {
-      throw new AppError(400, 'VALIDATION_ERROR', 'Password is required')
-    }
-    const user = await authRepository.findRecordById(req.user.id)
-    if (!user) throw new UnauthorizedError()
-    const passwordOk = await bcrypt.compare(password, user.passwordHash)
-    if (!passwordOk) throw new AppError(400, 'VALIDATION_ERROR', 'Incorrect password')
+    await authService.verifyPassword(req.user.id, password)
     res.json({ ok: true })
   },
 }

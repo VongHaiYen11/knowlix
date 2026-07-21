@@ -1,6 +1,6 @@
 import { excerpt, slugify, uniqueCleanStrings, wordCount } from '../../../utils/text.js'
 import { sourcesRepository } from '../sources.repository.js'
-import { pool } from '../../../database/pool.js'
+import { sourceIngestionRepository, type SourceIngestionRepository } from '../source-ingestion.repository.js'
 import {
   generateIngestSummary,
   extractKnowledgePages,
@@ -12,6 +12,26 @@ import { storageService } from '../../../lib/storage.js'
 import { embedText } from '../../../lib/embeddings.js'
 import { nowIsoTimestamp } from '../../../utils/date.js'
 import { defaultAiCustomization, type AiCustomizationProfile } from '../../ai-customization/ai-customization.defaults.js'
+
+export type GenerateSourceSummaryDependencies = {
+  ingestionRepository: SourceIngestionRepository
+  sourceRepository: Pick<typeof sourcesRepository, 'updateUploadedFileStatus' | 'failUploadedFile'>
+  storage: Pick<typeof storageService, 'download' | 'readText' | 'upload'>
+  embed: typeof embedText
+  extractSourceText: typeof extractText
+  generateSummary: typeof generateIngestSummary
+  extractPages: typeof extractKnowledgePages
+}
+
+const defaultDependencies: GenerateSourceSummaryDependencies = {
+  ingestionRepository: sourceIngestionRepository,
+  sourceRepository: sourcesRepository,
+  storage: storageService,
+  embed: embedText,
+  extractSourceText: extractText,
+  generateSummary: generateIngestSummary,
+  extractPages: extractKnowledgePages,
+}
 
 const INITIAL_CANDIDATE_LIMIT = 15
 const MIN_VECTOR_SCORE = 0.70
@@ -51,20 +71,6 @@ function timelineEvent(action: string, sourceTitle: string, reason?: string) {
           : 'Updated'
   const detail = reason?.trim()
   return detail ? `${prefix} from ${sourceTitle}: ${detail}` : `${prefix} from ${sourceTitle}`
-}
-
-function jsonArray(value: unknown): any[] {
-  return Array.isArray(value) ? value : []
-}
-
-function uniqueJson(values: any[], key: (value: any) => string): any[] {
-  const seen = new Set<string>()
-  return values.filter((value) => {
-    const id = key(value)
-    if (!id || seen.has(id)) return false
-    seen.add(id)
-    return true
-  })
 }
 
 type IngestCandidate = NonNullable<IngestRawFileOptions['candidates']>[number] & {
@@ -127,49 +133,20 @@ function combineCandidate(existing: IngestCandidate | undefined, next: IngestCan
   }
 }
 
-async function retrieveCandidateMetadata(userId: string, query: string): Promise<IngestCandidate[]> {
+async function retrieveCandidateMetadata(
+  userId: string,
+  query: string,
+  dependencies: Pick<GenerateSourceSummaryDependencies, 'embed' | 'ingestionRepository'>,
+): Promise<IngestCandidate[]> {
   const trimmedQuery = query.trim()
   if (!trimmedQuery) return []
-  const queryEmbedding = await embedText(trimmedQuery).catch(() => [])
-  const rows = queryEmbedding.length
-    ? (await pool.query(
-      `SELECT slug,title,overview,category,knowledge_tags AS tags,markdown_storage_object_id,
-        ts_rank_cd(COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))), plainto_tsquery('simple', $2)) AS fts_score,
-        1 - (embedding <=> $3::vector) AS vector_score
-       FROM knowledge_entries
-       WHERE user_id=$1
-         AND (
-          $2 = ''
-          OR COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))) @@ plainto_tsquery('simple', $2)
-          OR title ILIKE '%' || $2 || '%'
-          OR overview ILIKE '%' || $2 || '%'
-          OR embedding <=> $3::vector < 0.35
-         )
-       ORDER BY
-         (0.7 * GREATEST(0, 1 - (embedding <=> $3::vector)))
-         + (0.3 * LEAST(1, ts_rank_cd(COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))), plainto_tsquery('simple', $2)) / 0.1))
-         DESC,
-         updated_at DESC
-       LIMIT $4`,
-      [userId, trimmedQuery, `[${queryEmbedding.join(',')}]`, INITIAL_CANDIDATE_LIMIT],
-    )).rows
-    : (await pool.query(
-      `SELECT slug,title,overview,category,knowledge_tags AS tags,markdown_storage_object_id,
-        ts_rank_cd(COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))), plainto_tsquery('simple', $2)) AS fts_score,
-        0 AS vector_score
-       FROM knowledge_entries
-       WHERE user_id=$1
-         AND (
-          COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))) @@ plainto_tsquery('simple', $2)
-          OR title ILIKE '%' || $2 || '%'
-          OR overview ILIKE '%' || $2 || '%'
-         )
-       ORDER BY
-         ts_rank_cd(COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))), plainto_tsquery('simple', $2)) DESC,
-         updated_at DESC
-       LIMIT $3`,
-      [userId, trimmedQuery, INITIAL_CANDIDATE_LIMIT],
-    )).rows
+  const queryEmbedding = await dependencies.embed(trimmedQuery).catch(() => [])
+  const rows = await dependencies.ingestionRepository.findKnowledgeCandidates(
+    userId,
+    trimmedQuery,
+    queryEmbedding,
+    INITIAL_CANDIDATE_LIMIT,
+  )
 
   return rows.map((row) => {
     const ftsScore = Number(row.fts_score ?? 0)
@@ -192,7 +169,11 @@ async function retrieveCandidateMetadata(userId: string, query: string): Promise
   })
 }
 
-async function retrieveProposalCandidates(userId: string, proposal: KnowledgeProposal): Promise<{ candidates: IngestCandidate[]; refinementUsed: boolean }> {
+async function retrieveProposalCandidates(
+  userId: string,
+  proposal: KnowledgeProposal,
+  dependencies: Pick<GenerateSourceSummaryDependencies, 'embed' | 'ingestionRepository'>,
+): Promise<{ candidates: IngestCandidate[]; refinementUsed: boolean }> {
   let refinementUsed = false
   let aggregated = new Map<string, IngestCandidate>()
 
@@ -200,7 +181,7 @@ async function retrieveProposalCandidates(userId: string, proposal: KnowledgePro
     aggregated = new Map<string, IngestCandidate>()
     const queries = queryListForProposal(proposal, refinementCount)
     for (const query of queries) {
-      const rows = await retrieveCandidateMetadata(userId, query)
+      const rows = await retrieveCandidateMetadata(userId, query, dependencies)
       for (const candidate of rows) {
         aggregated.set(candidate.slug, combineCandidate(aggregated.get(candidate.slug), candidate))
       }
@@ -245,7 +226,12 @@ function reduceCandidateMarkdown(candidate: IngestCandidate, content: string, to
   ].filter(Boolean).join('\n')
 }
 
-async function loadCandidateMarkdown(userId: string, candidates: IngestCandidate[], candidateBudget: number): Promise<IngestCandidate[]> {
+async function loadCandidateMarkdown(
+  userId: string,
+  candidates: IngestCandidate[],
+  candidateBudget: number,
+  storage: Pick<typeof storageService, 'readText'>,
+): Promise<IngestCandidate[]> {
   const selected: IngestCandidate[] = []
   let usedTokens = 0
   for (const candidate of candidates) {
@@ -253,7 +239,7 @@ async function loadCandidateMarkdown(userId: string, candidates: IngestCandidate
       selected.push(candidate)
       continue
     }
-    const fullContent = await storageService.readText({ userId, storageObjectId: candidate.markdownStorageObjectId })
+    const fullContent = await storage.readText({ userId, storageObjectId: candidate.markdownStorageObjectId })
       .then((result) => result.text)
       .catch(() => '')
     if (!fullContent) {
@@ -275,7 +261,7 @@ async function prepareIngestContext(input: {
   userId: string
   summary: { ingestBrief?: { knowledgeProposals?: KnowledgeProposal[] }; title?: string; excerpt?: string; tags?: string[] }
   canonicalMarkdown: string
-}) {
+}, dependencies: Pick<GenerateSourceSummaryDependencies, 'embed' | 'ingestionRepository' | 'storage'>) {
   const fallbackProposal: KnowledgeProposal = {
     title: input.summary.title || 'Source Knowledge',
     conceptType: 'source',
@@ -292,7 +278,7 @@ async function prepareIngestContext(input: {
 
   for (const proposal of proposals) {
     queryCount += queryListForProposal(proposal, 0).length
-    const result = await retrieveProposalCandidates(input.userId, proposal)
+    const result = await retrieveProposalCandidates(input.userId, proposal, dependencies)
     refinementUsed = refinementUsed || result.refinementUsed
     for (const candidate of result.candidates) {
       candidateMap.set(candidate.slug, combineCandidate(candidateMap.get(candidate.slug), candidate))
@@ -308,7 +294,7 @@ async function prepareIngestContext(input: {
   const sourceTokens = tokenEstimate(sourceMarkdown)
   const dynamicCandidateBudget = Math.max(0, MODEL_CONTEXT_LIMIT - RESERVED_OUTPUT_TOKENS - PROMPT_OVERHEAD_TOKENS - sourceTokens)
   const candidateBudget = Math.min(MAX_CANDIDATE_MARKDOWN_TOKENS, dynamicCandidateBudget)
-  const candidates = await loadCandidateMarkdown(input.userId, strong, candidateBudget)
+  const candidates = await loadCandidateMarkdown(input.userId, strong, candidateBudget, dependencies.storage)
   const candidateTokens = candidates.reduce((sum, candidate) => sum + tokenEstimate(candidate.content || candidate.snippet || ''), 0)
 
   console.log(`[Ingest] Context prepared: proposals=${proposals.length}, queries=${queryCount}, candidates=${narrowed.length}, strong=${strong.length}, loaded=${candidates.length}, refinement=${refinementUsed ? 'yes' : 'no'}, sourceTokens=${sourceTokens}, candidateTokens=${candidateTokens}, slugs=${candidates.map((candidate) => candidate.slug).join(',')}`)
@@ -320,104 +306,9 @@ async function prepareIngestContext(input: {
   }
 }
 
-async function collapseMergedKnowledge(input: {
-  userId: string
-  targetSlug: string
-  targetTitle: string
-  mergedSlugs: string[]
-}) {
-  const obsoleteSlugs = input.mergedSlugs.filter((slug) => slug !== input.targetSlug)
-  if (!obsoleteSlugs.length) return
-
-  const client = await pool.connect()
-  try {
-    await client.query('BEGIN')
-    const { rows } = await client.query(
-      `SELECT slug,tags,knowledge_tags,source_list,reference_list,timeline
-       FROM knowledge_entries
-       WHERE user_id=$1 AND slug = ANY($2::text[])
-       FOR UPDATE`,
-      [input.userId, input.mergedSlugs],
-    )
-    const foundSlugs = new Set(rows.map((row) => row.slug))
-    if (!foundSlugs.has(input.targetSlug) || obsoleteSlugs.some((slug) => !foundSlugs.has(slug))) {
-      throw new Error('One or more Knowledge pages selected by the ingest merge no longer exist')
-    }
-
-    const tags = uniqueCleanStrings(rows.flatMap((row) => row.tags ?? []))
-    const knowledgeTags = uniqueCleanStrings(rows.flatMap((row) => row.knowledge_tags ?? []))
-    const sources = uniqueJson(rows.flatMap((row) => jsonArray(row.source_list)), (value) => String(value?.id ?? value?.source ?? value?.title ?? ''))
-    const references = uniqueJson(rows.flatMap((row) => jsonArray(row.reference_list)), (value) => `${String(value?.label ?? '')}::${String(value?.source ?? value?.id ?? '')}`)
-    const timeline = uniqueJson(rows.flatMap((row) => jsonArray(row.timeline)), (value) => `${String(value?.occurredAt ?? value?.date ?? '')}::${String(value?.event ?? '')}`)
-
-    await client.query(
-      `UPDATE knowledge_entries
-       SET tags=$1,knowledge_tags=$2,source_list=$3,reference_list=$4,timeline=$5,updated_at=now()
-       WHERE user_id=$6 AND slug=$7`,
-      [
-        tags,
-        knowledgeTags,
-        JSON.stringify(sources),
-        JSON.stringify(references),
-        JSON.stringify(timeline),
-        input.userId,
-        input.targetSlug,
-      ],
-    )
-
-    await client.query(
-      `INSERT INTO knowledge_source_links (user_id,slug,source_id,relation)
-       SELECT user_id,$3,source_id,'merged_from'
-       FROM knowledge_source_links
-       WHERE user_id=$1 AND slug = ANY($2::text[])
-       ON CONFLICT (user_id,slug,source_id) DO UPDATE SET relation='merged_from'`,
-      [input.userId, input.mergedSlugs, input.targetSlug],
-    )
-    await client.query(
-      'UPDATE knowledge_revisions SET slug=$1 WHERE user_id=$2 AND slug = ANY($3::text[])',
-      [input.targetSlug, input.userId, obsoleteSlugs],
-    )
-
-    const relatedRows = await client.query(
-      'SELECT slug,related FROM knowledge_entries WHERE user_id=$1 AND jsonb_array_length(related) > 0 FOR UPDATE',
-      [input.userId],
-    )
-    for (const row of relatedRows.rows) {
-      const nextRelated = uniqueJson(
-        jsonArray(row.related)
-          .map((related) => obsoleteSlugs.includes(String(related?.slug ?? ''))
-            ? { slug: input.targetSlug, title: input.targetTitle }
-            : related)
-          .filter((related) => String(related?.slug ?? '') !== row.slug)
-          .filter((related) => !obsoleteSlugs.includes(String(related?.slug ?? ''))),
-        (related) => String(related?.slug ?? ''),
-      )
-      if (JSON.stringify(nextRelated) !== JSON.stringify(jsonArray(row.related))) {
-        await client.query(
-          'UPDATE knowledge_entries SET related=$1,updated_at=now() WHERE user_id=$2 AND slug=$3',
-          [JSON.stringify(nextRelated), input.userId, row.slug],
-        )
-      }
-    }
-
-    await client.query(
-      'DELETE FROM knowledge_source_links WHERE user_id=$1 AND slug = ANY($2::text[])',
-      [input.userId, obsoleteSlugs],
-    )
-    await client.query(
-      'DELETE FROM knowledge_entries WHERE user_id=$1 AND slug = ANY($2::text[])',
-      [input.userId, obsoleteSlugs],
-    )
-    await client.query('COMMIT')
-  } catch (error) {
-    await client.query('ROLLBACK')
-    throw error
-  } finally {
-    client.release()
-  }
-}
-
 export class GenerateSourceSummaryUseCase {
+  constructor(private readonly dependencies: GenerateSourceSummaryDependencies = defaultDependencies) {}
+
   async execute(input: {
     userId: string
     fileId: string
@@ -431,20 +322,21 @@ export class GenerateSourceSummaryUseCase {
   }) {
     const { userId, fileId, sourceId, rawStorageObjectId, rawStorageUrl, originalName, created, uploadedType } = input
     const customization = input.customization ?? defaultAiCustomization()
+    const dependencies = this.dependencies
     try {
       console.log(`[Ingest] Starting ingest for "${originalName}" (${sourceId})`)
-      const raw = await storageService.download({ userId, storageObjectId: rawStorageObjectId })
+      const raw = await dependencies.storage.download({ userId, storageObjectId: rawStorageObjectId })
       
       // 1. Extract text first
       let preExtractedText
       try {
-        preExtractedText = await extractText(raw.buffer, originalName)
+        preExtractedText = await dependencies.extractSourceText(raw.buffer, originalName)
       } catch (e) {
         console.warn(`[Ingest] Could not pre-extract text:`, e)
       }
       
       // 2. Generate summary from extracted text
-      const summary = await generateIngestSummary(raw.buffer, {
+      const summary = await dependencies.generateSummary(raw.buffer, {
         originalName,
         uploadedType,
         preExtractedText,
@@ -452,17 +344,17 @@ export class GenerateSourceSummaryUseCase {
       })
 
       if (!preExtractedText) {
-        preExtractedText = await extractText(raw.buffer, originalName)
+        preExtractedText = await dependencies.extractSourceText(raw.buffer, originalName)
       }
       const canonicalMarkdown = preExtractedText?.canonicalMarkdown || preExtractedText?.text || ''
       const preparedContext = await prepareIngestContext({
         userId,
         summary,
         canonicalMarkdown,
-      })
+      }, dependencies)
       
       // 3. Extract final Knowledge actions with the narrowed full context.
-      const ingest = await extractKnowledgePages(raw.buffer, summary, {
+      const ingest = await dependencies.extractPages(raw.buffer, summary, {
         originalName,
         uploadedType,
         rawStorageUrl,
@@ -473,7 +365,7 @@ export class GenerateSourceSummaryUseCase {
       })
 
       const extractedObject = ingest.extractedText
-        ? await storageService.upload({
+        ? await dependencies.storage.upload({
           userId,
           kind: 'extracted_text',
           originalName: `${originalName}.txt`,
@@ -487,7 +379,7 @@ export class GenerateSourceSummaryUseCase {
       const sourceTags = uniqueCleanStrings(summary.tags ?? [])
       const summaryMarkdown = summary.body ?? ''
       const summaryObject = summaryMarkdown
-        ? await storageService.upload({
+        ? await dependencies.storage.upload({
           userId,
           kind: 'source_summary',
           originalName: `${sourceTitle}.md`,
@@ -498,25 +390,18 @@ export class GenerateSourceSummaryUseCase {
       const sourceExcerpt = summary.excerpt || excerpt(summaryMarkdown || originalName)
       const sourceStatus = 'Processed'
 
-      await pool.query(
-        `UPDATE sources
-         SET type=$1,title=$2,content=NULL,tags=$3,category=$4,status=$5,excerpt=$6,
-          raw_storage_object_id=$7,extracted_storage_object_id=$8,summary_storage_object_id=$9,knowledge_tags=$10,updated_at=now()
-         WHERE id=$11`,
-        [
-          uploadedType,
-          sourceTitle,
-          sourceTags,
-          sourceCategory,
-          sourceStatus,
-          sourceExcerpt,
-          rawStorageObjectId,
-          extractedObject?.id ?? null,
-          summaryObject?.id ?? null,
-          sourceTags,
-          sourceId,
-        ],
-      )
+      await dependencies.ingestionRepository.markSourceProcessed({
+        sourceId,
+        type: uploadedType,
+        title: sourceTitle,
+        tags: sourceTags,
+        category: sourceCategory,
+        status: sourceStatus,
+        excerpt: sourceExcerpt,
+        rawStorageObjectId,
+        extractedStorageObjectId: extractedObject?.id ?? null,
+        summaryStorageObjectId: summaryObject?.id ?? null,
+      })
 
       const sourceReference = { id: sourceId, type: uploadedType, title: sourceTitle }
       const writtenObjects = [extractedObject?.url, summaryObject?.url].filter(Boolean)
@@ -543,45 +428,26 @@ export class GenerateSourceSummaryUseCase {
         if (action === 'create' && slug) {
           const baseSlug = slug
           let suffix = 2
-          while ((await pool.query('SELECT 1 FROM knowledge_entries WHERE user_id=$1 AND slug=$2', [userId, slug])).rowCount) {
+          while (await dependencies.ingestionRepository.knowledgeSlugExists(userId, slug)) {
             slug = `${baseSlug}-${suffix}`
             suffix += 1
           }
         }
         if (!slug) continue
         if (action === 'link_only') {
-          await pool.query(
-            `UPDATE knowledge_entries
-             SET source_list=(
-               SELECT COALESCE(jsonb_agg(source_item), '[]'::jsonb)
-               FROM (
-                 SELECT DISTINCT ON (source_item->>'id') source_item
-                 FROM jsonb_array_elements(source_list || $1::jsonb) AS source_items(source_item)
-                 ORDER BY source_item->>'id'
-               ) deduped_sources
-             ),
-             timeline=timeline || $2::jsonb,
-             updated=$3,
-             updated_at=now()
-             WHERE user_id=$4 AND slug=$5`,
-            [
-              JSON.stringify([sourceReference]),
-              JSON.stringify([{ date: created, occurredAt: nowIsoTimestamp(), event: timelineEvent(action, sourceTitle, page.reason) }]),
-              created,
-              userId,
-              slug,
-            ],
-          )
-          await pool.query(
-            `INSERT INTO knowledge_source_links (user_id,slug,source_id,relation)
-             VALUES ($1,$2,$3,$4)
-             ON CONFLICT (user_id, slug, source_id) DO UPDATE SET relation=EXCLUDED.relation`,
-            [userId, slug, sourceId, 'supports'],
-          )
+          await dependencies.ingestionRepository.linkSource({
+            userId,
+            slug,
+            sourceId,
+            sourceReference,
+            timelineItem: { date: created, occurredAt: nowIsoTimestamp(), event: timelineEvent(action, sourceTitle, page.reason) },
+            updated: created,
+            relation: 'supports',
+          })
           continue
         }
 
-        const markdownObject = await storageService.upload({
+        const markdownObject = await dependencies.storage.upload({
           userId,
           kind: action === 'create' ? 'knowledge_markdown' : 'knowledge_revision',
           originalName: `${slug}.md`,
@@ -590,78 +456,42 @@ export class GenerateSourceSummaryUseCase {
         })
         writtenObjects.push(markdownObject.url)
         const related = uniqueCleanStrings(page.related).map((item) => ({ slug: slugify(item), title: item })).filter((item) => item.slug)
-        const embedding = await embedText(`${page.title}\n${excerpt(page.body, 6000)}\n${sourceTags.join(' ')}`)
-        await pool.query(
-          `INSERT INTO knowledge_entries
-            (slug,user_id,title,content,overview,category,tags,created,updated,read_time,key_ideas,explanation,examples,related,reference_list,source_list,timeline,markdown_storage_object_id,knowledge_tags,search_vector,embedding)
-           VALUES ($1,$2,$3,NULL,$4,$5,$6,$7,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,to_tsvector('simple', $18),$19)
-           ON CONFLICT (user_id, slug) DO UPDATE SET
-            title=EXCLUDED.title,
-            content=NULL,
-            overview=EXCLUDED.overview,
-            category=EXCLUDED.category,
-            tags=(SELECT ARRAY(SELECT DISTINCT unnest(knowledge_entries.tags || EXCLUDED.tags))),
-            updated=EXCLUDED.updated,
-            read_time=EXCLUDED.read_time,
-            explanation=EXCLUDED.explanation,
-            related=EXCLUDED.related,
-            reference_list=(
-              SELECT COALESCE(jsonb_agg(reference_item), '[]'::jsonb)
-              FROM (
-                SELECT DISTINCT ON (reference_item->>'source', reference_item->>'label') reference_item
-                FROM jsonb_array_elements(knowledge_entries.reference_list || EXCLUDED.reference_list) AS reference_items(reference_item)
-                ORDER BY reference_item->>'source', reference_item->>'label'
-              ) deduped_references
-            ),
-            source_list=(
-              SELECT COALESCE(jsonb_agg(source_item), '[]'::jsonb)
-              FROM (
-                SELECT DISTINCT ON (source_item->>'id') source_item
-                FROM jsonb_array_elements(knowledge_entries.source_list || EXCLUDED.source_list) AS source_items(source_item)
-                ORDER BY source_item->>'id'
-              ) deduped_sources
-            ),
-            markdown_storage_object_id=EXCLUDED.markdown_storage_object_id,
-            knowledge_tags=(SELECT ARRAY(SELECT DISTINCT unnest(knowledge_entries.knowledge_tags || EXCLUDED.knowledge_tags))),
-            search_vector=EXCLUDED.search_vector,
-            embedding=EXCLUDED.embedding,
-            timeline=knowledge_entries.timeline || EXCLUDED.timeline,
-            updated_at=now()`,
-          [
-            slug,
-            userId,
-            page.title,
-            page.overview || excerpt(page.body, 220),
-            sourceCategory,
-            sourceTags,
-            created,
-            readTimeFromContent(page.body),
-            JSON.stringify([]),
-            JSON.stringify(page.body.split(/\n\s*\n/).filter(Boolean).slice(0, 4)),
-            JSON.stringify([]),
-            JSON.stringify(related),
-            JSON.stringify([{ label: sourceTitle, source: rawStorageUrl }]),
-            JSON.stringify([sourceReference]),
-            JSON.stringify([{ date: created, occurredAt: nowIsoTimestamp(), event: timelineEvent(action, sourceTitle, page.reason) }]),
-            markdownObject.id,
-            sourceTags,
-            `${page.title}\n${page.overview}\n${page.body}\n${sourceTags.join(' ')}`,
-            JSON.stringify(embedding),
-          ],
-        )
-        await pool.query(
-          `INSERT INTO knowledge_revisions (id,user_id,slug,storage_object_id,revision_type,model,reason)
-           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-          [`revision_${crypto.randomUUID()}`, userId, slug, markdownObject.id, action, customization.ingestModel, page.reason ?? `Ingested from ${sourceTitle}`],
-        )
-        await pool.query(
-          `INSERT INTO knowledge_source_links (user_id,slug,source_id,relation)
-           VALUES ($1,$2,$3,$4)
-           ON CONFLICT (user_id, slug, source_id) DO UPDATE SET relation=EXCLUDED.relation`,
-          [userId, slug, sourceId, action === 'merge' ? 'merged_from' : action === 'replace' ? 'replaced_from' : 'supports'],
-        )
+        const embedding = await dependencies.embed(`${page.title}\n${excerpt(page.body, 6000)}\n${sourceTags.join(' ')}`)
+        await dependencies.ingestionRepository.upsertKnowledge({
+          slug,
+          userId,
+          title: page.title,
+          overview: page.overview || excerpt(page.body, 220),
+          category: sourceCategory,
+          tags: sourceTags,
+          date: created,
+          readTime: readTimeFromContent(page.body),
+          explanation: page.body.split(/\n\s*\n/).filter(Boolean).slice(0, 4),
+          related,
+          references: [{ label: sourceTitle, source: rawStorageUrl }],
+          sources: [sourceReference],
+          timeline: [{ date: created, occurredAt: nowIsoTimestamp(), event: timelineEvent(action, sourceTitle, page.reason) }],
+          markdownStorageObjectId: markdownObject.id,
+          searchText: `${page.title}\n${page.overview}\n${page.body}\n${sourceTags.join(' ')}`,
+          embedding,
+        })
+        await dependencies.ingestionRepository.createRevision({
+          id: `revision_${crypto.randomUUID()}`,
+          userId,
+          slug,
+          storageObjectId: markdownObject.id,
+          revisionType: action,
+          model: customization.ingestModel,
+          reason: page.reason ?? `Ingested from ${sourceTitle}`,
+        })
+        await dependencies.ingestionRepository.linkKnowledgeSource({
+          userId,
+          slug,
+          sourceId,
+          relation: action === 'merge' ? 'merged_from' : action === 'replace' ? 'replaced_from' : 'supports',
+        })
         if (action === 'merge') {
-          await collapseMergedKnowledge({
+          await dependencies.ingestionRepository.collapseMergedKnowledge({
             userId,
             targetSlug: slug,
             targetTitle: page.title,
@@ -670,12 +500,12 @@ export class GenerateSourceSummaryUseCase {
         }
       }
 
-      await sourcesRepository.updateUploadedFileStatus(fileId, ingest.skipped ? 'skipped' : 'completed', writtenObjects)
+      await dependencies.sourceRepository.updateUploadedFileStatus(fileId, ingest.skipped ? 'skipped' : 'completed', writtenObjects)
       console.log(`[Ingest] Ingest finished for "${originalName}" (${sourceId}). Title: "${sourceTitle}", Excerpt: "${sourceExcerpt}". Ingested ${ingest.pages.length} pages: ${ingest.pages.map(p => `[${p.action || 'create'}] ${p.title}`).join(', ')}`)
     } catch (error) {
       console.error(`[Ingest] Failed for "${originalName}":`, error)
-      await sourcesRepository.failUploadedFile(fileId).catch(console.error)
-      await pool.query("UPDATE sources SET status='Queued', excerpt=$1 WHERE id=$2", [`Ingestion failed: ${error instanceof Error ? error.message : 'Gemini ingest failed'}`, sourceId]).catch(console.error)
+      await dependencies.sourceRepository.failUploadedFile(fileId).catch(console.error)
+      await dependencies.ingestionRepository.markSourceFailed(sourceId, `Ingestion failed: ${error instanceof Error ? error.message : 'Gemini ingest failed'}`).catch(console.error)
     }
   }
 }

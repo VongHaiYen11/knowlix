@@ -38,10 +38,8 @@ export function getGeminiClient(): GoogleGenAI {
     throw new AppError(500, 'INTERNAL_ERROR', 'Missing GEMINI_API_KEY configuration')
   }
   const client = new GoogleGenAI({ apiKey: env.geminiApiKey })
-
-  // Proxy generateContent to add retry logic
   const originalGenerate = client.models.generateContent.bind(client.models)
-  client.models.generateContent = async function (this: any, ...args: Parameters<typeof originalGenerate>) {
+  const generateContent = async (...args: Parameters<typeof originalGenerate>) => {
     const maxRetries = 3
     let lastError: any
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -63,9 +61,8 @@ export function getGeminiClient(): GoogleGenAI {
     throw lastError
   }
 
-  // Proxy generateContentStream to add retry logic
   const originalGenerateStream = client.models.generateContentStream.bind(client.models)
-  client.models.generateContentStream = async function (this: any, ...args: Parameters<typeof originalGenerateStream>) {
+  const generateContentStream = async (...args: Parameters<typeof originalGenerateStream>) => {
     const maxRetries = 3
     let lastError: any
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -85,9 +82,8 @@ export function getGeminiClient(): GoogleGenAI {
     throw lastError
   }
 
-  // Proxy embedContent to add retry logic
   const originalEmbed = client.models.embedContent.bind(client.models)
-  client.models.embedContent = async function (this: any, ...args: Parameters<typeof originalEmbed>) {
+  const embedContent = async (...args: Parameters<typeof originalEmbed>) => {
     const maxRetries = 3
     let lastError: any
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -108,5 +104,21 @@ export function getGeminiClient(): GoogleGenAI {
     throw lastError
   }
 
-  return client
+  const models = new Proxy(client.models, {
+    get(target, property) {
+      if (property === 'generateContent') return generateContent
+      if (property === 'generateContentStream') return generateContentStream
+      if (property === 'embedContent') return embedContent
+      const value = Reflect.get(target, property, target)
+      return typeof value === 'function' ? value.bind(target) : value
+    },
+  })
+
+  return new Proxy(client, {
+    get(target, property) {
+      if (property === 'models') return models
+      const value = Reflect.get(target, property, target)
+      return typeof value === 'function' ? value.bind(target) : value
+    },
+  })
 }

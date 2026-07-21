@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs'
-import { ConflictError, UnauthorizedError } from '../../errors/index.js'
+import { AppError, ConflictError, UnauthorizedError } from '../../errors/index.js'
 import { initialsFromName } from '../../utils/text.js'
 import { signSessionToken } from '../../lib/jwt.js'
 import { authRepository } from './auth.repository.js'
@@ -88,17 +88,24 @@ export const authService = {
   async resetPassword(token: string, password: string): Promise<void> {
     const record = await authRepository.findResetRecordByToken(token)
     if (!record) {
-      throw new Error('invalid_token')
+      throw new AppError(400, 'VALIDATION_ERROR', 'The verification link is invalid or has already been used.')
     }
 
     if (new Date() > new Date(record.expires_at)) {
       await authRepository.deleteResetToken(token)
-      throw new Error('expired_token')
+      throw new AppError(400, 'VALIDATION_ERROR', 'The verification link has expired. Please sign up again.')
     }
 
     const passwordHash = await bcrypt.hash(password, 12)
     await authRepository.updatePasswordByEmail(record.email, passwordHash)
     await authRepository.deleteResetToken(token)
+  },
+
+  async verifyPassword(userId: string, password: string): Promise<void> {
+    const user = await authRepository.findRecordById(userId)
+    if (!user) throw new UnauthorizedError()
+    const passwordOk = await bcrypt.compare(password, user.passwordHash)
+    if (!passwordOk) throw new AppError(400, 'VALIDATION_ERROR', 'Incorrect password')
   },
 
   findUserById: authRepository.findById,

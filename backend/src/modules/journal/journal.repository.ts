@@ -8,7 +8,18 @@ export interface JournalEntryInput {
 }
 
 export const journalRepository = {
-  async list(where: string, params: unknown[], pageSize: number, offset: number) {
+  async list(input: { userId: string; from?: string; to?: string; pageSize: number; offset: number }) {
+    const params: unknown[] = [input.userId]
+    const filters = ['user_id=$1']
+    if (input.from) {
+      params.push(input.from)
+      filters.push(`entry_date >= $${params.length}`)
+    }
+    if (input.to) {
+      params.push(input.to)
+      filters.push(`entry_date <= $${params.length}`)
+    }
+    const where = filters.join(' AND ')
     const count = await pool.query(`SELECT count(DISTINCT entry_date)::int AS total FROM journal_entries WHERE ${where}`, params)
     const data = await pool.query(
       `WITH selected_days AS (
@@ -24,7 +35,7 @@ export const journalRepository = {
        JOIN selected_days ON selected_days.entry_date = journal_entries.entry_date
        WHERE journal_entries.user_id=$1
        ORDER BY journal_entries.entry_date DESC, journal_entries.created_at ASC`,
-      [...params, pageSize, offset],
+      [...params, input.pageSize, input.offset],
     )
     return { rows: data.rows, total: count.rows[0].total }
   },

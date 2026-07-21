@@ -17,17 +17,13 @@ function groupJournalRows(rows: any[]) {
 export const journalService = {
   async list(userId: string, query: Record<string, unknown>) {
     const { page, pageSize, offset } = parsePagination(query)
-    const params: unknown[] = [userId]
-    const filters = ['user_id=$1']
-    if (query.from) {
-      params.push(String(query.from))
-      filters.push(`entry_date >= $${params.length}`)
-    }
-    if (query.to) {
-      params.push(String(query.to))
-      filters.push(`entry_date <= $${params.length}`)
-    }
-    const result = await journalRepository.list(filters.join(' AND '), params, pageSize, offset)
+    const result = await journalRepository.list({
+      userId,
+      from: query.from ? String(query.from) : undefined,
+      to: query.to ? String(query.to) : undefined,
+      pageSize,
+      offset,
+    })
     return { items: groupJournalRows(result.rows), page, pageSize, total: result.total }
   },
 

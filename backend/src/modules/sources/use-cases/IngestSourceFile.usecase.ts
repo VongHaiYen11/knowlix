@@ -7,6 +7,21 @@ import { storageService } from '../../../lib/storage.js'
 import { sourcesRepository } from '../sources.repository.js'
 import { aiCustomizationService } from '../../ai-customization/ai-customization.service.js'
 import { GenerateSourceSummaryUseCase } from './GenerateSourceSummary.usecase.js'
+import { pendingSourceRow } from '../sources.mapper.js'
+
+type IngestSourceFileDependencies = {
+  storage: Pick<typeof storageService, 'upload'>
+  sourceRepository: Pick<typeof sourcesRepository, 'createUploadedFile' | 'create'>
+  customization: Pick<typeof aiCustomizationService, 'effectiveProfile'>
+  summaryGenerator: Pick<GenerateSourceSummaryUseCase, 'execute'>
+}
+
+const defaultDependencies = (): IngestSourceFileDependencies => ({
+  storage: storageService,
+  sourceRepository: sourcesRepository,
+  customization: aiCustomizationService,
+  summaryGenerator: new GenerateSourceSummaryUseCase(),
+})
 
 function sourceTypeFromUpload(mimeType: string, filename: string) {
   const extension = filename.toLowerCase().split('.').pop()
@@ -18,18 +33,18 @@ function sourceTypeFromUpload(mimeType: string, filename: string) {
 }
 
 export class IngestSourceFileUseCase {
-  private readonly generateSourceSummary = new GenerateSourceSummaryUseCase()
+  constructor(private readonly dependencies: IngestSourceFileDependencies = defaultDependencies()) {}
 
   async execute(userId: string, file: Express.Multer.File) {
     const fileId = `file_${crypto.randomUUID()}`
-    const rawObject = await storageService.upload({
+    const rawObject = await this.dependencies.storage.upload({
       userId,
       kind: 'raw_source',
       originalName: file.originalname,
       body: file.buffer,
       mimeType: file.mimetype || 'application/octet-stream',
     })
-    await sourcesRepository.createUploadedFile({
+    await this.dependencies.sourceRepository.createUploadedFile({
       id: fileId,
       userId,
       name: file.originalname,
@@ -43,7 +58,7 @@ export class IngestSourceFileUseCase {
     const created = todayLabel()
     const uploadedType = sourceTypeFromUpload(file.mimetype, file.originalname)
     const baseName = path.parse(file.originalname).name
-    const sourceInsert = await sourcesRepository.create({
+    const sourceInsert = await this.dependencies.sourceRepository.create({
       id: sourceId,
       userId,
       type: uploadedType,
@@ -62,8 +77,8 @@ export class IngestSourceFileUseCase {
       knowledgeTags: [],
     })
 
-    const customization = await aiCustomizationService.effectiveProfile(userId)
-    this.generateSourceSummary.execute({
+    const customization = await this.dependencies.customization.effectiveProfile(userId)
+    this.dependencies.summaryGenerator.execute({
       userId,
       fileId,
       sourceId,
@@ -88,23 +103,7 @@ export class IngestSourceFileUseCase {
         status: 'pending',
         written: [],
         message: undefined,
-        source: {
-          id: sourceInsert.id,
-          userId: sourceInsert.user_id,
-          type: sourceInsert.type,
-          title: sourceInsert.title,
-          tags: sourceInsert.tags,
-          category: sourceInsert.category,
-          created: sourceInsert.created,
-          status: sourceInsert.status,
-          meta: sourceInsert.meta,
-          excerpt: sourceInsert.excerpt,
-          fileId: sourceInsert.file_id,
-          rawStorageObjectId: sourceInsert.raw_storage_object_id,
-          extractedStorageObjectId: sourceInsert.extracted_storage_object_id,
-          summaryStorageObjectId: sourceInsert.summary_storage_object_id,
-          knowledgeTags: sourceInsert.knowledge_tags,
-        },
+        source: pendingSourceRow(sourceInsert),
         knowledge: []
       },
     }

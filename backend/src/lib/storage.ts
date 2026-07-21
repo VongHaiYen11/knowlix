@@ -2,9 +2,9 @@ import { createHash, randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { createClient } from '@supabase/supabase-js'
 import { env } from '../config/env.js'
-import { pool } from '../database/pool.js'
 import { AppError, NotFoundError } from '../errors/index.js'
 import { todayIsoDate } from '../utils/date.js'
+import { storageRepository } from './storage.repository.js'
 
 export type StorageObjectKind =
   | 'raw_source'
@@ -85,19 +85,25 @@ export const storageService = {
 
     const publicUrl = supabase().storage.from(bucket).getPublicUrl(key).data.publicUrl ?? ''
     const id = `storage_${randomUUID()}`
-    const { rows } = await pool.query(
-      `INSERT INTO storage_objects (id,user_id,bucket,object_key,url,kind,mime_type,size_bytes,checksum,original_name)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-       RETURNING *`,
-      [id, input.userId, bucket, key, publicUrl, input.kind, input.mimeType, body.byteLength, checksum, input.originalName],
-    )
-    return rowToObject(rows[0])
+    const row = await storageRepository.create({
+      id,
+      userId: input.userId,
+      bucket,
+      key,
+      url: publicUrl,
+      kind: input.kind,
+      mimeType: input.mimeType,
+      sizeBytes: body.byteLength,
+      checksum,
+      originalName: input.originalName,
+    })
+    return rowToObject(row)
   },
 
   async find(userId: string, id: string): Promise<StoredObject> {
-    const { rows } = await pool.query('SELECT * FROM storage_objects WHERE user_id=$1 AND id=$2', [userId, id])
-    if (!rows[0]) throw new NotFoundError('Storage object not found')
-    return rowToObject(rows[0])
+    const row = await storageRepository.find(userId, id)
+    if (!row) throw new NotFoundError('Storage object not found')
+    return rowToObject(row)
   },
 
   async download(input: { userId: string; storageObjectId: string }): Promise<{ object: StoredObject; buffer: Buffer }> {
