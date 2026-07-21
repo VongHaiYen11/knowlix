@@ -13,8 +13,8 @@ const navItems = [
   { label: 'Home', href: ROUTES.home, icon: Home },
   { label: 'Library', href: ROUTES.library, icon: Library },
   { label: 'Research', href: ROUTES.research, icon: Sparkles },
-  { label: 'Customization', href: ROUTES.customization, icon: SlidersHorizontal },
   { label: 'Journal', href: ROUTES.journal, icon: CalendarDays },
+  { label: 'Customization', href: ROUTES.customization, icon: SlidersHorizontal },
   { label: 'Settings', href: ROUTES.settings, icon: Settings },
 ]
 
