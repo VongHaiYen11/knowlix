@@ -1,5 +1,7 @@
 import type { z } from 'zod'
 import { AppError, ConflictError, NotFoundError } from '../../errors/index.js'
+import { parseModelJson } from '../../utils/json.js'
+import { normalizeKnowledgeMarkdown } from '../../utils/markdown.js'
 import { parsePagination } from '../../utils/pagination.js'
 import { queryList } from '../../utils/query.js'
 import { excerpt, slugify, uniqueCleanStrings } from '../../utils/text.js'
@@ -9,40 +11,35 @@ import { embedText } from '../../lib/embeddings.js'
 import { env } from '../../config/env.js'
 import { getGeminiClient } from '../../config/gemini.js'
 import { getIngestPagesPrompt, getKnowledgeMergePrompt } from '../../prompts/index.js'
-import { normalizeIngestPages, type IngestSummary } from '../../wiki/ingest.js'
+import { INGEST_PAGES_RESPONSE_SCHEMA, normalizeIngestPages, type IngestSummary } from '../../wiki/ingest.js'
 import { aiCustomizationService } from '../ai-customization/ai-customization.service.js'
 import { geminiConfig } from '../ai-customization/ai-customization.defaults.js'
 import { knowledgeRow } from './knowledge.mapper.js'
 import { knowledgeRepository } from './knowledge.repository.js'
 import type { knowledgeCreateSchema, knowledgeMergeApplySchema, knowledgeMergePreviewSchema, knowledgePatchSchema } from './knowledge.schemas.js'
 
-const KNOWLEDGE_REGENERATE_RESPONSE_SCHEMA = {
+const KNOWLEDGE_MERGE_RESPONSE_SCHEMA = {
   type: 'object',
-  required: ['pages'],
+  required: ['title', 'overview', 'category', 'tags', 'content', 'related', 'reason'],
   properties: {
-    pages: {
+    title: { type: 'string' },
+    overview: { type: 'string' },
+    category: { type: 'string' },
+    tags: { type: 'array', items: { type: 'string' } },
+    content: { type: 'string' },
+    related: {
       type: 'array',
       items: {
         type: 'object',
-        required: ['action', 'targetSlug', 'mergedSlugs', 'filename', 'title', 'overview', 'body', 'related', 'reason'],
+        required: ['slug', 'title'],
         properties: {
-          action: { type: 'string', enum: ['create', 'update', 'merge', 'replace', 'link_only', 'skip'] },
-          targetSlug: { type: 'string' },
-          mergedSlugs: { type: 'array', items: { type: 'string' } },
-          filename: { type: 'string' },
+          slug: { type: 'string' },
           title: { type: 'string' },
-          overview: { type: 'string' },
-          body: { type: 'string' },
-          related: { type: 'array', items: { type: 'string' } },
-          reason: { type: 'string' },
         },
       },
     },
+    reason: { type: 'string' },
   },
-}
-
-function cleanJsonText(text: string): string {
-  return text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim()
 }
 
 function uniqueBy<T>(values: T[], key: (value: T) => string): T[] {
@@ -295,18 +292,18 @@ export const knowledgeService = {
       contents: prompt.contents,
       config: geminiConfig({
         responseMimeType: 'application/json',
-        responseJsonSchema: KNOWLEDGE_REGENERATE_RESPONSE_SCHEMA,
+        responseJsonSchema: INGEST_PAGES_RESPONSE_SCHEMA,
         reasoning: customization.ingestReasoning,
         temperature: customization.ingestTemperature,
         systemInstruction: prompt.systemInstruction,
       }),
     })
-    const responseText = response.text ? cleanJsonText(response.text) : ''
+    const responseText = response.text?.trim() ?? ''
     if (!responseText) throw new AppError(502, 'INTERNAL_ERROR', 'Gemini returned an empty Knowledge regenerate response')
 
     let pages
     try {
-      pages = normalizeIngestPages(JSON.parse(responseText), sourceSummary)
+      pages = normalizeIngestPages(parseModelJson(responseText), sourceSummary)
     } catch (error) {
       throw new AppError(502, 'INTERNAL_ERROR', `Failed to parse Knowledge regenerate JSON: ${error instanceof Error ? error.message : 'invalid JSON'}`)
     }
@@ -404,18 +401,23 @@ export const knowledgeService = {
       contents: prompt.contents,
       config: geminiConfig({
         responseMimeType: 'application/json',
+        responseJsonSchema: KNOWLEDGE_MERGE_RESPONSE_SCHEMA,
         reasoning: customization.ingestReasoning,
         temperature: customization.ingestTemperature,
         systemInstruction: prompt.systemInstruction,
       }),
     })
 
-    const responseText = response.text ? cleanJsonText(response.text) : ''
+    const responseText = response.text?.trim() ?? ''
     if (!responseText) throw new AppError(502, 'INTERNAL_ERROR', 'Gemini returned an empty merge preview response')
 
-    let parsed: any
+    let parsed: Record<string, unknown>
     try {
-      parsed = JSON.parse(responseText)
+      const value = parseModelJson(responseText)
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        throw new Error('expected a JSON object')
+      }
+      parsed = value as Record<string, unknown>
     } catch (error) {
       throw new AppError(502, 'INTERNAL_ERROR', `Failed to parse merge preview JSON: ${error instanceof Error ? error.message : 'invalid JSON'}`)
     }
@@ -423,6 +425,10 @@ export const knowledgeService = {
     const fallbackTags = uniqueCleanStrings(orderedRows.flatMap((row) => row.knowledge_tags ?? row.tags ?? []))
     const title = String(parsed.title || body.targetTitle || orderedRows.map((row) => row.title).join(' + ')).trim()
     const slug = slugify(title)
+    const content = normalizeKnowledgeMarkdown(
+      String(parsed.content || orderedRows.map((row) => row.overview).filter(Boolean).join('\n\n')),
+      title,
+    )
     const sourceRefs = uniqueBy(orderedRows.flatMap((row) => jsonArray(row.source_list)), sourceKey)
     const references = uniqueBy(orderedRows.flatMap((row) => jsonArray(row.reference_list)), referenceKey)
     const created = todayLabel()
@@ -430,10 +436,10 @@ export const knowledgeService = {
     return {
       title,
       slug,
-      overview: String(parsed.overview || excerpt(String(parsed.content || ''), 260)).trim(),
+      overview: String(parsed.overview || excerpt(content, 260)).trim(),
       category: String(parsed.category || orderedRows[0]?.category || 'General').trim(),
       tags: uniqueCleanStrings(Array.isArray(parsed.tags) ? parsed.tags.map(String) : fallbackTags),
-      content: String(parsed.content || `# ${title}\n\n${orderedRows.map((row) => row.overview).filter(Boolean).join('\n\n')}`).trim(),
+      content,
       sources: sourceRefs,
       related: normalizeRelated(parsed.related),
       references,

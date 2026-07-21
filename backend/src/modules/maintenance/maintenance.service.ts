@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { getGeminiClient } from '../../config/gemini.js'
 import { todayIsoDate, todayLabel } from '../../utils/date.js'
+import { parseModelJson } from '../../utils/json.js'
 import { slugify } from '../../utils/text.js'
 import { storageService } from '../../lib/storage.js'
 import { maintenanceRepository } from './maintenance.repository.js'
@@ -51,8 +52,8 @@ export const maintenanceService = {
     })
     let contradictions: Array<{ slugs: string[]; explanation: string }> = []
     try {
-      const cleanText = response.text ? response.text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim() : '[]'
-      contradictions = JSON.parse(cleanText)
+      const parsed = parseModelJson(response.text?.trim() || '[]')
+      contradictions = Array.isArray(parsed) ? parsed as Array<{ slugs: string[]; explanation: string }> : []
     } catch (parseErr) {
       console.error('[Lint API] Failed to parse Gemini contradiction JSON:', parseErr, response.text)
     }

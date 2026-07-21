@@ -5,6 +5,7 @@ import type { researchSchema, researchThreadSchema } from './research.schemas.js
 import { researchRepository } from './research.repository.js'
 import { storageService } from '../../lib/storage.js'
 import { embedText } from '../../lib/embeddings.js'
+import { parseModelJson } from '../../utils/json.js'
 import { getResearchSelectionPrompt, getResearchAnswerPrompt, getResearchSummaryPrompt } from '../../prompts/index.js'
 import { aiCustomizationService } from '../ai-customization/ai-customization.service.js'
 import { geminiConfig } from '../ai-customization/ai-customization.defaults.js'
@@ -106,8 +107,7 @@ export const researchService = {
           contents: selectionPrompt.contents,
           config: geminiConfig({ responseMimeType: 'application/json', reasoning: 'low', temperature: 0, systemInstruction: selectionPrompt.systemInstruction })
         })
-        const cleanText = selection.text ? selection.text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim() : '[]'
-        const parsed = JSON.parse(cleanText)
+        const parsed = parseModelJson(selection.text?.trim() || '[]')
         if (Array.isArray(parsed)) selectedSlugs = new Set(parsed.filter((slug): slug is string => typeof slug === 'string'))
       } catch (error) {
         console.error('[Research API] Failed to parse selected knowledge slugs:', error)

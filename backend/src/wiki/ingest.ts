@@ -2,6 +2,8 @@ import path from 'node:path'
 import mammoth from 'mammoth'
 import pdf from 'pdf-parse/lib/pdf-parse.js'
 import { getGeminiClient } from '../config/gemini.js'
+import { parseModelJson } from '../utils/json.js'
+import { normalizeKnowledgeMarkdown, normalizeMarkdownWhitespace, normalizeSummaryMarkdown } from '../utils/markdown.js'
 import { excerpt } from '../utils/text.js'
 import { getIngestSummaryPrompt, getIngestPagesPrompt } from '../prompts/index.js'
 import { defaultAiCustomization, geminiConfig, ingestOutputLimits, type AiCustomizationProfile } from '../modules/ai-customization/ai-customization.defaults.js'
@@ -81,7 +83,7 @@ const INGEST_SUMMARY_RESPONSE_SCHEMA = {
   },
 }
 
-const INGEST_PAGES_RESPONSE_SCHEMA = {
+export const INGEST_PAGES_RESPONSE_SCHEMA = {
   type: 'object',
   required: ['pages'],
   properties: {
@@ -163,10 +165,6 @@ function titleFromName(fileName: string, extension: string) {
   return path.basename(fileName, extension)
 }
 
-function cleanJsonText(text: string) {
-  return text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim()
-}
-
 function asStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return []
   return value.filter((item): item is string => typeof item === 'string').map((item) => item.trim()).filter(Boolean)
@@ -181,7 +179,7 @@ function tokenEstimate(text: string) {
 }
 
 function normalizeWhitespace(value: string) {
-  return value.replace(/\r\n?/g, '\n').replace(/[ \t]+\n/g, '\n').replace(/\n{4,}/g, '\n\n\n').trim()
+  return normalizeMarkdownWhitespace(value)
 }
 
 function outlineFromSections(sections: SourceSection[]) {
@@ -272,44 +270,6 @@ function buildSections(markdown: string) {
   return headingSections.length ? headingSections : splitParagraphWindows(markdown)
 }
 
-function cleanLeadingSectionNumber(value: string): string {
-  return value.replace(/^\s*\d+(?:\.\d+)*[.)]\s+/, '').trim()
-}
-
-function normalizeMarkdownTitle(body: string, title: string): string {
-  const cleanTitle = cleanLeadingSectionNumber(title) || title
-  const cleanBody = repairJsonEscapedLatex(body).trim()
-  if (!cleanBody) return cleanBody
-  if (/^#\s+.+/m.test(cleanBody)) {
-    return cleanBody.replace(/^#\s+.+/m, `# ${cleanTitle}`)
-  }
-  return `# ${cleanTitle}\n\n${cleanBody}`
-}
-
-function normalizeSummaryBody(body: string, title: string): string {
-  const cleanBody = repairJsonEscapedLatex(body).trim()
-  if (!cleanBody) return cleanBody
-  const leadingTitle = cleanBody.match(/^#\s+(.+?)(?:\n+|$)/)
-  if (!leadingTitle) return cleanBody
-  const heading = cleanLeadingSectionNumber(leadingTitle[1]).toLowerCase()
-  const cleanTitle = cleanLeadingSectionNumber(title).toLowerCase()
-  if (heading && cleanTitle && heading === cleanTitle) {
-    return cleanBody.slice(leadingTitle[0].length).trim()
-  }
-  return cleanBody.replace(/^#\s+/, '## ')
-}
-
-function repairJsonEscapedLatex(content: string) {
-  return content
-    .replace(/\f\s*rac/g, '\\frac')
-    .replace(/\u0008\s*ar/g, '\\bar')
-    .replace(/\r\s*ight/g, '\\right')
-    .replace(/\n\s*abla/g, '\\nabla')
-    .replace(/\t\s*heta/g, '\\theta')
-    .replace(/\t\s*imes/g, '\\times')
-    .replace(/\t\s*ext/g, '\\text')
-}
-
 function normalizeAction(value: unknown): IngestAction {
   return value === 'update' || value === 'merge' || value === 'replace' || value === 'link_only' || value === 'skip' ? value : 'create'
 }
@@ -357,9 +317,9 @@ function normalizeIngestBrief(value: unknown, fallback: { title: string; excerpt
 function normalizePage(value: unknown, fallbackTitle: string): IngestPage | null {
   const page = asRecord(value)
   const rawTitle = typeof page.title === 'string' && page.title.trim() ? page.title.trim() : fallbackTitle
-  const title = cleanLeadingSectionNumber(rawTitle) || rawTitle
+  const title = rawTitle.trim()
   const overview = typeof page.overview === 'string' && page.overview.trim() ? page.overview.trim() : ''
-  const body = typeof page.body === 'string' ? normalizeMarkdownTitle(page.body, title) : ''
+  const body = typeof page.body === 'string' ? normalizeKnowledgeMarkdown(page.body, title) : ''
   const action = normalizeAction(page.action)
   if (!body && !['link_only', 'skip'].includes(action)) return null
   const filename = typeof page.filename === 'string' && page.filename.trim() ? page.filename.trim() : `${title}.md`
@@ -381,15 +341,15 @@ export function normalizeIngestSummary(input: unknown, fallback: { title: string
   const summaryRecord = asRecord(parsed.summary)
   const rawSummaryBody = typeof summaryRecord.body === 'string' && summaryRecord.body.trim() ? summaryRecord.body.trim() : fallback.extractedText
   
-  const parsedTitle = cleanLeadingSectionNumber(
+  const parsedTitle = (
     (typeof summaryRecord.title === 'string' ? summaryRecord.title.trim() : '')
     || rawSummaryBody.match(/^#\s+(.+)/m)?.[1]?.trim()
-    || '',
-  )
-  const summaryTitle = parsedTitle || cleanLeadingSectionNumber(fallback.title) || fallback.title
-  const summaryBody = normalizeSummaryBody(rawSummaryBody, summaryTitle)
+    || ''
+  ).trim()
+  const summaryTitle = parsedTitle || fallback.title.trim()
+  const summaryBody = normalizeSummaryMarkdown(rawSummaryBody, summaryTitle)
   const parsedExcerpt = typeof summaryRecord.excerpt === 'string' && summaryRecord.excerpt.trim() ? summaryRecord.excerpt.trim() : ''
-  const cleanExcerpt = summaryBody.replace(/```[\s\S]*?```/g, '').replace(/[#*_>`|[\]-]/g, '').trim().slice(0, 180)
+  const cleanExcerpt = excerpt(summaryBody)
 
   return {
     title: summaryTitle,
@@ -484,11 +444,11 @@ export async function generateIngestSummary(buffer: Buffer, options: IngestRawFi
       maxOutputTokens: ingestOutputLimits.summaryMaxOutputTokens,
     }),
   })
-  const responseText = response.text ? cleanJsonText(response.text) : ''
+  const responseText = response.text?.trim() ?? ''
   if (!responseText) throw new Error('Gemini returned an empty ingest summary response')
 
   try {
-    return normalizeIngestSummary(JSON.parse(responseText), { title, extractedText })
+    return normalizeIngestSummary(parseModelJson(responseText), { title, extractedText })
   } catch (error) {
     throw new Error(`Failed to parse Gemini ingest summary JSON: ${error instanceof Error ? error.message : 'invalid JSON'}`)
   }
@@ -554,11 +514,11 @@ export async function extractKnowledgePages(
       maxOutputTokens: ingestOutputLimits.pagesMaxOutputTokens,
     }),
   })
-  const responseText = response.text ? cleanJsonText(response.text) : ''
+  const responseText = response.text?.trim() ?? ''
   if (!responseText) throw new Error('Gemini returned an empty ingest pages response')
 
   try {
-    const pages = normalizeIngestPages(JSON.parse(responseText), summary)
+    const pages = normalizeIngestPages(parseModelJson(responseText), summary)
     const skipped = pages.every((page) => page.action === 'skip')
       ? pages.map((page) => page.reason).filter(Boolean).join(' ') || 'No durable Knowledge contribution found.'
       : undefined
