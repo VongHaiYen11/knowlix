@@ -3,7 +3,7 @@ import { ConflictError, UnauthorizedError } from '../../errors/index.js'
 import { initialsFromName } from '../../utils/text.js'
 import { signSessionToken } from '../../lib/jwt.js'
 import { authRepository } from './auth.repository.js'
-import { sendVerificationEmail } from '../../utils/email.js'
+import { sendVerificationEmail, sendForgotPasswordEmail } from '../../utils/email.js'
 import type { loginSchema, signupSchema } from './auth.schemas.js'
 import type { z } from 'zod'
 import type { AuthResult } from './auth.types.js'
@@ -68,6 +68,37 @@ export const authService = {
     if (!ok) throw new UnauthorizedError('Invalid email or password')
     const { passwordHash: _passwordHash, ...safeUser } = user
     return { user: safeUser, token: signSessionToken(user.id) }
+  },
+
+  async forgotPassword(email: string): Promise<void> {
+    const user = await authRepository.findByEmail(email)
+    if (!user) {
+      return
+    }
+
+    const token = crypto.randomUUID()
+    const expiresAt = new Date(Date.now() + 1 * 60 * 60 * 1000) // 1 hour
+
+    await authRepository.deleteResetTokenByEmail(email)
+    await authRepository.createResetToken(token, email, expiresAt)
+
+    await sendForgotPasswordEmail(email, user.name, token)
+  },
+
+  async resetPassword(token: string, password: string): Promise<void> {
+    const record = await authRepository.findResetRecordByToken(token)
+    if (!record) {
+      throw new Error('invalid_token')
+    }
+
+    if (new Date() > new Date(record.expires_at)) {
+      await authRepository.deleteResetToken(token)
+      throw new Error('expired_token')
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12)
+    await authRepository.updatePasswordByEmail(record.email, passwordHash)
+    await authRepository.deleteResetToken(token)
   },
 
   findUserById: authRepository.findById,

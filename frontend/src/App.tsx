@@ -17,6 +17,8 @@ const LibraryContentEditorPage = lazy(() => import('@/pages/LibraryContentEditor
 const NoteEditorPage = lazy(() => import('@/pages/NoteEditorPage').then((module) => ({ default: module.NoteEditorPage })))
 const LoginPage = lazy(() => import('@/pages/LoginPage').then((module) => ({ default: module.LoginPage })))
 const SignupPage = lazy(() => import('@/pages/SignupPage').then((module) => ({ default: module.SignupPage })))
+const ForgotPasswordPage = lazy(() => import('@/pages/ForgotPasswordPage').then((module) => ({ default: module.ForgotPasswordPage })))
+const ResetPasswordPage = lazy(() => import('@/pages/ResetPasswordPage').then((module) => ({ default: module.ResetPasswordPage })))
 
 function LoadingScreen() {
   return <div className="p-6"><Skeleton className="h-96" /></div>
@@ -73,6 +75,8 @@ export function App() {
       <Route element={<AuthRoute />}>
         <Route path="login" element={<LoginPage />} />
         <Route path="signup" element={<SignupPage />} />
+        <Route path="forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="reset-password" element={<ResetPasswordPage />} />
       </Route>
       <Route element={<ShellRoute />}>
         <Route index element={<HomePage />} />

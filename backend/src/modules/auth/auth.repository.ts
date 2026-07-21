@@ -73,4 +73,35 @@ export const authRepository = {
   async deleteVerificationByToken(token: string): Promise<void> {
     await pool.query('DELETE FROM email_verifications WHERE token = $1', [token])
   },
+
+  async deleteResetTokenByEmail(email: string): Promise<void> {
+    await pool.query('DELETE FROM password_resets WHERE email = $1', [email])
+  },
+
+  async createResetToken(token: string, email: string, expiresAt: Date): Promise<void> {
+    await pool.query(
+      `INSERT INTO password_resets (token, email, expires_at)
+       VALUES ($1, $2, $3)`,
+      [token, email, expiresAt],
+    )
+  },
+
+  async findResetRecordByToken(token: string): Promise<any | undefined> {
+    const { rows } = await pool.query(
+      'SELECT token, email, expires_at FROM password_resets WHERE token = $1',
+      [token],
+    )
+    return rows[0]
+  },
+
+  async deleteResetToken(token: string): Promise<void> {
+    await pool.query('DELETE FROM password_resets WHERE token = $1', [token])
+  },
+
+  async updatePasswordByEmail(email: string, passwordHash: string): Promise<void> {
+    await pool.query(
+      'UPDATE app_users SET password_hash = $2 WHERE email = $1',
+      [email, passwordHash],
+    )
+  },
 }

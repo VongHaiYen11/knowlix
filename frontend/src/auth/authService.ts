@@ -18,4 +18,10 @@ export const authService = {
   async updateMe(input: { name?: string; email?: string; currentPassword?: string; newPassword?: string }): Promise<AuthUser> {
     return apiClient.patch<AuthUser>('/api/v1/me', input)
   },
+  async forgotPassword(email: string): Promise<{ ok: boolean; message: string }> {
+    return apiClient.post<{ ok: boolean; message: string }>('/api/v1/auth/forgot-password', { email })
+  },
+  async resetPassword(input: { token: string; password: string }): Promise<{ ok: boolean; message: string }> {
+    return apiClient.post<{ ok: boolean; message: string }>('/api/v1/auth/reset-password', input)
+  },
 }

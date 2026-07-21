@@ -17,6 +17,7 @@ export function LoginPage() {
 
   const verified = searchParams.get('verified') === 'true'
   const urlError = searchParams.get('error')
+  const reset = searchParams.get('reset') === 'success'
 
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -34,6 +35,15 @@ export function LoginPage() {
 
   return (
     <AuthFrame title="Welcome back" subtitle="Sign in to continue your private library.">
+      {reset && (
+        <div className="mb-6 p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-sm flex items-start gap-3">
+          <CheckCircle className="h-5 w-5 shrink-0 mt-0.5 text-emerald-500" />
+          <div className="text-left">
+            <p className="font-semibold text-emerald-800 dark:text-emerald-200">Password reset successful!</p>
+            <p className="mt-0.5 text-emerald-700/80 dark:text-emerald-300/80">Your password has been reset. Please log in with your new password.</p>
+          </div>
+        </div>
+      )}
       {verified && (
         <div className="mb-6 p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-sm flex items-start gap-3">
           <CheckCircle className="h-5 w-5 shrink-0 mt-0.5 text-emerald-500" />
@@ -58,7 +68,14 @@ export function LoginPage() {
       )}
       <form onSubmit={submit} className="space-y-4">
         <AuthInput label="Email" type="email" value={email} onChange={setEmail} autoComplete="email" />
-        <AuthInput label="Password" type="password" value={password} onChange={setPassword} autoComplete="current-password" />
+        <div className="flex flex-col space-y-1">
+          <AuthInput label="Password" type="password" value={password} onChange={setPassword} autoComplete="current-password" />
+          <div className="text-right">
+            <Link to={ROUTES.forgotPassword} className="text-xs text-primary hover:underline">
+              Forgot password?
+            </Link>
+          </div>
+        </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <Button type="submit" className="w-full" disabled={submitting}>{submitting ? 'Signing in...' : 'Login'}</Button>
       </form>

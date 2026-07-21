@@ -48,3 +48,37 @@ export async function sendVerificationEmail(to: string, name: string, token: str
     html,
   })
 }
+
+export async function sendForgotPasswordEmail(to: string, name: string, token: string): Promise<void> {
+  const resetLink = `${env.frontendOrigin}/reset-password?token=${token}`
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; color: #1a1a1a;">
+      <div style="text-align: center; margin-bottom: 30px;">
+        <h1 style="font-size: 28px; font-weight: 700; color: #000; margin: 0; font-family: Georgia, serif;">Reset Your Password</h1>
+        <p style="font-size: 16px; color: #666; margin-top: 10px;">Knowlix personal knowledge library</p>
+      </div>
+      <div style="background-color: #f9f9f9; border: 1px solid #eaeaea; border-radius: 12px; padding: 30px; margin-bottom: 30px;">
+        <p style="font-size: 16px; line-height: 24px; margin-top: 0;">Hello <strong>${name}</strong>,</p>
+        <p style="font-size: 16px; line-height: 24px;">We received a request to reset your password for your Knowlix account. Click the button below to choose a new password:</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${resetLink}" style="background-color: #000; color: #fff; text-decoration: none; padding: 12px 28px; font-size: 15px; font-weight: 600; border-radius: 6px; display: inline-block;">Reset Password</a>
+        </div>
+        <p style="font-size: 14px; color: #666; line-height: 20px; margin-bottom: 0;">This reset link will expire in 1 hour. If you did not request a password reset, you can safely ignore this email.</p>
+        <p style="font-size: 14px; color: #666; line-height: 20px; margin-top: 10px; margin-bottom: 0;">If the button above does not work, copy and paste this URL into your browser:<br>
+        <a href="${resetLink}" style="color: #0066cc; word-break: break-all;">${resetLink}</a></p>
+      </div>
+      <div style="text-align: center; font-size: 12px; color: #999;">
+        <p>© 2026 Knowlix. All rights reserved.</p>
+      </div>
+    </div>
+  `
+
+  await transporter.sendMail({
+    from: fromAddress,
+    to,
+    subject: '[Knowlix] Reset your password',
+    html,
+  })
+}
+
