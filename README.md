@@ -48,6 +48,11 @@ The root README is the project landing page. Detailed implementation notes live 
 | **Research workspace** | Ask grounded questions against retrieved Knowledge with numbered references. |
 | **Markdown reading** | Render rich Markdown with math and diagrams through KaTeX and Mermaid support. |
 | **Authentication** | Protect user data with cookie-based JWT sessions and bcrypt password hashing. |
+| **Email Verification** | Secure registration flows verifying user email addresses before account activation via SMTP. |
+| **Secure Account Flows** | Dedicated Forgot/Reset Password flows, plus password-locked email modification safety dialogs. |
+| **Robust AI Pipeline** | Automatic retry handlers (up to 3 attempts with exponential backoff) protecting all Gemini API generation, streaming, and embedding calls. |
+| **Paginated Lists** | Fluid pagination controls (max 5 page range with auto-alignment of active page to second-to-last index) in library tabs and research history. |
+| **Serif Typography** | Standardized the global serif typeface to Google Fonts' Lora for rich, diacritic-safe Vietnamese text rendering. |
 
 ## Architecture
 
