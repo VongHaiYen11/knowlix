@@ -102,6 +102,11 @@
   textarea {
     @apply focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring;
   }
+
+  input[type="password"]::-ms-reveal,
+  input[type="password"]::-ms-clear {
+    display: none;
+  }
 }
 
 @layer utilities {
