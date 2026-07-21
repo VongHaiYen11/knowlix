@@ -14,8 +14,4 @@ export const aiCustomizationController = {
   async reset(req: AuthedRequest, res: Response) {
     res.json(await aiCustomizationService.reset(req.user.id))
   },
-
-  async estimateCost(req: AuthedRequest, res: Response) {
-    res.json(await aiCustomizationService.estimateCost(req.user.id, req.body, req.file))
-  },
 }

@@ -1,150 +1,173 @@
-# 🚀 Knowlix
+<div align="center">
 
-![React](https://img.shields.io/badge/React-19.0-blue)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue)
-![Node.js](https://img.shields.io/badge/Node.js-Express-green)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-pgvector-blue)
-![Gemini AI](https://img.shields.io/badge/AI-Google%20Gemini-orange)
+# 🔖 Knowlix
 
-Knowlix is an AI-powered knowledge management system designed to seamlessly ingest, process, and organize information from various document formats into structured, searchable knowledge entries.
+**AI-powered personal knowledge workspace for turning documents into searchable, grounded Knowledge.**
 
-## 📖 Overview
+<p>
+  <a href="#overview">Overview</a> •
+  <a href="#features">Features</a> •
+  <a href="#workflow">Workflow</a> •
+  <a href="#getting-started">Getting Started</a> •
+  <a href="#documentation">Docs</a>
+</p>
 
-Knowlix helps users extract and organize information from raw documents (PDF, DOCX, TXT, Markdown) by utilizing advanced AI models. It is designed for researchers, students, and professionals who need a centralized hub to store documents, automatically extract key insights, and perform semantic searches across their personal knowledge base.
+<p>
+  <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=111827">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white">
+  <img alt="Vite" src="https://img.shields.io/badge/Vite-Frontend-646CFF?logo=vite&logoColor=white">
+  <img alt="Tailwind CSS" src="https://img.shields.io/badge/Tailwind-CSS-38BDF8?logo=tailwindcss&logoColor=white">
+</p>
 
-## ✨ Key Features
+<p>
+  <img alt="Node.js" src="https://img.shields.io/badge/Node.js-Express-339933?logo=nodedotjs&logoColor=white">
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-pgvector-4169E1?logo=postgresql&logoColor=white">
+  <img alt="Google Gemini" src="https://img.shields.io/badge/AI-Google%20Gemini-FBBC04?logo=google&logoColor=111827">
+  <img alt="Supabase Storage" src="https://img.shields.io/badge/Storage-Supabase-3FCF8E?logo=supabase&logoColor=111827">
+</p>
 
-- **Multi-Format Document Ingestion:** Upload and process PDFs, Word documents (DOCX), Text files, and Markdown.
-- **AI-Powered Summarization & Extraction:** Automatically extract key ideas, summaries, and structured knowledge using Google Gemini AI.
-- **AI Customization:** Tune Knowledge ingestion prompts, research behavior, model choice, reasoning level, and estimate relative AI cost before uploading or asking.
-- **Semantic Vector Search:** Find relevant information quickly using pgvector-powered semantic embeddings.
-- **Rich Markdown Rendering:** Support for complex Markdown elements, including math equations (KaTeX) and diagrams (Mermaid).
-- **Secure File Storage:** Raw documents and extracted text are securely managed via Supabase Storage.
-- **User Authentication:** Secure JWT-based authentication system.
+</div>
 
-## 🏗 System Architecture
+---
 
-Knowlix follows a modern client-server architecture with dedicated external services for storage and AI processing.
+## Overview
 
-- **Frontend:** A React Single Page Application (SPA) responsible for the user interface, file uploads, and displaying rich knowledge entries.
-- **Backend:** A Node.js/Express API that handles authentication, file ingestion, orchestration of AI tasks, and database interactions.
-- **Database:** PostgreSQL stores all relational data (users, metadata) and uses the `pgvector` extension for storing and querying AI embeddings.
-- **External Services:**
-  - **Google Gemini API:** Used for text summarization, knowledge extraction, and generating vector embeddings.
-  - **Supabase Storage:** Serves as the object storage solution for holding uploaded raw files and processed text objects.
+Knowlix helps researchers, students, and professionals upload source documents, extract durable knowledge, and search across a private knowledge base. The app accepts PDF, DOCX, TXT, and Markdown files, stores the original source of truth, generates source summaries and Knowledge pages with Google Gemini, and indexes Knowledge with PostgreSQL plus `pgvector`.
 
-This architecture ensures a clear separation of concerns, allowing the frontend to remain lightweight while the backend efficiently offloads heavy AI computation and file storage to dedicated scalable external services.
+The root README is the project landing page. Detailed implementation notes live in [`frontend/README.md`](frontend/README.md) and [`backend/README.md`](backend/README.md).
 
-## 🔄 System Workflow
+## Features
 
-1. **Upload:** The user uploads a document via the React frontend.
-2. **Storage:** The backend receives the file, uploads the raw source to Supabase Storage, and records the metadata in the database.
-3. **Extraction:** The backend parses the file's contents (using tools like `pdf-parse` or `mammoth` for DOCX) to extract raw text.
-4. **AI Processing:** The backend applies the user's Customization profile, sends extracted text to Google Gemini to generate summaries and Knowledge pages, and creates semantic vector embeddings.
-5. **Persist:** The processed data and vectors are stored in PostgreSQL, and any large markdown assets are saved to Supabase Storage.
-6. **Query & Display:** The user can now seamlessly search their knowledge base, and the frontend will fetch and render the rich Markdown entries.
+| Area | What Knowlix Does |
+| --- | --- |
+| **Document ingestion** | Upload PDF, DOCX, TXT, and Markdown sources for AI-assisted processing. |
+| **Source of truth** | Store raw uploads and extracted text so users can inspect the original material. |
+| **Knowledge generation** | Generate grounded source summaries and durable Knowledge pages from uploaded material. |
+| **AI customization** | Tune ingest prompts, research behavior, model choice, reasoning level, and temperature. |
+| **Semantic search** | Use Gemini embeddings and `pgvector` to retrieve relevant Knowledge. |
+| **Research workspace** | Ask grounded questions against retrieved Knowledge with numbered references. |
+| **Markdown reading** | Render rich Markdown with math and diagrams through KaTeX and Mermaid support. |
+| **Authentication** | Protect user data with cookie-based JWT sessions and bcrypt password hashing. |
 
-## 🛠 Technology Stack
+## Architecture
 
-- **Frontend:** React 19, TypeScript, Vite, Tailwind CSS v4, React Router, React Markdown (with KaTeX & Mermaid support)
-- **Backend:** Node.js, Express, TypeScript
-- **Database:** PostgreSQL, pgvector (via Docker)
-- **AI / LLM:** Google Gemini API (`@google/genai`)
-- **Authentication:** JWT (JSON Web Tokens), bcryptjs
-- **Storage:** Supabase Storage
-- **Other Tools:** `pdf-parse`, `mammoth` (DOCX parsing), `multer`
+```text
+React + Vite frontend
+        |
+        v
+Node.js / Express API
+        |
+        +--> Google Gemini API        # summaries, Knowledge extraction, research answers, embeddings
+        +--> Supabase Storage         # raw files, extracted text, generated markdown
+        +--> PostgreSQL + pgvector    # users, sources, Knowledge metadata, vectors, research threads
+```
 
-## 🗄 Database Overview
+### Stack
 
-- **Database Used:** PostgreSQL with the `pgvector` extension.
-- **Data Stored:** User accounts (`app_users`), AI customization (`user_ai_customizations`), document metadata (`sources`, `uploaded_files`, `storage_objects`), and processed content (`knowledge_entries`, `knowledge_revisions`). The vector representations of the knowledge are stored in `vector(768)` columns.
-- **Why Chosen:** PostgreSQL provides robust relational data guarantees, while `pgvector` allows for native semantic similarity search within the same database, eliminating the need for a separate specialized vector database.
+| Layer | Tools |
+| --- | --- |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, React Router, React Markdown |
+| Backend | Node.js, Express, TypeScript, Zod, Multer |
+| Database | PostgreSQL, `pgvector`, raw SQL migrations |
+| AI | Google Gemini via `@google/genai` |
+| Storage | Supabase Storage |
+| Parsing | `pdf-parse`, `mammoth` |
+| Auth | JWT cookies, bcryptjs |
 
-## 📁 Project Structure
+## Workflow
+
+1. **Upload** a supported document from the React app.
+2. **Store** the raw source in Supabase Storage and metadata in PostgreSQL.
+3. **Extract** readable text from PDF, DOCX, TXT, or Markdown.
+4. **Summarize** the source and plan durable Knowledge candidates with Gemini.
+5. **Generate** Knowledge pages, update existing pages, merge when appropriate, or link-only when the source adds no new durable detail.
+6. **Embed** Knowledge metadata/content for semantic retrieval with `pgvector`.
+7. **Research** by asking questions over retrieved Knowledge with grounded references.
+
+## Project Structure
 
 ```text
 knowlix/
-├── backend/       # Node.js/Express API, database migrations, and backend logic
+├── backend/       # Express API, ingest orchestration, migrations, storage, AI integrations
 ├── docs/          # Additional technical documentation
 ├── frontend/      # React 19 SPA built with Vite
-└── scripts/       # Utility scripts for the project
+└── scripts/       # Project utilities
 ```
 
-## 🚀 Getting Started
+## Getting Started
 
-### 1. Clone the repository
+### 1. Clone
+
 ```bash
 git clone <repository-url>
 cd knowlix
 ```
 
-### 2. Install dependencies
+### 2. Install
+
 ```bash
-# Install frontend dependencies
 cd frontend
 npm install
 
-# Install backend dependencies
 cd ../backend
 npm install
 ```
 
-### 3. Environment Variables
-Create the necessary `.env` files based on the provided examples.
+### 3. Configure Environment
 
-In `frontend/`:
 ```bash
+cd frontend
+cp .env.example .env
+
+cd ../backend
 cp .env.example .env
 ```
 
-In `backend/`:
-```bash
-cp .env.example .env
-```
-*Make sure to fill in your `GEMINI_API_KEY`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY` in the backend `.env` file.*
+Fill the backend `.env` with the required Gemini and Supabase values:
 
-### 4. Database Setup
-Start the PostgreSQL database via Docker and run migrations:
+```text
+GEMINI_API_KEY=
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+```
+
+### 4. Start Database
+
 ```bash
 cd backend
 docker-compose up -d
 npm run db:migrate
 ```
 
-### 5. Run the Application
-Start both the backend and frontend development servers.
+### 5. Run Development Servers
 
-**Run Backend:**
 ```bash
+# Terminal 1
 cd backend
 npm run dev
-```
 
-**Run Frontend:**
-```bash
+# Terminal 2
 cd frontend
 npm run dev
 ```
 
-## 📚 Documentation
+## Documentation
 
-Detailed implementation instructions and architecture details are available in:
-- `frontend/README.md`
-- `backend/README.md`
+| Document | Purpose |
+| --- | --- |
+| [`frontend/README.md`](frontend/README.md) | Frontend routes, UI behavior, local development, and rendering stack. |
+| [`backend/README.md`](backend/README.md) | API routes, database schema, ingest pipeline, research flow, storage, and AI customization. |
 
-See those files for the `/customization` route, `/api/v1/ai-customization` API, default prompt behavior, and cost estimator details.
+## Design Notes
 
-## 💡 Design Decisions
+- **PostgreSQL + pgvector** keeps relational metadata and vector search in one database.
+- **Supabase Storage** stores large file and Markdown assets outside relational rows.
+- **Gemini** powers source summarization, Knowledge extraction, grounded research answers, and embeddings.
+- **Root docs stay concise** so backend and frontend implementation details can evolve in their own READMEs.
 
-- **React 19 & Vite:** Chosen for the frontend for blazing-fast development speeds, modern React features, and a lightweight build process.
-- **Node.js & Express:** Provides a simple, unopinionated, and highly extensible backend to handle REST API endpoints and integrate seamlessly with JavaScript/TypeScript tooling.
-- **PostgreSQL + pgvector:** Consolidates standard relational data and AI embeddings into a single system, simplifying infrastructure and deployment compared to maintaining a separate vector database.
-- **Google Gemini API:** Selected for text summarization, Knowledge extraction, grounded research answers, and cost-effective embedding generation.
-- **Supabase Storage:** Chosen for object storage due to its excellent developer experience, simple SDK, and seamless integration with modern web stacks.
+## Roadmap Ideas
 
-## 🌱 Future Improvements
-
-- Implementation of a conversational chat interface to ask questions directly against specific documents.
-- Support for extracting data from image-based documents (OCR).
-- Collaboration features for sharing knowledge entries among multiple users.
-- Automated tagging and categorization system based on document content clustering.
+- OCR support for image-based documents.
+- Collaboration and sharing workflows.
+- More analytics around real AI usage and processing reliability.
+- Expanded Knowledge maintenance and quality checks.

@@ -238,8 +238,6 @@ export const sourcesService = {
   },
 
   async delete(userId: string, id: string) {
-    const slugs = await sourcesRepository.relatedKnowledgeSlugs(userId, id)
-    await sourcesRepository.deleteRelatedKnowledge(userId, slugs)
-    await sourcesRepository.delete(userId, id)
+    await sourcesRepository.deleteWithKnowledgeDetach(userId, id)
   },
 }

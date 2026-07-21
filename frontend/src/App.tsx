@@ -87,8 +87,8 @@ export function App() {
         <Route path="library/source/:id/edit" element={<SourceEditRoute />} />
         <Route path="library/note/:id" element={<NoteRoute />} />
         <Route path="research" element={<ResearchPage />} />
-        <Route path="customization" element={<CustomizationPage />} />
         <Route path="journal" element={<JournalPage />} />
+        <Route path="customization" element={<CustomizationPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to={ROUTES.home} replace />} />
       </Route>

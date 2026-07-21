@@ -1,414 +1,72 @@
-# UI Development Guidelines
-
-These guidelines define the UI development standards for this project. The goal is to keep the codebase consistent, reusable, maintainable, and visually coherent.
-
----
-
-# Core Principles
-
-When implementing any UI:
-
-1. Consistency is more important than creativity.
-2. Reuse existing components whenever possible.
-3. Follow the design system.
-4. Build responsive layouts by default.
-5. Keep components small and maintainable.
-6. Separate presentation from business logic.
-
----
-
-# Design System
-
-## Never hardcode design values
-
-Avoid hardcoded values for:
-
-- colors
-- spacing
-- border radius
-- typography
-- shadows
-- transitions
-
-Instead, always use values defined by the design system.
-
-Good
-
-```tsx
-className="bg-primary text-primary-foreground border-border"
-```
-
-or
-
-```ts
-colors.light.primary
-```
-
-Bad
-
-```tsx
-className="bg-[#5e7d63]"
-```
-
-If a required color or token does not exist, add it to the theme instead of introducing arbitrary values.
-
----
-
-# Theme Usage
-
-All UI colors must come from the shared theme.
-
-Never introduce one-off colors unless absolutely necessary.
-
-Prefer semantic colors instead of visual colors.
-
-Good
-
-```
-primary
-secondary
-accent
-destructive
-muted
-background
-foreground
-border
-card
-```
-
-Bad
-
-```
-green
-blue
-gray500
-yellow200
-```
-
----
-
-# Component Reuse
-
-Before creating any component:
-
-1. Check the existing `components/` directory.
-2. Reuse an existing component if possible.
-3. Extend an existing component instead of duplicating it.
-
-Common reusable components include:
-
-- Button
-- Card
-- Badge
-- Dialog
-- Alert
-- EmptyState
-- ConfirmationDialog
-- SearchInput
-- PageHeader
-- LoadingSpinner
-- Skeleton
-- DropdownMenu
-
-Do not create multiple versions of the same component unless there is a strong reason.
-
----
-
-# Shared Components
-
-Any UI pattern used more than once should become a reusable component.
-
-Examples:
-
-Instead of
-
-```
-DeleteModal
-ArchiveModal
-LogoutModal
-```
-
-Prefer
-
-```
-ConfirmationDialog
-```
-
-Instead of
-
-```
-EmptyWiki
-EmptyLibrary
-EmptyChat
-```
-
-Prefer
-
-```
-<EmptyState />
-```
-
----
-
-# Responsive Design
-
-Every screen must support:
-
-- Mobile
-- Tablet
-- Desktop
-
-Never build desktop-only layouts.
-
-Prefer responsive utilities over fixed widths.
-
-Example
-
-```tsx
-grid-cols-1 md:grid-cols-2 xl:grid-cols-3
-```
-
-Avoid
-
-```tsx
-style={{ width: 1200 }}
-```
-
----
-
-# Layout
-
-Pages should use consistent spacing.
-
-Avoid random margins.
-
-Use shared spacing utilities.
-
-Prefer
-
-```
-space-y-6
-gap-4
-gap-6
-container
-max-w-...
-```
-
-Keep alignment consistent across the application.
-
----
-
-# Component Size
-
-Keep files reasonably small.
-
-Recommended:
-
-- under 200 lines → ideal
-- 200–350 lines → acceptable
-- over 350 lines → consider refactoring
-- over 500 lines → should be split
-
-Large pages should be divided into smaller sections.
-
-Example
-
-```
-Settings/
-
-    index.tsx
-
-    AccountSection.tsx
-
-    PasswordSection.tsx
-
-    AppearanceSection.tsx
-
-    ModelSection.tsx
-```
-
-instead of
-
-```
-Settings.tsx
-```
-
-with hundreds of lines.
-
----
-
-# Folder Structure
-
-Organize components by feature whenever possible.
-
-Example
-
-```
-pages/
-
-    settings/
-
-        index.tsx
-
-        components/
-
-            AccountSection.tsx
-
-            PasswordSection.tsx
-
-            ThemeSelector.tsx
-```
-
-instead of putting every component into a global folder.
-
-Only place components inside the global `components/` folder if they are reusable across multiple features.
-
----
-
-# Business Logic
-
-UI components should primarily render UI.
-
-Move business logic into:
-
-- hooks
-- services
-- utilities
-
-Good
-
-```tsx
-const { updateProfile } = useProfile()
-```
-
-Avoid
-
-```tsx
-const handleSave = async () => {
-    ...
-}
-```
-
-if the logic is large or reusable.
-
----
-
-# State Management
-
-Keep state as close as possible to where it is used.
-
-Avoid unnecessary prop drilling.
-
-Use Context only when state is truly shared.
-
----
-
-# Naming
-
-Components
-
-```
-PageHeader
-SettingsCard
-LibraryGrid
-```
-
-Hooks
-
-```
-useAuth
-useTheme
-useSearch
-```
-
-Utilities
-
-```
-formatDate
-parseMarkdown
-chunkText
-```
-
-Avoid vague names like
-
-```
-Helper
-Utils
-Data
-Thing
-Component1
-```
-
----
-
-# Accessibility
-
-Every interactive component should support:
-
-- keyboard navigation
-- focus states
-- proper labels
-- aria attributes where appropriate
-
-Never remove focus outlines unless replacing them with an accessible alternative.
-
----
-
-# Visual Consistency
-
-New screens should match existing patterns.
-
-Do not introduce:
-
-- new spacing systems
-- new typography
-- new border radius
-- new button styles
-- new shadows
-
-Consistency across the application is more important than making a single page unique.
-
----
-
-# Before Creating New UI
-
-Always ask:
-
-- Does this component already exist?
-- Can I reuse an existing component?
-- Am I introducing duplicate code?
-- Does this follow the design system?
-- Is it responsive?
-- Is the file becoming too large?
-- Should this be extracted into a reusable component?
-
----
-
-# Pull Request Checklist
-
-Before submitting UI changes:
-
-- [ ] No hardcoded colors
-- [ ] Uses theme tokens
-- [ ] Reuses existing components
-- [ ] Responsive on mobile and desktop
-- [ ] No duplicated UI
-- [ ] Components are reasonably small
-- [ ] Business logic separated from presentation
-- [ ] Accessibility considered
-- [ ] Naming follows project conventions
-
----
-
-# Philosophy
-
-A good UI is:
-
-- consistent
-- predictable
-- reusable
-- responsive
-- accessible
-- easy to maintain
-
-Prefer improving the existing design system over introducing one-off solutions.
+# Frontend Agent Guidelines
+
+These rules describe the current Knowlix frontend. Keep them aligned with the actual code before relying on them.
+
+## Current Stack
+
+- React 19, TypeScript, Vite, Tailwind CSS v4, React Router 7.
+- Markdown rendering uses `react-markdown`, `remark-gfm`, `remark-math`, `rehype-katex`, `katex`, and `mermaid`.
+- Icons come from `lucide-react`.
+- API calls are centralized through `src/repositories/apiClient.ts`.
+
+## App Shell and Navigation
+
+- Route definitions live in `src/App.tsx`; route paths live in `src/constants/routes.ts`.
+- Primary navigation is owned by `src/components/layout/AppShell.tsx`.
+- Current nav order is `Home`, `Library`, `Research`, `Journal`, `Customization`, `Settings`.
+- `AppShell` owns the sidebar, mobile drawer, collapse control, logout affordance, and global theme toggle.
+- Do not move the theme toggle into page headers; the shell is the global-control surface.
+- Use `PageShell` and `PageHeader` for routed pages unless a page has a deliberately different full-screen/editor layout.
+
+## Design System
+
+- Prefer existing UI components in `src/components/ui`: `Badge`, `Button`, `Card`, `ConfirmDialog`, `Dropdown`, `EmptyState`, `SearchInput`, `Skeleton`, `Tabs`, and `Toggle`.
+- Reuse existing components whenever possible. If a UI pattern appears more than once, or two components are only slightly different, extract a shared component instead of copying the same structure again.
+- Use semantic Tailwind classes backed by project CSS variables: `background`, `foreground`, `card`, `border`, `primary`, `secondary`, `accent`, `muted`, and `destructive`.
+- Avoid hardcoded hex colors, one-off shadows, arbitrary radii, or ad hoc spacing when an existing token/component works.
+- Use `cn()` from `src/utils/cn.ts` for conditional class composition.
+- Keep layouts responsive by default; sidebar/mobile behavior should be handled through shared shell patterns rather than page-specific nav hacks.
+
+## Component Placement
+
+- Put only generic, app-wide primitives in `src/components/ui`. A component belongs there only when it has no product-specific language, route knowledge, data fetching, or Knowlix domain assumptions.
+- Put shared page framing and global layout in `src/components/common` or `src/components/layout`, following the current `PageHeader`, `PageShell`, `SectionHeading`, `AppShell`, and `ThemeToggle` split.
+- Put reusable domain UI in `src/features/<feature>/`. Examples: Library cards/lists belong under `features/library`, Research panels under `features/research`, editor controls under `features/editor`.
+- Keep page files focused on route composition, state wiring, and high-level flow. Pages should not become home for reusable cards, drawers, modals, or table rows.
+- If two feature components become genuinely generic, promote the shared primitive downward into `components/ui` only after removing feature-specific copy and assumptions.
+- Do not create a second version of an existing primitive with a slightly different name. Extend the existing component API conservatively.
+
+## Data and API Rules
+
+- Keep API behavior in repositories/services, not inside presentational components.
+- `src/repositories/apiClient.ts` defaults `VITE_API_URL` to `http://127.0.0.1:4000` and sends credentials for cookie auth.
+- Library data goes through `libraryService` and the `LibraryRepository` interface.
+- `apiLibraryRepository` is the real app path when API mode is enabled; `indexedDbLibraryRepository` is fallback/offline/dev behavior only.
+- Merge, regenerate, upload ingest, and source promotion require API-backed behavior; do not make IndexedDB the canonical path for those workflows.
+- Use `getAllPages()` for paginated API lists that need complete collections.
+- Do not call `fetch` directly from pages or visual components. Add API behavior to a repository/service layer first.
+- Keep request/response TypeScript interfaces next to the service that owns the API call unless the type is shared across multiple domains.
+- Treat route strings as constants from `src/constants/routes.ts`; avoid hardcoded internal route strings inside components.
+
+## Product Behavior
+
+- Library has three tabs: Source of Truth, Knowledge, and Notes.
+- Supported upload/display source types are PDF, DOCX, TXT, and Markdown; keep frontend unions, labels, icons, accept lists, and backend constraints aligned when this changes.
+- Source and Knowledge viewer/editor parity is intentional: source/knowledge pages have viewer routes and edit routes.
+- Research threads are DB-backed through `/api/v1/research/threads`; local client state is a working/fallback cache, not the source of truth.
+- Research summaries are thread-scoped modal previews. Do not turn them into Knowledge, Notes, or Library artifacts.
+- Hide Research summary actions until the thread is eligible; do not show unusable disabled controls for ineligible short chats.
+- Customization contains model, reasoning, temperature, and prompt requirement controls. The cost/token estimator feature has been removed and should not be reintroduced without a full product decision.
+
+## Editing Standards
+
+- Keep visible copy concise and in English unless the task explicitly asks otherwise.
+- Reuse feature components under `src/features/*` before adding new page-local components.
+- Do not let one file grow into a catch-all page. If a file becomes hard to scan or keeps accumulating unrelated sections, split repeated rows, panels, modals, cards, or hooks into focused feature components.
+- Keep large pages readable by extracting repeated panels, rows, or modal content into feature components.
+- When changing a shared component such as `AppShell`, `PageShell`, `PageHeader`, `Button`, or `Dropdown`, check the routes that already consume it.
+- Keep modals, panels, and repeated form rows controlled by props when they are reusable. Do not hide important side effects inside presentational components.
+- Avoid duplicating loading, empty, and error states. Reuse `Skeleton`, `EmptyState`, and existing feature-level patterns.
+- Prefer lucide icons already used in the app. Do not add custom SVG icons unless no suitable icon exists.
+- After changing route structure, navigation, source types, API contracts, or product behavior, update the relevant README/AGENTS docs in the same sweep.
+- Run `npm run build` in `frontend/` after TypeScript or component changes.

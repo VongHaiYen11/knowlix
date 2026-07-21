@@ -8,12 +8,38 @@ import { storageService } from '../../lib/storage.js'
 import { embedText } from '../../lib/embeddings.js'
 import { env } from '../../config/env.js'
 import { getGeminiClient } from '../../config/gemini.js'
-import { getKnowledgeMergePrompt } from '../../prompts/index.js'
+import { getIngestPagesPrompt, getKnowledgeMergePrompt } from '../../prompts/index.js'
+import { normalizeIngestPages, type IngestSummary } from '../../wiki/ingest.js'
 import { aiCustomizationService } from '../ai-customization/ai-customization.service.js'
 import { geminiConfig } from '../ai-customization/ai-customization.defaults.js'
 import { knowledgeRow } from './knowledge.mapper.js'
 import { knowledgeRepository } from './knowledge.repository.js'
 import type { knowledgeCreateSchema, knowledgeMergeApplySchema, knowledgeMergePreviewSchema, knowledgePatchSchema } from './knowledge.schemas.js'
+
+const KNOWLEDGE_REGENERATE_RESPONSE_SCHEMA = {
+  type: 'object',
+  required: ['pages'],
+  properties: {
+    pages: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['action', 'targetSlug', 'mergedSlugs', 'filename', 'title', 'overview', 'body', 'related', 'reason'],
+        properties: {
+          action: { type: 'string', enum: ['create', 'update', 'merge', 'replace', 'link_only', 'skip'] },
+          targetSlug: { type: 'string' },
+          mergedSlugs: { type: 'array', items: { type: 'string' } },
+          filename: { type: 'string' },
+          title: { type: 'string' },
+          overview: { type: 'string' },
+          body: { type: 'string' },
+          related: { type: 'array', items: { type: 'string' } },
+          reason: { type: 'string' },
+        },
+      },
+    },
+  },
+}
 
 function cleanJsonText(text: string): string {
   return text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim()
@@ -50,6 +76,17 @@ function normalizeRelated(value: unknown): Array<{ slug: string; title: string }
       title: String(item?.title ?? item?.slug ?? '').trim(),
     }))
     .filter((item) => item.slug && item.title)
+}
+
+async function readSourceMarkdown(userId: string, source: any): Promise<string> {
+  const storageObjectId = source.extracted_storage_object_id ?? source.summary_storage_object_id
+  if (!storageObjectId) return ''
+  try {
+    const { text } = await storageService.readText({ userId, storageObjectId })
+    return text.trim()
+  } catch {
+    return ''
+  }
 }
 
 function firstNonEmpty<T>(primary: T[], fallback: T[]): T[] {
@@ -178,6 +215,150 @@ export const knowledgeService = {
     if (!row.markdown_storage_object_id) return ''
     const { text } = await storageService.readText({ userId, storageObjectId: row.markdown_storage_object_id })
     return text
+  },
+
+  async regenerate(userId: string, slug: string) {
+    const current = await knowledgeRepository.findBySlug(userId, slug)
+    if (!current) throw new NotFoundError('Knowledge page not found')
+
+    const currentEntry = knowledgeRow(current)
+    const sourceIds = uniqueCleanStrings(jsonArray(current.source_list).map((source) => String(source?.id ?? '')))
+    if (!sourceIds.length) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'This Knowledge page has no linked sources to regenerate from')
+    }
+
+    const sourceRows = await knowledgeRepository.sourceRows(userId, sourceIds)
+    if (!sourceRows.length) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'Linked sources for this Knowledge page were not found')
+    }
+
+    const sourceBlocks = await Promise.all(sourceRows.map(async (source) => {
+      const markdown = await readSourceMarkdown(userId, source)
+      const fallback = source.excerpt ? `# ${source.title}\n\n${source.excerpt}` : ''
+      const content = markdown || fallback
+      if (!content.trim()) return ''
+      return `# Source: ${source.title}\n\n${content.trim()}`
+    }))
+    const relevantSourceMarkdown = sourceBlocks.filter(Boolean).join('\n\n---\n\n').trim()
+    if (!relevantSourceMarkdown) {
+      throw new AppError(400, 'VALIDATION_ERROR', 'Linked sources do not have readable extracted text or summaries')
+    }
+
+    const currentMarkdown = current.markdown_storage_object_id
+      ? await storageService.readText({ userId, storageObjectId: current.markdown_storage_object_id }).then((result) => result.text).catch(() => '')
+      : ''
+    const customization = await aiCustomizationService.effectiveProfile(userId)
+    const proposal = {
+      title: current.title,
+      conceptType: 'topic',
+      retrievalQueries: uniqueCleanStrings([current.title, current.overview, ...(current.knowledge_tags ?? current.tags ?? [])]).slice(0, 5),
+      possibleSectionIds: [],
+      reason: 'Regenerate the existing Knowledge page from its linked source-of-truth materials.',
+    }
+    const sourceSummary: IngestSummary = {
+      title: current.title,
+      category: current.category,
+      tags: current.knowledge_tags ?? current.tags ?? [],
+      body: sourceRows.map((source) => `- ${source.title}: ${source.excerpt ?? ''}`.trim()).join('\n'),
+      excerpt: current.overview ?? '',
+      ingestBrief: {
+        durableConcepts: proposal.retrievalQueries,
+        knowledgeProposals: [proposal],
+      },
+    }
+    const prompt = getIngestPagesPrompt({
+      originalName: `${current.slug}.md`,
+      uploadedType: 'Linked sources',
+      fileKind: 'regenerate',
+      candidates: [{
+        slug: current.slug,
+        title: current.title,
+        overview: current.overview ?? '',
+        category: current.category ?? 'General',
+        tags: current.knowledge_tags ?? current.tags ?? [],
+        content: currentMarkdown || `# ${current.title}\n\n${current.overview ?? ''}`,
+        score: 1,
+        matchedQueryCount: proposal.retrievalQueries.length,
+        ftsScore: 1,
+        vectorScore: 1,
+      }],
+      relevantSourceMarkdown,
+      sourceSummary,
+      ingestBrief: sourceSummary.ingestBrief,
+      proposal,
+      knowledgeDefinition: customization.knowledgeDefinition,
+      knowledgeExtractionInstructions: customization.knowledgeExtractionInstructions,
+    })
+
+    const response = await getGeminiClient().models.generateContent({
+      model: customization.ingestModel,
+      contents: prompt.contents,
+      config: geminiConfig({
+        responseMimeType: 'application/json',
+        responseJsonSchema: KNOWLEDGE_REGENERATE_RESPONSE_SCHEMA,
+        reasoning: customization.ingestReasoning,
+        temperature: customization.ingestTemperature,
+        systemInstruction: prompt.systemInstruction,
+      }),
+    })
+    const responseText = response.text ? cleanJsonText(response.text) : ''
+    if (!responseText) throw new AppError(502, 'INTERNAL_ERROR', 'Gemini returned an empty Knowledge regenerate response')
+
+    let pages
+    try {
+      pages = normalizeIngestPages(JSON.parse(responseText), sourceSummary)
+    } catch (error) {
+      throw new AppError(502, 'INTERNAL_ERROR', `Failed to parse Knowledge regenerate JSON: ${error instanceof Error ? error.message : 'invalid JSON'}`)
+    }
+
+    const page = pages.find((item) => item.body && item.action !== 'skip') ?? pages[0]
+    if (!page || !page.body || page.action === 'skip') {
+      throw new AppError(422, 'VALIDATION_ERROR', page?.reason || 'The linked sources did not produce a regenerated Knowledge page')
+    }
+
+    const markdownObject = await storageService.upload({
+      userId,
+      kind: 'knowledge_revision',
+      originalName: `${current.slug}.md`,
+      body: page.body,
+      mimeType: 'text/markdown',
+    })
+    const nextTitle = page.title || current.title
+    const nextOverview = page.overview || excerpt(page.body, 260)
+    const nextTags = uniqueCleanStrings([...(current.knowledge_tags ?? current.tags ?? []), ...sourceRows.flatMap((source) => source.knowledge_tags ?? source.tags ?? [])])
+    const nextRelated = page.related.map((item) => ({ slug: slugify(item), title: item })).filter((item) => item.slug && item.title)
+    const eventDate = todayLabel()
+    const embedding = await embedText(`${nextTitle}\n${nextOverview}\n${excerpt(page.body, 900)}\n${nextTags.join(' ')}`)
+    const row = await knowledgeRepository.update({
+      ...currentEntry,
+      userId,
+      currentSlug: current.slug,
+      nextSlug: current.slug,
+      title: nextTitle,
+      overview: nextOverview,
+      category: current.category,
+      tags: nextTags,
+      readTime: `${Math.max(1, Math.ceil(page.body.trim().split(/\s+/).filter(Boolean).length / 220))} min read`,
+      explanation: page.body.split(/\n\s*\n/).filter(Boolean).slice(0, 4),
+      related: nextRelated,
+      references: jsonArray(current.reference_list),
+      sources: jsonArray(current.source_list),
+      timeline: [...jsonArray(current.timeline), { date: eventDate, event: `Regenerated from linked sources: ${page.reason || 'Knowledge refreshed'}` }],
+      markdownStorageObjectId: markdownObject.id,
+      knowledgeTags: nextTags,
+      embedding,
+    })
+    await knowledgeRepository.createRevision({
+      id: `revision_${crypto.randomUUID()}`,
+      userId,
+      slug: current.slug,
+      storageObjectId: markdownObject.id,
+      revisionType: 'update',
+      model: customization.ingestModel,
+      reason: page.reason || 'Regenerated Knowledge page from linked sources',
+    })
+
+    return knowledgeRow(row)
   },
 
   async propose(userId: string, slug: string, body: z.infer<typeof knowledgePatchSchema>) {

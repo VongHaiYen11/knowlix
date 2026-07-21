@@ -1,14 +1,41 @@
 import { excerpt, slugify, uniqueCleanStrings, wordCount } from '../../utils/text.js'
 import { sourcesRepository } from './sources.repository.js'
 import { pool } from '../../database/pool.js'
-import { generateIngestSummary, extractKnowledgePages, extractText } from '../../wiki/ingest.js'
+import {
+  generateIngestSummary,
+  extractKnowledgePages,
+  extractText,
+  type IngestRawFileOptions,
+  type KnowledgeProposal,
+} from '../../wiki/ingest.js'
 import { storageService } from '../../lib/storage.js'
 import { embedText } from '../../lib/embeddings.js'
 import { defaultAiCustomization, type AiCustomizationProfile } from '../ai-customization/ai-customization.defaults.js'
 
+const INITIAL_CANDIDATE_LIMIT = 15
+const MIN_VECTOR_SCORE = 0.70
+const MIN_FTS_SCORE = 0.05
+const VECTOR_WEIGHT = 0.7
+const FTS_WEIGHT = 0.3
+const SCORE_MARGIN = 0.08
+const MULTI_QUERY_MATCH_BONUS = 0.02
+const MAX_MULTI_QUERY_BONUS = 0.06
+const MAX_FULL_CANDIDATES = 5
+const TOO_MANY_STRONG_CANDIDATES = 6
+const MAX_QUERY_REFINEMENTS = 1
+const RESERVED_OUTPUT_TOKENS = 6000
+const PROMPT_OVERHEAD_TOKENS = 2000
+const MAX_CANDIDATE_MARKDOWN_TOKENS = 12000
+const MAX_SINGLE_CANDIDATE_TOKENS = 8000
+const MODEL_CONTEXT_LIMIT = 100000
+
 function readTimeFromContent(content: string) {
   const minutes = Math.max(1, Math.ceil(wordCount(content) / 220))
   return `${minutes} min read`
+}
+
+function tokenEstimate(text: string) {
+  return Math.max(1, Math.ceil(text.length / 4))
 }
 
 function timelineEvent(action: string, sourceTitle: string, reason?: string) {
@@ -37,6 +64,259 @@ function uniqueJson(values: any[], key: (value: any) => string): any[] {
     seen.add(id)
     return true
   })
+}
+
+type IngestCandidate = NonNullable<IngestRawFileOptions['candidates']>[number] & {
+  markdownStorageObjectId?: string
+  snippet: string
+  matchedQueryCount: number
+  ftsScore: number
+  vectorScore: number
+  score: number
+  matchedQueries: string[]
+}
+
+function normalizeFtsScore(score: number) {
+  if (!Number.isFinite(score) || score <= 0) return 0
+  return Math.min(1, score / (score + 0.1))
+}
+
+function hybridScore(input: { vectorScore: number; ftsScore: number; matchedQueryCount: number }) {
+  const base = VECTOR_WEIGHT * Math.max(0, Math.min(1, input.vectorScore))
+    + FTS_WEIGHT * normalizeFtsScore(input.ftsScore)
+  const bonus = Math.min(MAX_MULTI_QUERY_BONUS, Math.max(0, input.matchedQueryCount - 1) * MULTI_QUERY_MATCH_BONUS)
+  return Math.min(1, base + bonus)
+}
+
+function candidatePasses(candidate: Pick<IngestCandidate, 'vectorScore' | 'ftsScore'>) {
+  return candidate.vectorScore >= MIN_VECTOR_SCORE || candidate.ftsScore >= MIN_FTS_SCORE
+}
+
+function refineProposalQueries(proposal: KnowledgeProposal) {
+  const compact = uniqueCleanStrings([
+    proposal.title,
+    proposal.conceptType,
+    ...proposal.retrievalQueries,
+  ]).slice(0, 4)
+  return [compact.join(' ')]
+}
+
+function queryListForProposal(proposal: KnowledgeProposal, refinementCount: number) {
+  if (refinementCount > 0) return refineProposalQueries(proposal)
+  return uniqueCleanStrings([proposal.title, ...proposal.retrievalQueries]).slice(0, 4)
+}
+
+function combineCandidate(existing: IngestCandidate | undefined, next: IngestCandidate): IngestCandidate {
+  if (!existing) return next
+  const matchedQueries = uniqueCleanStrings([...existing.matchedQueries, ...next.matchedQueries])
+  const matchedQueryCount = matchedQueries.length
+  const ftsScore = Math.max(existing.ftsScore, next.ftsScore)
+  const vectorScore = Math.max(existing.vectorScore, next.vectorScore)
+  return {
+    ...existing,
+    overview: existing.overview || next.overview,
+    category: existing.category || next.category,
+    tags: uniqueCleanStrings([...(existing.tags ?? []), ...(next.tags ?? [])]),
+    snippet: existing.snippet.length >= next.snippet.length ? existing.snippet : next.snippet,
+    matchedQueries,
+    matchedQueryCount,
+    ftsScore,
+    vectorScore,
+    score: hybridScore({ ftsScore, vectorScore, matchedQueryCount }),
+  }
+}
+
+async function retrieveCandidateMetadata(userId: string, query: string): Promise<IngestCandidate[]> {
+  const trimmedQuery = query.trim()
+  if (!trimmedQuery) return []
+  const queryEmbedding = await embedText(trimmedQuery).catch(() => [])
+  const rows = queryEmbedding.length
+    ? (await pool.query(
+      `SELECT slug,title,overview,category,knowledge_tags AS tags,markdown_storage_object_id,
+        ts_rank_cd(COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))), plainto_tsquery('simple', $2)) AS fts_score,
+        1 - (embedding <=> $3::vector) AS vector_score
+       FROM knowledge_entries
+       WHERE user_id=$1
+         AND (
+          $2 = ''
+          OR COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))) @@ plainto_tsquery('simple', $2)
+          OR title ILIKE '%' || $2 || '%'
+          OR overview ILIKE '%' || $2 || '%'
+          OR embedding <=> $3::vector < 0.35
+         )
+       ORDER BY
+         (0.7 * GREATEST(0, 1 - (embedding <=> $3::vector)))
+         + (0.3 * LEAST(1, ts_rank_cd(COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))), plainto_tsquery('simple', $2)) / 0.1))
+         DESC,
+         updated_at DESC
+       LIMIT $4`,
+      [userId, trimmedQuery, `[${queryEmbedding.join(',')}]`, INITIAL_CANDIDATE_LIMIT],
+    )).rows
+    : (await pool.query(
+      `SELECT slug,title,overview,category,knowledge_tags AS tags,markdown_storage_object_id,
+        ts_rank_cd(COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))), plainto_tsquery('simple', $2)) AS fts_score,
+        0 AS vector_score
+       FROM knowledge_entries
+       WHERE user_id=$1
+         AND (
+          COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))) @@ plainto_tsquery('simple', $2)
+          OR title ILIKE '%' || $2 || '%'
+          OR overview ILIKE '%' || $2 || '%'
+         )
+       ORDER BY
+         ts_rank_cd(COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))), plainto_tsquery('simple', $2)) DESC,
+         updated_at DESC
+       LIMIT $3`,
+      [userId, trimmedQuery, INITIAL_CANDIDATE_LIMIT],
+    )).rows
+
+  return rows.map((row) => {
+    const ftsScore = Number(row.fts_score ?? 0)
+    const vectorScore = Number(row.vector_score ?? 0)
+    return {
+      slug: row.slug,
+      title: row.title,
+      overview: row.overview,
+      category: row.category,
+      tags: row.tags ?? [],
+      markdownStorageObjectId: row.markdown_storage_object_id ?? undefined,
+      content: '',
+      snippet: excerpt(`${row.title}\n${row.overview ?? ''}\n${(row.tags ?? []).join(' ')}`, 800),
+      matchedQueryCount: 1,
+      matchedQueries: [trimmedQuery],
+      ftsScore,
+      vectorScore,
+      score: hybridScore({ ftsScore, vectorScore, matchedQueryCount: 1 }),
+    }
+  })
+}
+
+async function retrieveProposalCandidates(userId: string, proposal: KnowledgeProposal): Promise<{ candidates: IngestCandidate[]; refinementUsed: boolean }> {
+  let refinementUsed = false
+  let aggregated = new Map<string, IngestCandidate>()
+
+  for (let refinementCount = 0; refinementCount <= MAX_QUERY_REFINEMENTS; refinementCount += 1) {
+    aggregated = new Map<string, IngestCandidate>()
+    const queries = queryListForProposal(proposal, refinementCount)
+    for (const query of queries) {
+      const rows = await retrieveCandidateMetadata(userId, query)
+      for (const candidate of rows) {
+        aggregated.set(candidate.slug, combineCandidate(aggregated.get(candidate.slug), candidate))
+      }
+    }
+
+    const sorted = Array.from(aggregated.values())
+      .filter(candidatePasses)
+      .sort((a, b) => b.score - a.score)
+    const topScore = sorted[0]?.score ?? 0
+    const strong = sorted.filter((candidate) => candidate.score >= topScore - SCORE_MARGIN)
+    if (strong.length >= TOO_MANY_STRONG_CANDIDATES && refinementCount < MAX_QUERY_REFINEMENTS) {
+      refinementUsed = true
+      continue
+    }
+    return { candidates: strong.slice(0, MAX_FULL_CANDIDATES), refinementUsed }
+  }
+
+  return { candidates: [], refinementUsed }
+}
+
+function headingOutline(markdown: string) {
+  const headings = markdown.match(/^#{1,6}\s+.+$/gm) ?? []
+  return headings.slice(0, 40).join('\n')
+}
+
+function reduceCandidateMarkdown(candidate: IngestCandidate, content: string, tokenBudget: number) {
+  if (tokenEstimate(content) <= tokenBudget) return content
+  const outline = headingOutline(content)
+  const charBudget = Math.max(1200, tokenBudget * 4)
+  const prefix = content.slice(0, Math.floor(charBudget * 0.75)).trim()
+  const suffix = content.slice(Math.max(0, content.length - Math.floor(charBudget * 0.15))).trim()
+  return [
+    `# ${candidate.title}`,
+    '',
+    candidate.overview,
+    '',
+    outline ? `## Existing Heading Outline\n${outline}` : '',
+    '',
+    '## Structurally Reduced Existing Markdown',
+    prefix,
+    suffix && suffix !== prefix ? `\n[...candidate reduced for context budget...]\n\n${suffix}` : '',
+  ].filter(Boolean).join('\n')
+}
+
+async function loadCandidateMarkdown(userId: string, candidates: IngestCandidate[], candidateBudget: number): Promise<IngestCandidate[]> {
+  const selected: IngestCandidate[] = []
+  let usedTokens = 0
+  for (const candidate of candidates) {
+    if (!candidate.markdownStorageObjectId) {
+      selected.push(candidate)
+      continue
+    }
+    const fullContent = await storageService.readText({ userId, storageObjectId: candidate.markdownStorageObjectId })
+      .then((result) => result.text)
+      .catch(() => '')
+    if (!fullContent) {
+      selected.push(candidate)
+      continue
+    }
+    const remainingBudget = Math.max(1200, candidateBudget - usedTokens)
+    const perCandidateBudget = Math.min(MAX_SINGLE_CANDIDATE_TOKENS, remainingBudget)
+    const content = reduceCandidateMarkdown(candidate, fullContent, perCandidateBudget)
+    const contentTokens = tokenEstimate(content)
+    if (usedTokens && usedTokens + contentTokens > candidateBudget) break
+    selected.push({ ...candidate, content })
+    usedTokens += contentTokens
+  }
+  return selected
+}
+
+async function prepareIngestContext(input: {
+  userId: string
+  summary: { ingestBrief?: { knowledgeProposals?: KnowledgeProposal[] }; title?: string; excerpt?: string; tags?: string[] }
+  canonicalMarkdown: string
+}) {
+  const fallbackProposal: KnowledgeProposal = {
+    title: input.summary.title || 'Source Knowledge',
+    conceptType: 'source',
+    retrievalQueries: uniqueCleanStrings([input.summary.title || '', input.summary.excerpt || '', ...(input.summary.tags ?? [])]).slice(0, 3),
+    possibleSectionIds: [],
+    reason: 'Fallback proposal generated from source summary.',
+  }
+  const proposals = input.summary.ingestBrief?.knowledgeProposals?.length
+    ? input.summary.ingestBrief.knowledgeProposals
+    : [fallbackProposal]
+  const candidateMap = new Map<string, IngestCandidate>()
+  let refinementUsed = false
+  let queryCount = 0
+
+  for (const proposal of proposals) {
+    queryCount += queryListForProposal(proposal, 0).length
+    const result = await retrieveProposalCandidates(input.userId, proposal)
+    refinementUsed = refinementUsed || result.refinementUsed
+    for (const candidate of result.candidates) {
+      candidateMap.set(candidate.slug, combineCandidate(candidateMap.get(candidate.slug), candidate))
+    }
+  }
+
+  const narrowed = Array.from(candidateMap.values())
+    .filter(candidatePasses)
+    .sort((a, b) => b.score - a.score)
+  const topScore = narrowed[0]?.score ?? 0
+  const strong = narrowed.filter((candidate) => candidate.score >= topScore - SCORE_MARGIN).slice(0, MAX_FULL_CANDIDATES)
+  const sourceMarkdown = input.canonicalMarkdown
+  const sourceTokens = tokenEstimate(sourceMarkdown)
+  const dynamicCandidateBudget = Math.max(0, MODEL_CONTEXT_LIMIT - RESERVED_OUTPUT_TOKENS - PROMPT_OVERHEAD_TOKENS - sourceTokens)
+  const candidateBudget = Math.min(MAX_CANDIDATE_MARKDOWN_TOKENS, dynamicCandidateBudget)
+  const candidates = await loadCandidateMarkdown(input.userId, strong, candidateBudget)
+  const candidateTokens = candidates.reduce((sum, candidate) => sum + tokenEstimate(candidate.content || candidate.snippet || ''), 0)
+
+  console.log(`[Ingest] Context prepared: proposals=${proposals.length}, queries=${queryCount}, candidates=${narrowed.length}, strong=${strong.length}, loaded=${candidates.length}, refinement=${refinementUsed ? 'yes' : 'no'}, sourceTokens=${sourceTokens}, candidateTokens=${candidateTokens}, slugs=${candidates.map((candidate) => candidate.slug).join(',')}`)
+
+  return {
+    proposals,
+    candidates,
+    relevantSourceMarkdown: sourceMarkdown,
+  }
 }
 
 async function collapseMergedKnowledge(input: {
@@ -169,43 +449,25 @@ export async function runBackgroundIngest(input: {
       customization,
     })
 
-    // 3. Generate embedding for hybrid search using the summary excerpt
-    const textSnippet = summary.excerpt || summary.body || preExtractedText?.text?.slice(0, 1000) || originalName
-    const fileEmbedding = await embedText(textSnippet).catch(() => [])
-    const embeddingStr = `[${fileEmbedding.join(',')}]`
+    if (!preExtractedText) {
+      preExtractedText = await extractText(raw.buffer, originalName)
+    }
+    const canonicalMarkdown = preExtractedText?.canonicalMarkdown || preExtractedText?.text || ''
+    const preparedContext = await prepareIngestContext({
+      userId,
+      summary,
+      canonicalMarkdown,
+    })
     
-    // 4. Find candidates using Hybrid Search (FTS + Vector)
-    const candidatesResult = await pool.query(
-      `SELECT slug,title,overview,category,knowledge_tags AS tags,markdown_storage_object_id
-       FROM knowledge_entries
-       WHERE user_id=$1
-       ORDER BY GREATEST(
-          ts_rank_cd(COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))), plainto_tsquery('simple', $2)),
-          1 - (embedding <=> $3::vector)
-       ) DESC, updated_at DESC
-       LIMIT 5`,
-      [userId, originalName, embeddingStr],
-    )
-
-    const candidates = await Promise.all(candidatesResult.rows.map(async (row) => ({
-      slug: row.slug,
-      title: row.title,
-      overview: row.overview,
-      category: row.category,
-      tags: row.tags ?? [],
-      content: row.markdown_storage_object_id
-        ? await storageService.readText({ userId, storageObjectId: row.markdown_storage_object_id }).then((result) => result.text).catch(() => '')
-        : '',
-    })))
-    
-    // 5. Extract knowledge pages using candidates and summary
+    // 3. Extract final Knowledge actions with the narrowed full context.
     const ingest = await extractKnowledgePages(raw.buffer, summary, {
       originalName,
       uploadedType,
       rawStorageUrl,
       preExtractedText,
       customization,
-      candidates,
+      candidates: preparedContext.candidates,
+      relevantSourceMarkdown: preparedContext.relevantSourceMarkdown,
     })
 
     const extractedObject = ingest.extractedText
@@ -256,7 +518,7 @@ export async function runBackgroundIngest(input: {
 
     const sourceReference = { id: sourceId, type: uploadedType, title: sourceTitle }
     const writtenObjects = [extractedObject?.url, summaryObject?.url].filter(Boolean)
-    const candidateSlugs = new Set(candidates.map((candidate) => candidate.slug))
+    const candidateSlugs = new Set(preparedContext.candidates.map((candidate) => candidate.slug))
     for (const page of ingest.pages) {
       let action = page.action ?? 'create'
       if (action === 'skip') continue

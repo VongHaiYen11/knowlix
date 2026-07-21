@@ -17,8 +17,3 @@ export const aiCustomizationPatchSchema = z.object({
   knowledgeExtractionInstructions: z.string().trim().max(8000).optional(),
   researchAnswerInstructions: z.string().trim().max(8000).optional(),
 }).strict()
-
-export const costEstimateSchema = z.object({
-  workflow: z.enum(['ingestion', 'research']),
-  question: z.string().trim().max(8000).optional(),
-}).strict()
