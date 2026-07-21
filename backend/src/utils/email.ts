@@ -1,10 +1,10 @@
 import nodemailer from 'nodemailer'
 import { env } from '../config/env.js'
 
-// Parse FROM address: if it does not contain a '@', we should add '<onboarding@resend.dev>'
+// Parse FROM address: if it does not contain a '@', we should append the SMTP user email address
 let fromAddress = env.smtpFrom
-if (!fromAddress.includes('@')) {
-  fromAddress = `${fromAddress} <onboarding@resend.dev>`
+if (!fromAddress.includes('@') && env.smtpUser) {
+  fromAddress = `${fromAddress} <${env.smtpUser}>`
 }
 
 const transporter = nodemailer.createTransport({
