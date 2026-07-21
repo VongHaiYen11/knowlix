@@ -20,12 +20,15 @@ export function MarkdownPreview({ content }: { content: string }) {
           a: ({ children, href }) => <a href={href} className="text-primary underline decoration-primary/30 underline-offset-2 hover:decoration-primary">{children}</a>,
           li: ({ children }) => <li className="ml-5 list-disc text-[17px] leading-relaxed text-foreground/90">{children}</li>,
           blockquote: ({ children }) => <blockquote className="my-5 border-l-2 border-primary/40 pl-5 font-serif text-lg italic leading-relaxed text-muted-foreground">{children}</blockquote>,
+          pre: ({ children }) => <pre className="my-5 max-w-full overflow-x-auto whitespace-pre-wrap break-words rounded-xl border border-border bg-secondary/70 p-4 font-mono text-sm leading-relaxed [overflow-wrap:anywhere]">{children}</pre>,
           code: ({ className, children }) => {
             const language = /language-(\w+)/.exec(className ?? '')?.[1]
-            const value = String(children).replace(/\n$/, '')
+            const rawValue = String(children)
+            const value = rawValue.replace(/\n$/, '')
+            const isBlock = Boolean(className) || rawValue.includes('\n')
             if (language === 'mermaid') return <MermaidDiagram chart={value} />
-            if (!className && !value.includes('\n')) return <code className="rounded-md bg-secondary px-1.5 py-0.5 font-mono text-[0.85em]">{children}</code>
-            return <pre className="my-5 overflow-auto rounded-xl border border-border bg-secondary/70 p-4 font-mono text-sm leading-relaxed"><code>{value}</code></pre>
+            if (!isBlock) return <code className="break-words rounded-md bg-secondary px-1.5 py-0.5 font-mono text-[0.85em] [overflow-wrap:anywhere]">{children}</code>
+            return <code className={className}>{value}</code>
           },
           table: ({ children }) => <div className="my-5 overflow-x-auto rounded-xl border border-border elevated"><table className="w-full border-collapse text-sm">{children}</table></div>,
           th: ({ children }) => <th className="border-b border-border px-4 py-2.5 text-left font-medium">{children}</th>,

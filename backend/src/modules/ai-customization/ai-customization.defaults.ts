@@ -42,9 +42,9 @@ export const modelCatalog = [
     supportsThinkingBudget: true,
   },
   {
-    id: 'gemini-2.5-pro',
-    label: 'Gemini 2.5 Pro',
-    description: 'Higher quality model for difficult extraction or research.',
+    id: 'gemini-3-flash-preview',
+    label: 'Gemini 3 Flash Preview',
+    description: 'Preview model for newer Gemini capabilities.',
     supportsThinkingBudget: true,
   },
 ] as const

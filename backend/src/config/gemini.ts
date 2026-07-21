@@ -2,6 +2,17 @@ import { GoogleGenAI } from '@google/genai'
 import { env } from './env.js'
 import { AppError } from '../errors/index.js'
 
+function modelFromArgs(args: readonly unknown[]): string {
+  const request = args[0]
+  if (!request || typeof request !== 'object') return 'unknown'
+  const model = (request as { model?: unknown }).model
+  return typeof model === 'string' && model.trim() ? model : 'unknown'
+}
+
+function logGeminiCall(operation: string, args: readonly unknown[], attempt: number, maxAttempts: number) {
+  console.info(`[Gemini API] operation=${operation} model=${modelFromArgs(args)} attempt=${attempt}/${maxAttempts}`)
+}
+
 export function getGeminiClient(): GoogleGenAI {
   if (!env.geminiApiKey) {
     throw new AppError(500, 'INTERNAL_ERROR', 'Missing GEMINI_API_KEY configuration')
@@ -15,6 +26,7 @@ export function getGeminiClient(): GoogleGenAI {
     let lastError: any
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
+        logGeminiCall('generateContent', args, attempt, maxRetries)
         return await originalGenerate(...args)
       } catch (err) {
         lastError = err
@@ -35,6 +47,7 @@ export function getGeminiClient(): GoogleGenAI {
     let lastError: any
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
+        logGeminiCall('generateContentStream', args, attempt, maxRetries)
         return await originalGenerateStream(...args)
       } catch (err) {
         lastError = err
@@ -54,6 +67,7 @@ export function getGeminiClient(): GoogleGenAI {
     let lastError: any
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
+        logGeminiCall('embedContent', args, attempt, maxRetries)
         return await originalEmbed(...args)
       } catch (err) {
         lastError = err

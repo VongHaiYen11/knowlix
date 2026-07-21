@@ -5,15 +5,8 @@ import { PageShell } from '@/components/common/PageShell'
 import { Button } from '@/components/ui/Button'
 import { PromptEditModal, PromptPreviewRow, promptMeta, type PromptKey } from '@/features/customization/CustomizationPanels'
 import { SettingsGroup, SettingsRow } from '@/features/settings/SettingsGroup'
-import { aiCustomizationService, type AiCustomizationProfile, type AiCustomizationResponse, type AiReasoning } from '@/services/aiCustomizationService'
+import { aiCustomizationService, type AiCustomizationProfile, type AiCustomizationResponse } from '@/services/aiCustomizationService'
 import { cn } from '@/utils/cn'
-
-const reasoningOptions: Array<{ value: AiReasoning; label: string }> = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'low', label: 'Low' },
-  { value: 'balanced', label: 'Balanced' },
-  { value: 'high', label: 'High' },
-]
 
 function temperatureValue(value: number | null) {
   return value === null ? '' : String(value)
@@ -133,11 +126,6 @@ export function CustomizationPage() {
               {data.modelCatalog.map((model) => <option key={model.id} value={model.id}>{model.label}</option>)}
             </select>
           </SettingsRow>
-          <SettingsRow label="Reasoning" hint="Controls the relative thinking budget for ingestion calls.">
-            <select value={draft.ingestReasoning} onChange={(event) => updateAndSave('ingestReasoning', event.target.value as AiReasoning)} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:outline-none sm:w-72">
-              {reasoningOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-            </select>
-          </SettingsRow>
           <SettingsRow label="Temperature" hint="Leave blank to use the model default. Use 0-1 for more control.">
             <input value={temperatureValue(draft.ingestTemperature)} onChange={(event) => updateAndSave('ingestTemperature', parseTemperature(event.target.value))} inputMode="decimal" placeholder="Model default" className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm focus:outline-none sm:w-72" />
           </SettingsRow>
@@ -149,11 +137,6 @@ export function CustomizationPage() {
           <SettingsRow label="Model" hint="Used for candidate selection and final research answers.">
             <select value={draft.researchModel} onChange={(event) => updateAndSave('researchModel', event.target.value)} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:outline-none sm:w-72">
               {data.modelCatalog.map((model) => <option key={model.id} value={model.id}>{model.label}</option>)}
-            </select>
-          </SettingsRow>
-          <SettingsRow label="Reasoning" hint="Controls the relative thinking budget for final answers.">
-            <select value={draft.researchReasoning} onChange={(event) => updateAndSave('researchReasoning', event.target.value as AiReasoning)} className="h-10 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:outline-none sm:w-72">
-              {reasoningOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
           </SettingsRow>
           <SettingsRow label="Temperature" hint="Leave blank to use the model default. Selection stays deterministic server-side.">

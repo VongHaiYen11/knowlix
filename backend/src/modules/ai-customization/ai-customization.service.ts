@@ -1,7 +1,7 @@
 import type { z } from 'zod'
 import { aiCustomizationRepository, type AiCustomizationRow } from './ai-customization.repository.js'
 import { type aiCustomizationPatchSchema } from './ai-customization.schemas.js'
-import { defaultAiCustomization, modelCatalog, type AiCustomizationProfile } from './ai-customization.defaults.js'
+import { allowedModelId, defaultAiCustomization, modelCatalog, type AiCustomizationProfile } from './ai-customization.defaults.js'
 
 function numberOrNull(value: string | number | null): number | null {
   if (value === null) return null
@@ -13,8 +13,8 @@ function rowToProfile(row: AiCustomizationRow | null): AiCustomizationProfile {
   const defaults = defaultAiCustomization()
   if (!row) return defaults
   return {
-    ingestModel: row.ingest_model || defaults.ingestModel,
-    researchModel: row.research_model || defaults.researchModel,
+    ingestModel: allowedModelId(row.ingest_model) ? row.ingest_model : defaults.ingestModel,
+    researchModel: allowedModelId(row.research_model) ? row.research_model : defaults.researchModel,
     ingestReasoning: row.ingest_reasoning || defaults.ingestReasoning,
     researchReasoning: row.research_reasoning || defaults.researchReasoning,
     ingestTemperature: numberOrNull(row.ingest_temperature),
