@@ -1,8 +1,11 @@
 import type { Request, Response } from 'express'
+import bcrypt from 'bcryptjs'
 import { env } from '../../config/env.js'
 import { sessionCookieOptions } from '../../config/cookies.js'
 import { authService } from './auth.service.js'
-import { AppError } from '../../errors/index.js'
+import { authRepository } from './auth.repository.js'
+import { AppError, UnauthorizedError } from '../../errors/index.js'
+import type { AuthedRequest } from '../../types/request.js'
 
 export const authController = {
   async signup(req: Request, res: Response) {
@@ -63,5 +66,17 @@ export const authController = {
         : 'The verification link is invalid or has already been used.'
       throw new AppError(400, 'VALIDATION_ERROR', errorMsg)
     }
+  },
+
+  async verifyPassword(req: AuthedRequest, res: Response) {
+    const { password } = req.body
+    if (!password || typeof password !== 'string') {
+      throw new AppError(400, 'VALIDATION_ERROR', 'Password is required')
+    }
+    const user = await authRepository.findRecordById(req.user.id)
+    if (!user) throw new UnauthorizedError()
+    const passwordOk = await bcrypt.compare(password, user.passwordHash)
+    if (!passwordOk) throw new AppError(400, 'VALIDATION_ERROR', 'Incorrect password')
+    res.json({ ok: true })
   },
 }

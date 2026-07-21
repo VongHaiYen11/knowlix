@@ -24,4 +24,7 @@ export const authService = {
   async resetPassword(input: { token: string; password: string }): Promise<{ ok: boolean; message: string }> {
     return apiClient.post<{ ok: boolean; message: string }>('/api/v1/auth/reset-password', input)
   },
+  async verifyPassword(password: string): Promise<{ ok: boolean }> {
+    return apiClient.post<{ ok: boolean }>('/api/v1/auth/verify-password', { password })
+  },
 }
