@@ -21,10 +21,20 @@ These rules describe the current Knowlix frontend. Keep them aligned with the ac
 ## Design System
 
 - Prefer existing UI components in `src/components/ui`: `Badge`, `Button`, `Card`, `ConfirmDialog`, `Dropdown`, `EmptyState`, `SearchInput`, `Skeleton`, `Tabs`, and `Toggle`.
+- Reuse existing components whenever possible. If a UI pattern appears more than once, or two components are only slightly different, extract a shared component instead of copying the same structure again.
 - Use semantic Tailwind classes backed by project CSS variables: `background`, `foreground`, `card`, `border`, `primary`, `secondary`, `accent`, `muted`, and `destructive`.
 - Avoid hardcoded hex colors, one-off shadows, arbitrary radii, or ad hoc spacing when an existing token/component works.
 - Use `cn()` from `src/utils/cn.ts` for conditional class composition.
 - Keep layouts responsive by default; sidebar/mobile behavior should be handled through shared shell patterns rather than page-specific nav hacks.
+
+## Component Placement
+
+- Put only generic, app-wide primitives in `src/components/ui`. A component belongs there only when it has no product-specific language, route knowledge, data fetching, or Knowlix domain assumptions.
+- Put shared page framing and global layout in `src/components/common` or `src/components/layout`, following the current `PageHeader`, `PageShell`, `SectionHeading`, `AppShell`, and `ThemeToggle` split.
+- Put reusable domain UI in `src/features/<feature>/`. Examples: Library cards/lists belong under `features/library`, Research panels under `features/research`, editor controls under `features/editor`.
+- Keep page files focused on route composition, state wiring, and high-level flow. Pages should not become home for reusable cards, drawers, modals, or table rows.
+- If two feature components become genuinely generic, promote the shared primitive downward into `components/ui` only after removing feature-specific copy and assumptions.
+- Do not create a second version of an existing primitive with a slightly different name. Extend the existing component API conservatively.
 
 ## Data and API Rules
 
@@ -34,6 +44,9 @@ These rules describe the current Knowlix frontend. Keep them aligned with the ac
 - `apiLibraryRepository` is the real app path when API mode is enabled; `indexedDbLibraryRepository` is fallback/offline/dev behavior only.
 - Merge, regenerate, upload ingest, and source promotion require API-backed behavior; do not make IndexedDB the canonical path for those workflows.
 - Use `getAllPages()` for paginated API lists that need complete collections.
+- Do not call `fetch` directly from pages or visual components. Add API behavior to a repository/service layer first.
+- Keep request/response TypeScript interfaces next to the service that owns the API call unless the type is shared across multiple domains.
+- Treat route strings as constants from `src/constants/routes.ts`; avoid hardcoded internal route strings inside components.
 
 ## Product Behavior
 
@@ -49,6 +62,11 @@ These rules describe the current Knowlix frontend. Keep them aligned with the ac
 
 - Keep visible copy concise and in English unless the task explicitly asks otherwise.
 - Reuse feature components under `src/features/*` before adding new page-local components.
+- Do not let one file grow into a catch-all page. If a file becomes hard to scan or keeps accumulating unrelated sections, split repeated rows, panels, modals, cards, or hooks into focused feature components.
 - Keep large pages readable by extracting repeated panels, rows, or modal content into feature components.
 - When changing a shared component such as `AppShell`, `PageShell`, `PageHeader`, `Button`, or `Dropdown`, check the routes that already consume it.
+- Keep modals, panels, and repeated form rows controlled by props when they are reusable. Do not hide important side effects inside presentational components.
+- Avoid duplicating loading, empty, and error states. Reuse `Skeleton`, `EmptyState`, and existing feature-level patterns.
+- Prefer lucide icons already used in the app. Do not add custom SVG icons unless no suitable icon exists.
+- After changing route structure, navigation, source types, API contracts, or product behavior, update the relevant README/AGENTS docs in the same sweep.
 - Run `npm run build` in `frontend/` after TypeScript or component changes.
