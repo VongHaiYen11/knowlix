@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&display=swap');
 @import 'tailwindcss';
 @import 'katex/dist/katex.min.css';
 
@@ -32,7 +33,7 @@
 :root {
   color-scheme: light;
   --font-sans-token: Inter, ui-sans-serif, system-ui, sans-serif;
-  --font-serif-token: "DM Serif Display", ui-serif, Georgia, serif;
+  --font-serif-token: "Lora", ui-serif, Georgia, serif;
   --font-mono-token: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   --radius-sm-token: 0.5rem;
   --radius-md-token: 0.75rem;
