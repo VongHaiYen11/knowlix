@@ -1,4 +1,4 @@
-import { ArrowDownUp, Brain, CalendarDays, Clock, Layers, MessageSquareText, Search, Tag } from 'lucide-react'
+import { ArrowDownUp, Brain, CalendarDays, Clock, Layers, MessageSquareText, Search, Tag, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
@@ -17,6 +17,7 @@ interface ResearchHistoryPanelProps {
   categories: string[]
   onSelectThread: (id: string) => void
   onOpenSummary: (id: string) => void
+  onDeleteThread: (id: string) => void
 }
 
 const formatDate = (value: string) => new Intl.DateTimeFormat('en', {
@@ -26,7 +27,7 @@ const formatDate = (value: string) => new Intl.DateTimeFormat('en', {
   minute: '2-digit',
 }).format(new Date(value))
 
-export function ResearchHistoryPanel({ threads, activeThreadId, tags, categories, onSelectThread, onOpenSummary }: ResearchHistoryPanelProps) {
+export function ResearchHistoryPanel({ threads, activeThreadId, tags, categories, onSelectThread, onOpenSummary, onDeleteThread }: ResearchHistoryPanelProps) {
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState(sortOptions[0])
   const [selectedTags, setSelectedTags] = useState<string[]>([])
@@ -142,6 +143,18 @@ export function ResearchHistoryPanel({ threads, activeThreadId, tags, categories
                               <Brain className="h-3.5 w-3.5" />
                             </span>
                           ) : null}
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              onDeleteThread(thread.id)
+                            }}
+                            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition hover:border-destructive/40 hover:text-destructive"
+                            aria-label={`Delete ${thread.title || 'Untitled'}`}
+                            title="Delete chat"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                           <Badge tone="accent">{thread.scope.dateRange}</Badge>
                         </span>
                       </div>

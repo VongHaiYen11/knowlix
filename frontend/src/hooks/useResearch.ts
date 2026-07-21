@@ -256,6 +256,18 @@ export function useResearch(initialQuestion: string) {
     setInput('')
   }, [])
 
+  const deleteThread = useCallback(async (id: string) => {
+    pendingPersistIds.current.delete(id)
+    await researchService.deleteThread(id)
+    setThreads((current) => {
+      const next = current.filter((thread) => thread.id !== id)
+      setActiveThreadId((activeId) => activeId === id ? next[0]?.id ?? '' : activeId)
+      return next
+    })
+    setSummaryLoadingThreadId((current) => current === id ? null : current)
+    setSummaryError(null)
+  }, [])
+
   const generateSummary = useCallback(async (id = activeThreadId) => {
     const thread = threads.find((item) => item.id === id)
     if (!thread) throw new Error('Research thread not found')
@@ -289,6 +301,7 @@ export function useResearch(initialQuestion: string) {
     reset,
     renameThread,
     selectThread,
+    deleteThread,
     generateSummary,
     summaryLoadingThreadId,
     summaryError,

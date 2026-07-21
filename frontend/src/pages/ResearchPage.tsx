@@ -1,8 +1,9 @@
-import { Brain, History, MessageSquarePlus, PencilLine } from 'lucide-react'
+import { Brain, History, MessageSquarePlus, PencilLine, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { PageHeader } from '@/components/common/PageHeader'
 import { Button } from '@/components/ui/Button'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Conversation } from '@/features/research/Conversation'
 import { EvidencePanel } from '@/features/research/EvidencePanel'
 import { ResearchHistoryPanel } from '@/features/research/ResearchHistoryPanel'
@@ -16,6 +17,9 @@ export function ResearchPage() {
   const [scopeOpen, setScopeOpen] = useState(true)
   const [renaming, setRenaming] = useState(false)
   const [summaryThreadId, setSummaryThreadId] = useState<string | null>(null)
+  const [deleteThreadId, setDeleteThreadId] = useState<string | null>(null)
+  const [deletingThread, setDeletingThread] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const taxonomy = useTaxonomy()
   const taxonomyData = taxonomy.data
@@ -27,6 +31,22 @@ export function ResearchPage() {
   const assistantThinking = research.messages.some((message) => message.role === 'assistant' && message.content === 'Thinking...')
   const hasEnoughMessagesForSummary = Boolean(research.activeThread) && research.messages.length > 3
   const canSummarizeCurrent = hasEnoughMessagesForSummary && !assistantThinking
+  const threadToDelete = deleteThreadId ? research.threads.find((thread) => thread.id === deleteThreadId) : undefined
+
+  async function confirmDeleteThread() {
+    if (!deleteThreadId || deletingThread) return
+    setDeletingThread(true)
+    setDeleteError(null)
+    try {
+      await research.deleteThread(deleteThreadId)
+      if (summaryThreadId === deleteThreadId) setSummaryThreadId(null)
+      setDeleteThreadId(null)
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : 'Could not delete this chat')
+    } finally {
+      setDeletingThread(false)
+    }
+  }
 
   async function openCurrentSummary() {
     const thread = research.activeThread
@@ -120,6 +140,20 @@ export function ResearchPage() {
                     {research.summaryLoadingThreadId === research.activeThread?.id ? 'Summarizing...' : 'Summary'}
                   </Button>
                 ) : null}
+                {research.activeThread ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeleteError(null)
+                      setDeleteThreadId(research.activeThread?.id ?? null)
+                    }}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-primary-foreground/75 transition hover:bg-primary-foreground/10 hover:text-primary-foreground"
+                    aria-label="Delete current chat"
+                    title="Delete chat"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                ) : null}
               </div>
             </div>
             <Conversation messages={research.messages} input={research.input} onInput={research.setInput} onSend={research.send} />
@@ -138,6 +172,10 @@ export function ResearchPage() {
               onOpenSummary={(id) => {
                 research.clearSummaryError()
                 setSummaryThreadId(id)
+              }}
+              onDeleteThread={(id) => {
+                setDeleteError(null)
+                setDeleteThreadId(id)
               }}
             />
           </div>
@@ -161,6 +199,20 @@ export function ResearchPage() {
         error={research.summaryError}
         onClose={() => setSummaryThreadId(null)}
         onRegenerate={regenerateSummary}
+      />
+      <ConfirmDialog
+        open={Boolean(deleteThreadId)}
+        title="Delete chat?"
+        message={`This permanently deletes "${threadToDelete?.title || 'Untitled'}" and its messages.`}
+        confirmLabel="Delete chat"
+        error={deleteError}
+        loading={deletingThread}
+        onConfirm={() => void confirmDeleteThread()}
+        onCancel={() => {
+          if (deletingThread) return
+          setDeleteThreadId(null)
+          setDeleteError(null)
+        }}
       />
     </div>
   )

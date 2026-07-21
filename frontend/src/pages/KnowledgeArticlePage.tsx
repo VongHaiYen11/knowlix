@@ -79,9 +79,9 @@ export function KnowledgeArticlePage({ slug }: { slug: string }) {
                       <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
                         <Icon className="h-4 w-4" strokeWidth={1.75} />
                       </span>
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{source.type}</p>
-                        <p className="mt-0.5 text-sm font-medium leading-snug hover:text-primary transition-colors">{source.title}</p>
+                        <p title={source.title} className="mt-0.5 truncate text-sm font-medium leading-snug transition-colors hover:text-primary">{source.title}</p>
                       </div>
                     </Link>
                   </li>

@@ -111,7 +111,7 @@ export function LibraryContentEditorPage({ id, kind }: LibraryContentEditorPageP
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] flex-col">
+    <div className="flex h-[calc(100vh-4rem)] min-h-0 flex-col">
       <div className="flex items-center gap-3 border-b border-border px-4 py-3 md:px-6 lg:px-8">
         <Link to={backRoute} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" />Viewer</Link>
         <div className="min-w-0 flex-1">
@@ -122,7 +122,7 @@ export function LibraryContentEditorPage({ id, kind }: LibraryContentEditorPageP
       </div>
       <EditorToolbar view={view} onView={setView} onInsert={insertBlock} onSurround={surround} />
       <div ref={splitRef} className="flex min-h-0 flex-1">
-        {view !== 'preview' && <div className={cn('min-w-0 overflow-auto', view !== 'split' && 'flex-1')} style={view === 'split' ? { flexBasis: `${editorWidth}%` } : undefined}><div className="editor-frame"><textarea ref={ref} value={draft} onChange={(event) => setDraft(event.target.value)} spellCheck className="min-h-[65vh] w-full resize-none bg-transparent font-mono text-sm leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none" aria-label="Markdown editor" /></div></div>}
+        {view !== 'preview' && <div className={cn('flex min-h-0 min-w-0 flex-col overflow-hidden', view !== 'split' && 'flex-1')} style={view === 'split' ? { flexBasis: `${editorWidth}%` } : undefined}><div className="editor-frame min-h-0 flex-1"><textarea ref={ref} value={draft} onChange={(event) => setDraft(event.target.value)} spellCheck className="block h-full min-h-0 w-full resize-none overflow-auto bg-transparent font-mono text-sm leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none" aria-label="Markdown editor" /></div></div>}
         {view === 'split' && <button type="button" onPointerDown={startResize} className="group relative w-3 shrink-0 cursor-col-resize border-x border-border bg-secondary/40 transition hover:bg-accent/60" aria-label="Resize editor and preview panes"><span className="absolute left-1/2 top-1/2 h-10 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-border transition group-hover:bg-primary" /></button>}
         {view !== 'edit' && <div className="min-w-0 flex-1 overflow-auto"><div className="editor-frame"><MarkdownPreview content={draft} /></div></div>}
       </div>
