@@ -47,6 +47,7 @@ These rules describe the current Knowlix frontend. Keep them aligned with the ac
 - Do not call `fetch` directly from pages or visual components. Add API behavior to a repository/service layer first.
 - Keep request/response TypeScript interfaces next to the service that owns the API call unless the type is shared across multiple domains.
 - Treat route strings as constants from `src/constants/routes.ts`; avoid hardcoded internal route strings inside components.
+- Treat backend request/response shapes, status codes, pagination metadata, supported enum values, and redirects as contracts. Update frontend types and repository adapters in the same change when those contracts move.
 
 ## Product Behavior
 
@@ -56,7 +57,7 @@ These rules describe the current Knowlix frontend. Keep them aligned with the ac
 - Research threads are DB-backed through `/api/v1/research/threads`; local client state is a working/fallback cache, not the source of truth.
 - Research summaries are thread-scoped modal previews. Do not turn them into Knowledge, Notes, or Library artifacts.
 - Hide Research summary actions until the thread is eligible; do not show unusable disabled controls for ineligible short chats.
-- Customization contains model, reasoning, temperature, and prompt requirement controls. The cost/token estimator feature has been removed and should not be reintroduced without a full product decision.
+- Customization visibly exposes model, temperature, and prompt requirement controls. Reasoning-budget controls and the cost/token estimator are not part of the current UI and should not be reintroduced without an explicit product decision.
 
 ## Editing Standards
 
@@ -68,5 +69,9 @@ These rules describe the current Knowlix frontend. Keep them aligned with the ac
 - Keep modals, panels, and repeated form rows controlled by props when they are reusable. Do not hide important side effects inside presentational components.
 - Avoid duplicating loading, empty, and error states. Reuse `Skeleton`, `EmptyState`, and existing feature-level patterns.
 - Prefer lucide icons already used in the app. Do not add custom SVG icons unless no suitable icon exists.
-- After changing route structure, navigation, source types, API contracts, or product behavior, update the relevant README/AGENTS docs in the same sweep.
+- Treat documentation updates as part of implementation. Update `frontend/README.md` whenever routes, navigation, user-visible behavior, rendering rules, frontend architecture, API integration, environment variables, or scripts change.
+- Update `backend/README.md` when a frontend change requires a backend contract change, and update the root `README.md` when capabilities, setup, or cross-stack workflow changes.
+- Update `../docs/architecture_design_pattern.md` and the relevant `AGENTS.md` whenever a durable boundary or coding convention changes.
+- Before finishing, search README/AGENTS files for stale controls, routes, model names, contract fields, and commands related to the change.
 - Run `npm run build` in `frontend/` after TypeScript or component changes.
+- For full-stack contract changes, run the backend tests/build after updating the backend side as well.

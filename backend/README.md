@@ -75,11 +75,14 @@ The backend is responsible for:
 
 ## 🏗 Architecture Overview
 
-The backend follows a simple layered module structure:
+The backend follows layered boundaries, with focused use cases for workflows that coordinate several systems:
 
 ```text
-HTTP route -> controller -> service -> repository -> PostgreSQL / Storage / Gemini
+HTTP route -> controller -> service/use case -> repository or infrastructure port
+                                              -> PostgreSQL / Supabase / Gemini
 ```
+
+SQL, transactions, Pool/Client access, and SQL filter construction stay in `*.repository.ts` or `src/database/`. Database rows are converted to API-facing shapes by `*.mapper.ts`. The architecture rules and guard tests are documented in [`../docs/architecture_design_pattern.md`](../docs/architecture_design_pattern.md).
 
 ### Routing Layer
 
@@ -95,12 +98,12 @@ HTTP route -> controller -> service -> repository -> PostgreSQL / Storage / Gemi
 - **What problem it solves:** Makes route behavior easy to scan and keeps response formatting close to the API boundary.
 - **Trade-off:** Some streaming behavior, such as research SSE, necessarily stays controller-aware.
 
-### Service Layer
+### Service / Use Case Layer
 
-- **What was chosen:** Services own workflows such as upload ingest, research answer generation, account updates, and note promotion.
+- **What was chosen:** Services own ordinary domain workflows. Focused use-case classes under `src/modules/sources/use-cases/` own complex source ingestion and deletion workflows.
 - **Why it was chosen:** Most Knowlix operations combine database writes, storage calls, LLM calls, and validation-derived data.
 - **What problem it solves:** Centralizes business logic instead of spreading it across controllers and repositories.
-- **Trade-off:** Services can become long when a flow is complex, as seen in ingest.
+- **Dependency rule:** Use cases receive narrow repository, storage, embedding, extraction, and generation ports through constructor injection, with production defaults supplied at composition time.
 
 ### Repository Layer
 
@@ -108,6 +111,7 @@ HTTP route -> controller -> service -> repository -> PostgreSQL / Storage / Gemi
 - **Why it was chosen:** The schema uses PostgreSQL JSONB, arrays, full-text search, and pgvector operators directly.
 - **What problem it solves:** Gives precise control over retrieval queries, upserts, transactions, and indexes.
 - **Trade-off:** There is no ORM-level abstraction; schema changes must be propagated manually.
+- **Boundary:** Services and use cases pass typed filters or domain inputs and never construct SQL fragments.
 
 ### Database Layer
 
@@ -126,7 +130,7 @@ HTTP route -> controller -> service -> repository -> PostgreSQL / Storage / Gemi
 
 - `cookie-parser` reads session cookies.
 - CORS allows the configured frontend origin with credentials.
-- `validateBody` parses request bodies with Zod.
+- `validateBody` and `validateQuery` parse request bodies and query strings with Zod at the routing layer.
 - `requireAuth` loads the current user and attaches it to the request.
 - `asyncRoute` forwards async errors to the global error handler.
 - `multerErrorMiddleware` maps upload size errors to a typed API error.
@@ -194,7 +198,7 @@ HTTP route -> controller -> service -> repository -> PostgreSQL / Storage / Gemi
 6. An `uploaded_files` row is created with `pending` ingest status.
 7. A `sources` row is created as `Markdown` with `Processing` status.
 8. The original note row is deleted.
-9. `runBackgroundIngest` starts the same ingest flow used by file uploads.
+9. `GenerateSourceSummaryUseCase.execute` starts the same background ingest flow used by file uploads.
 
 **Design choice:**
 
@@ -247,7 +251,7 @@ after a note is converted into a Markdown source.
 
 #### 3. Store raw source bytes
 
-- **Module:** `sources.service.ts`, `storageService.upload`
+- **Module:** `IngestSourceFileUseCase`, `storageService.upload`, `storage.repository.ts`
 - **What happens:** the raw file buffer is uploaded to Supabase Storage with kind `raw_source`.
 - **Tables written:** `storage_objects`
 - **External calls:** Supabase Storage upload
@@ -256,7 +260,7 @@ after a note is converted into a Markdown source.
 
 #### 4. Create upload and source records
 
-- **Module:** `sources.service.ts`, `sources.repository.ts`
+- **Module:** `IngestSourceFileUseCase`, `sources.repository.ts`
 - **What happens:** the backend creates:
   - an `uploaded_files` row with `pending` ingest status
   - a `sources` row with `Processing` status
@@ -266,8 +270,8 @@ after a note is converted into a Markdown source.
 
 #### 5. Start background ingest
 
-- **Module:** `sources.service.ts`, `sources.ingest-service.ts`
-- **What happens:** the backend reads the user's effective AI customization, passes that immutable snapshot to `runBackgroundIngest`, and does not await the job.
+- **Module:** `IngestSourceFileUseCase`, `GenerateSourceSummaryUseCase`
+- **What happens:** the backend reads the user's effective AI customization, passes that immutable snapshot to `GenerateSourceSummaryUseCase.execute`, and does not await the job.
 - **Design choice:**
   - **What was chosen:** in-process fire-and-forget background processing.
   - **Why it was chosen:** keeps upload latency low without adding a queue dependency.
@@ -276,7 +280,7 @@ after a note is converted into a Markdown source.
 
 #### 6. Download raw storage object
 
-- **Module:** `runBackgroundIngest`, `storageService.download`
+- **Module:** `GenerateSourceSummaryUseCase`, `storageService.download`
 - **What happens:** the raw object is downloaded from Supabase Storage.
 - **Tables read:** `storage_objects`
 - **External calls:** Supabase Storage download
@@ -301,7 +305,7 @@ after a note is converted into a Markdown source.
 
 #### 9. Embed source summary excerpt for candidate search
 
-- **Module:** `sources.ingest-service.ts`, `embedText`
+- **Module:** `GenerateSourceSummaryUseCase`, `embedText`
 - **What happens:** the backend embeds the generated source excerpt, falling back to the summary body, extracted-text prefix, then filename.
 - **External calls:** Gemini embedding model from `GEMINI_EMBEDDING_MODEL`
 - **Failure behavior:** embedding failure falls back to an empty vector in candidate selection.
@@ -309,7 +313,7 @@ after a note is converted into a Markdown source.
 
 #### 10. Retrieve candidate Knowledge entries
 
-- **Module:** `sources.ingest-service.ts`
+- **Module:** `GenerateSourceSummaryUseCase`, `source-ingestion.repository.ts`
 - **What happens:** PostgreSQL ranks existing Knowledge entries for the same user using:
   - full-text rank over title, overview, and tags
   - vector similarity via `embedding <=> $vector`
@@ -349,14 +353,14 @@ after a note is converted into a Markdown source.
 
 #### 14. Update the source row
 
-- **Module:** `sources.ingest-service.ts`
+- **Module:** `GenerateSourceSummaryUseCase`, `source-ingestion.repository.ts`
 - **What happens:** the source gets its generated title, category, tags, excerpt, storage object IDs, and status.
 - **Tables written:** `sources`
 - **Status behavior:** `Processed` when ingest completes, including a deliberate no-Knowledge result; `Queued` when a failure fallback writes an error excerpt.
 
 #### 15. Upsert Knowledge pages
 
-- **Module:** `sources.ingest-service.ts`
+- **Module:** `GenerateSourceSummaryUseCase`, `source-ingestion.repository.ts`
 - **What happens:** for each generated page:
   - `skip` does nothing
   - `link_only` updates source provenance and timeline
@@ -376,7 +380,7 @@ after a note is converted into a Markdown source.
 
 #### 17. Track provenance and revisions
 
-- **Module:** `sources.ingest-service.ts`
+- **Module:** `GenerateSourceSummaryUseCase`, `source-ingestion.repository.ts`
 - **What happens:** the backend stores:
   - source materials in `source_list`
   - timeline events like generated, updated, merged, replaced, or linked
@@ -432,7 +436,7 @@ Response type:
 #### 2. Resolve AI customization
 
 - **Module:** `aiCustomizationService.effectiveProfile`
-- **What happens:** the backend loads the user's research model, reasoning level, temperature, and answer instructions from PostgreSQL, falling back to server defaults when no row exists.
+- **What happens:** the backend loads the user's research model, internal/default reasoning budget, temperature, and answer instructions from PostgreSQL, falling back to server defaults when no row exists. The current frontend exposes model, temperature, and prompt instructions; it does not expose a reasoning-budget control.
 - **Why this step exists:** research behavior is server-owned and user-scoped instead of controlled by a browser-only header.
 
 #### 3. Embed the user question
@@ -561,11 +565,14 @@ PostgreSQL stores the storage object IDs and metadata. This keeps rows compact w
 
 `src/config/gemini.ts` creates a Google GenAI client from `GEMINI_API_KEY`.
 
+The returned client is wrapped with transparent JavaScript Proxies around the client and `client.models`. Generation, streaming, and embedding SDK failures retry up to three attempts with backoff and log model/operation completion. JSON parsing or domain validation that happens after an SDK response remains the calling workflow's responsibility.
+
 ### Models
 
 - `GEMINI_MODEL` is the fallback default content generation model.
 - `GEMINI_EMBEDDING_MODEL` is used for embeddings.
 - User-facing model choice lives in `user_ai_customizations` and is validated against the backend model catalog.
+- The current selectable generation models are `gemini-2.5-flash` and `gemini-3-flash-preview`.
 - Maintenance and Inspiration still use `GEMINI_MODEL` in the current implementation.
 
 ### User Requirement Defaults
@@ -751,13 +758,13 @@ backend/
 │   ├── config/                   # env, cookies, Gemini client
 │   ├── database/                 # pg pool and migration runner
 │   ├── errors/                   # AppError classes and global handler
-│   ├── lib/                      # JWT, embeddings, storage integrations
+│   ├── lib/                      # JWT, embeddings, storage service/repository
 │   ├── middleware/               # auth-independent middleware utilities
 │   ├── modules/
 │   │   ├── ai-customization/     # AI profile, defaults, and model catalog
 │   │   ├── auth/                 # signup/login/logout
 │   │   ├── users/                # current user profile/password
-│   │   ├── sources/              # source CRUD, upload, ingest, file preview
+│   │   ├── sources/              # source CRUD, use cases, ingest repository, preview
 │   │   ├── knowledge/            # Knowledge CRUD and proposals
 │   │   ├── notes/                # notes and note promotion
 │   │   ├── journal/              # dated journal entries
@@ -805,6 +812,12 @@ Build TypeScript:
 npm run build
 ```
 
+Run architecture and use-case tests:
+
+```bash
+npm test
+```
+
 Start compiled output:
 
 ```bash
@@ -828,7 +841,7 @@ The repository does not define a backend Dockerfile.
 
 ### Validation
 
-- Body validation uses Zod schemas through `validateBody`.
+- Body and query validation use Zod schemas through `validateBody` and `validateQuery` at the routing layer.
 - Validation failures return:
 
 ```json
@@ -906,6 +919,8 @@ Typed app errors return:
 - **What problem it solves:** keeps auth, sources, knowledge, research, journal, and notes maintainable.
 - **Trade-off:** shared cross-module operations require explicit imports and coordination.
 
+Architecture guard tests enforce that database access stays in repositories/database infrastructure, controllers do not import repositories or bcrypt, and Gemini retries use Proxy wrappers without mutating SDK methods.
+
 ## 🛣 Future Improvements
 
 These are suggestions based on current code shape, not implemented features:
@@ -913,7 +928,7 @@ These are suggestions based on current code shape, not implemented features:
 - Add a durable background job queue for ingest retries and worker isolation.
 - Add structured logging and request correlation IDs.
 - Add OpenAPI/Swagger documentation generated from route schemas.
-- Add automated tests for auth, ingest failure cases, retrieval, and thread persistence.
+- Expand automated tests for auth, ingest failure cases, retrieval, and thread persistence beyond the current architecture/use-case guards.
 - Add rate limiting for auth, upload, and LLM-backed endpoints.
 - Add observability around Gemini latency, storage failures, and retrieval quality.
 - Add an evaluation harness for retrieval ranking and answer citation quality.

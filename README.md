@@ -43,7 +43,7 @@ The root README is the project landing page. Detailed implementation notes live 
 | **Document ingestion** | Upload PDF, DOCX, TXT, and Markdown sources for AI-assisted processing. |
 | **Source of truth** | Store raw uploads and extracted text so users can inspect the original material. |
 | **Knowledge generation** | Generate grounded source summaries and durable Knowledge pages from uploaded material. |
-| **AI customization** | Tune ingest prompts, research behavior, model choice, reasoning level, and temperature. |
+| **AI customization** | Tune ingest prompts, research behavior, model choice, and temperature. |
 | **Semantic search** | Use Gemini embeddings and `pgvector` to retrieve relevant Knowledge. |
 | **Research workspace** | Ask grounded questions against retrieved Knowledge with numbered references. |
 | **Markdown reading** | Render rich Markdown with math and diagrams through KaTeX and Mermaid support. |
@@ -66,6 +66,8 @@ Node.js / Express API
         +--> Supabase Storage         # raw files, extracted text, generated markdown
         +--> PostgreSQL + pgvector    # users, sources, Knowledge metadata, vectors, research threads
 ```
+
+Backend code follows route -> controller -> service/use case -> repository boundaries. SQL and transactions remain inside repositories, while mappers isolate database records from API response shapes. See [`docs/architecture_design_pattern.md`](docs/architecture_design_pattern.md) for the enforced design rules.
 
 ### Stack
 
@@ -162,6 +164,7 @@ npm run dev
 | --- | --- |
 | [`frontend/README.md`](frontend/README.md) | Frontend routes, UI behavior, local development, and rendering stack. |
 | [`backend/README.md`](backend/README.md) | API routes, database schema, ingest pipeline, research flow, storage, and AI customization. |
+| [`docs/architecture_design_pattern.md`](docs/architecture_design_pattern.md) | Clean Architecture boundaries, repositories, mappers, Gemini Proxy behavior, and architecture guard tests. |
 
 ## Design Notes
 

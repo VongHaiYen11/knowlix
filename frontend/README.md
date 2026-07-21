@@ -24,7 +24,7 @@
 - 📝 Note editor with split Markdown preview, explicit save/cancel controls, and “Add as source of truth”.
 - 🔎 Research workspace with chat history, cited Knowledge references, filters, and collapsible side panels.
 - 📓 Journal page for dated quick notes with optional tags.
-- 🎛️ Customization tab for Knowledge ingestion prompts, research behavior, model choice, reasoning level, and temperature.
+- 🎛️ Customization tab for Knowledge ingestion prompts, research behavior, model choice, and temperature.
 - ⚙️ Settings for account profile, password, and theme.
 - 🌗 Light/dark theme support.
 - 🇻🇳 Vietnam-time date helpers for user-facing daily behavior.
@@ -140,6 +140,8 @@ Data access follows this shape:
 ```text
 Page -> Hook -> Service -> Repository -> API or IndexedDB
 ```
+
+Request/response types, status behavior, pagination metadata, and supported values are treated as backend contracts. Contract changes must update the frontend repository/service adapter and both workspace READMEs in the same change.
 
 ## 🎨 Styling
 
