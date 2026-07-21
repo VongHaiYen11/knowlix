@@ -15,6 +15,7 @@ import { ROUTES } from '@/constants/routes'
 import { useLibraryKnowledge, useLibraryNotes, useLibrarySources, useTaxonomy } from '@/hooks/useLibrary'
 import { libraryService } from '@/services/libraryService'
 import type { KnowledgeEntry, NoteItem, SourceType } from '@/types/knowledge'
+import { Pagination } from '@/components/ui/Pagination'
 
 type LibraryTab = 'sources' | 'knowledge' | 'notes'
 
@@ -29,11 +30,28 @@ export function LibraryPage() {
   const [category, setCategory] = useState('All')
   const [tag, setTag] = useState('All')
   const [sort, setSort] = useState<'updated-desc' | 'created-desc' | 'title-asc' | 'type-asc'>('updated-desc')
+  const [sourcesPage, setSourcesPage] = useState(1)
+  const [knowledgePage, setKnowledgePage] = useState(1)
+  const [notesPage, setNotesPage] = useState(1)
+
   const taxonomy = useTaxonomy()
   const taxonomyData = taxonomy.data
   const sourceFilters = useMemo(() => ({ query, sourceType, category, tag, sort }), [category, query, sort, sourceType, tag])
   const knowledgeFilters = useMemo(() => ({ query, category, tag, sort }), [category, query, sort, tag])
   const noteFilters = useMemo(() => ({ query, sort }), [query, sort])
+
+  useEffect(() => {
+    setSourcesPage(1)
+  }, [sourceFilters])
+
+  useEffect(() => {
+    setKnowledgePage(1)
+  }, [knowledgeFilters])
+
+  useEffect(() => {
+    setNotesPage(1)
+  }, [noteFilters])
+
   const sources = useLibrarySources(sourceFilters)
   const knowledge = useLibraryKnowledge(knowledgeFilters)
   const notes = useLibraryNotes(noteFilters)
@@ -122,6 +140,21 @@ export function LibraryPage() {
     navigate(ROUTES.knowledge(entry.slug))
   }
 
+  const paginatedSources = useMemo(() => {
+    return sources.data?.slice((sourcesPage - 1) * 6, sourcesPage * 6) ?? []
+  }, [sources.data, sourcesPage])
+  const sourcesTotalPages = Math.ceil((sources.data?.length ?? 0) / 6)
+
+  const paginatedKnowledge = useMemo(() => {
+    return knowledge.data?.slice((knowledgePage - 1) * 6, knowledgePage * 6) ?? []
+  }, [knowledge.data, knowledgePage])
+  const knowledgeTotalPages = Math.ceil((knowledge.data?.length ?? 0) / 6)
+
+  const paginatedNotes = useMemo(() => {
+    return notes.data?.slice((notesPage - 1) * 6, notesPage * 6) ?? []
+  }, [notes.data, notesPage])
+  const notesTotalPages = Math.ceil((notes.data?.length ?? 0) / 6)
+
   const selectedKnowledge = useMemo(() => {
     const selected = new Set(selectedKnowledgeSlugs)
     return knowledge.data.filter((entry) => selected.has(entry.slug))
@@ -152,7 +185,14 @@ export function LibraryPage() {
             onTag={setTag}
             onSort={setSort}
           />
-          {sources.status === 'loading' ? <Skeleton count={4} className="h-32" /> : <SourceList sources={sources.data} />}
+          {sources.status === 'loading' ? (
+            <Skeleton count={4} className="h-32" />
+          ) : (
+            <>
+              <SourceList sources={paginatedSources} />
+              <Pagination currentPage={sourcesPage} totalPages={sourcesTotalPages} onPageChange={setSourcesPage} />
+            </>
+          )}
         </TabPanel>
       ) : tab === 'knowledge' ? (
         <TabPanel>
@@ -177,13 +217,18 @@ export function LibraryPage() {
             onOpenMerge={() => setMergeModalOpen(true)}
             onCancelMerge={cancelMergeSelection}
           />
-          {knowledge.status === 'loading' ? <Skeleton count={4} className="h-56" /> : (
-            <KnowledgeGrid
-              knowledge={knowledge.data}
-              selectionMode={mergeSelectionMode}
-              selectedSlugs={selectedKnowledgeSlugs}
-              onToggleSelection={toggleKnowledgeSelection}
-            />
+          {knowledge.status === 'loading' ? (
+            <Skeleton count={4} className="h-56" />
+          ) : (
+            <>
+              <KnowledgeGrid
+                knowledge={paginatedKnowledge}
+                selectionMode={mergeSelectionMode}
+                selectedSlugs={selectedKnowledgeSlugs}
+                onToggleSelection={toggleKnowledgeSelection}
+              />
+              <Pagination currentPage={knowledgePage} totalPages={knowledgeTotalPages} onPageChange={setKnowledgePage} />
+            </>
           )}
           <KnowledgeMergeModal
             open={mergeModalOpen}
@@ -210,7 +255,14 @@ export function LibraryPage() {
             onTag={setTag}
             onSort={setSort}
           />
-          {notes.status === 'loading' ? <Skeleton count={4} className="h-28" /> : <NoteList notes={notes.data} promotingNoteId={promotingNoteId} onPromote={promoteNote} />}
+          {notes.status === 'loading' ? (
+            <Skeleton count={4} className="h-28" />
+          ) : (
+            <>
+              <NoteList notes={paginatedNotes} promotingNoteId={promotingNoteId} onPromote={promoteNote} />
+              <Pagination currentPage={notesPage} totalPages={notesTotalPages} onPageChange={setNotesPage} />
+            </>
+          )}
         </TabPanel>
       )}
     </PageShell>
