@@ -145,9 +145,11 @@ export function CustomizationPage() {
           <PromptPreviewRow meta={promptMeta.researchAnswerInstructions} value={draft.researchAnswerInstructions} onEdit={() => openPromptEditor('researchAnswerInstructions')} />
         </SettingsGroup>
 
-        <Button className="w-full" variant="outline" icon={<RotateCcw className="h-4 w-4" />} onClick={reset} disabled={resetting || autoSaving}>
+        <div className="flex justify-center">
+          <Button icon={<RotateCcw className="h-4 w-4" />} onClick={reset} disabled={resetting || autoSaving}>
             {resetting ? 'Resetting...' : 'Reset all customization to defaults'}
           </Button>
+        </div>
       </div>
 
       <PromptEditModal

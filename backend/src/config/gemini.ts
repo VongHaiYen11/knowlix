@@ -13,6 +13,26 @@ function logGeminiCall(operation: string, args: readonly unknown[], attempt: num
   console.info(`[Gemini API] operation=${operation} model=${modelFromArgs(args)} attempt=${attempt}/${maxAttempts}`)
 }
 
+function logGeminiFinished(operation: string, args: readonly unknown[], attempt: number, maxAttempts: number, startedAt: number) {
+  console.info(`[Gemini API] operation=${operation} model=${modelFromArgs(args)} attempt=${attempt}/${maxAttempts} status=finished durationMs=${Date.now() - startedAt}`)
+}
+
+async function* withGeminiStreamLogging<T>(
+  stream: AsyncGenerator<T>,
+  args: readonly unknown[],
+  attempt: number,
+  maxAttempts: number,
+  startedAt: number,
+): AsyncGenerator<T> {
+  try {
+    for await (const chunk of stream) yield chunk
+    logGeminiFinished('generateContentStream', args, attempt, maxAttempts, startedAt)
+  } catch (error) {
+    console.warn(`[Gemini API] operation=generateContentStream model=${modelFromArgs(args)} attempt=${attempt}/${maxAttempts} status=stream-failed durationMs=${Date.now() - startedAt}:`, error)
+    throw error
+  }
+}
+
 export function getGeminiClient(): GoogleGenAI {
   if (!env.geminiApiKey) {
     throw new AppError(500, 'INTERNAL_ERROR', 'Missing GEMINI_API_KEY configuration')
@@ -26,8 +46,11 @@ export function getGeminiClient(): GoogleGenAI {
     let lastError: any
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
+        const startedAt = Date.now()
         logGeminiCall('generateContent', args, attempt, maxRetries)
-        return await originalGenerate(...args)
+        const response = await originalGenerate(...args)
+        logGeminiFinished('generateContent', args, attempt, maxRetries, startedAt)
+        return response
       } catch (err) {
         lastError = err
         console.warn(`[Gemini API] generateContent failed (attempt ${attempt}/${maxRetries}):`, err)
@@ -47,8 +70,10 @@ export function getGeminiClient(): GoogleGenAI {
     let lastError: any
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
+        const startedAt = Date.now()
         logGeminiCall('generateContentStream', args, attempt, maxRetries)
-        return await originalGenerateStream(...args)
+        const stream = await originalGenerateStream(...args)
+        return withGeminiStreamLogging(stream, args, attempt, maxRetries, startedAt)
       } catch (err) {
         lastError = err
         console.warn(`[Gemini API] generateContentStream failed (attempt ${attempt}/${maxRetries}):`, err)
@@ -67,8 +92,11 @@ export function getGeminiClient(): GoogleGenAI {
     let lastError: any
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
+        const startedAt = Date.now()
         logGeminiCall('embedContent', args, attempt, maxRetries)
-        return await originalEmbed(...args)
+        const response = await originalEmbed(...args)
+        logGeminiFinished('embedContent', args, attempt, maxRetries, startedAt)
+        return response
       } catch (err) {
         lastError = err
         console.warn(`[Gemini API] embedContent failed (attempt ${attempt}/${maxRetries}):`, err)
