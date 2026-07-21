@@ -5,7 +5,7 @@ import { excerpt, wordCount } from '../../utils/text.js'
 import { storageService } from '../../lib/storage.js'
 import { todayLabel } from '../../utils/date.js'
 import { sourcesRepository } from '../sources/sources.repository.js'
-import { runBackgroundIngest } from '../sources/sources.ingest-service.js'
+import { GenerateSourceSummaryUseCase } from '../sources/use-cases/GenerateSourceSummary.usecase.js'
 import { aiCustomizationService } from '../ai-customization/ai-customization.service.js'
 import { noteRow } from './notes.mapper.js'
 import { notesRepository } from './notes.repository.js'
@@ -124,7 +124,17 @@ export const notesService = {
 
     await notesRepository.delete(userId, id)
     const customization = await aiCustomizationService.effectiveProfile(userId)
-    runBackgroundIngest({ userId, fileId, sourceId, rawStorageObjectId: rawObject.id, rawStorageUrl: rawObject.url, originalName, created, uploadedType: 'Markdown', customization }).catch((err) => {
+    new GenerateSourceSummaryUseCase().execute({
+      userId,
+      fileId,
+      sourceId,
+      rawStorageObjectId: rawObject.id,
+      rawStorageUrl: rawObject.url,
+      originalName,
+      created,
+      uploadedType: 'Markdown',
+      customization
+    }).catch((err: unknown) => {
       console.error('[Ingest] Unhandled note promotion ingest rejection:', err)
     })
 

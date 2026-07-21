@@ -10,8 +10,9 @@ import { storageService } from '../../lib/storage.js'
 import { sourceRow } from './sources.mapper.js'
 import { binarySourceTypes, type sourceCreateSchema, type sourcePatchSchema } from './sources.schemas.js'
 import { sourcesRepository } from './sources.repository.js'
-import { runBackgroundIngest } from './sources.ingest-service.js'
 import { aiCustomizationService } from '../ai-customization/ai-customization.service.js'
+import { IngestSourceFileUseCase } from './use-cases/IngestSourceFile.usecase.js'
+import { DeleteSourceUseCase } from './use-cases/DeleteSource.usecase.js'
 
 function sourceTypeFromUpload(mimeType: string, filename: string) {
   const extension = filename.toLowerCase().split('.').pop()
@@ -159,53 +160,7 @@ export const sourcesService = {
   },
 
   async upload(userId: string, file: Express.Multer.File) {
-    const fileId = `file_${crypto.randomUUID()}`
-    const rawObject = await storageService.upload({
-      userId,
-      kind: 'raw_source',
-      originalName: file.originalname,
-      body: file.buffer,
-      mimeType: file.mimetype || 'application/octet-stream',
-    })
-    await sourcesRepository.createUploadedFile({ id: fileId, userId, name: file.originalname, mimeType: file.mimetype, sizeBytes: file.size, rawPath: rawObject.url, storageObjectId: rawObject.id })
-
-    const sourceId = `source_${crypto.randomUUID()}`
-    const created = todayLabel()
-    const uploadedType = sourceTypeFromUpload(file.mimetype, file.originalname)
-    const baseName = path.parse(file.originalname).name
-    const sourceInsert = await sourcesRepository.create({
-      id: sourceId,
-      userId,
-      type: uploadedType,
-      title: baseName,
-      content: null,
-      tags: [],
-      category: 'Uncategorized',
-      created,
-      status: 'Processing',
-      meta: `${file.originalname} - ${Math.ceil(file.size / 1024)} KB`,
-      excerpt: excerpt(baseName),
-      fileId,
-      rawStorageObjectId: rawObject.id,
-      extractedStorageObjectId: null,
-      summaryStorageObjectId: null,
-      knowledgeTags: [],
-    })
-
-    const customization = await aiCustomizationService.effectiveProfile(userId)
-    runBackgroundIngest({ userId, fileId, sourceId, rawStorageObjectId: rawObject.id, rawStorageUrl: rawObject.url, originalName: file.originalname, created, uploadedType, customization }).catch((err) => {
-      console.error('[Ingest] Unhandled background ingest rejection:', err)
-    })
-
-    return {
-      fileId,
-      name: file.originalname,
-      mimeType: file.mimetype,
-      size: file.size,
-      rawPath: rawObject.url,
-      rawStorageObjectId: rawObject.id,
-      ingest: { status: 'pending', written: [], message: undefined, source: sourceRow(sourceInsert), knowledge: [] },
-    }
+    return new IngestSourceFileUseCase().execute(userId, file)
   },
 
   async file(userId: string, id: string) {
@@ -238,6 +193,6 @@ export const sourcesService = {
   },
 
   async delete(userId: string, id: string) {
-    await sourcesRepository.deleteWithKnowledgeDetach(userId, id)
+    await new DeleteSourceUseCase().execute(userId, id)
   },
 }
