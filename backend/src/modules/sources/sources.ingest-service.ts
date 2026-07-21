@@ -7,7 +7,6 @@ import {
   extractText,
   type IngestRawFileOptions,
   type KnowledgeProposal,
-  type SourceSection,
 } from '../../wiki/ingest.js'
 import { storageService } from '../../lib/storage.js'
 import { embedText } from '../../lib/embeddings.js'
@@ -29,7 +28,6 @@ const PROMPT_OVERHEAD_TOKENS = 2000
 const MAX_CANDIDATE_MARKDOWN_TOKENS = 12000
 const MAX_SINGLE_CANDIDATE_TOKENS = 8000
 const MODEL_CONTEXT_LIMIT = 100000
-const FULL_SOURCE_TOKEN_LIMIT = 18000
 
 function readTimeFromContent(content: string) {
   const minutes = Math.max(1, Math.ceil(wordCount(content) / 220))
@@ -272,34 +270,10 @@ async function loadCandidateMarkdown(userId: string, candidates: IngestCandidate
   return selected
 }
 
-function expandRelevantSectionIds(sections: SourceSection[], proposalIds: string[]) {
-  const ids = new Set(proposalIds)
-  for (const id of proposalIds) {
-    const index = sections.findIndex((section) => section.id === id)
-    if (index < 0) continue
-    const section = sections[index]
-    if (section.parentId) ids.add(section.parentId)
-    if (sections[index - 1]) ids.add(sections[index - 1].id)
-    if (sections[index + 1]) ids.add(sections[index + 1].id)
-  }
-  return ids
-}
-
-function relevantSourceMarkdown(canonicalMarkdown: string, sections: SourceSection[], proposals: KnowledgeProposal[]) {
-  if (tokenEstimate(canonicalMarkdown) <= FULL_SOURCE_TOKEN_LIMIT) return canonicalMarkdown
-  const hintedIds = uniqueCleanStrings(proposals.flatMap((proposal) => proposal.possibleSectionIds))
-  const expandedIds = expandRelevantSectionIds(sections, hintedIds)
-  const selected = sections.filter((section) => expandedIds.has(section.id))
-  const fallback = selected.length ? selected : sections.slice(0, Math.min(5, sections.length))
-  const markdown = fallback.map((section) => section.content).join('\n\n').trim()
-  return markdown || canonicalMarkdown.slice(0, FULL_SOURCE_TOKEN_LIMIT * 4)
-}
-
 async function prepareIngestContext(input: {
   userId: string
   summary: { ingestBrief?: { knowledgeProposals?: KnowledgeProposal[] }; title?: string; excerpt?: string; tags?: string[] }
   canonicalMarkdown: string
-  sections: SourceSection[]
 }) {
   const fallbackProposal: KnowledgeProposal = {
     title: input.summary.title || 'Source Knowledge',
@@ -329,7 +303,7 @@ async function prepareIngestContext(input: {
     .sort((a, b) => b.score - a.score)
   const topScore = narrowed[0]?.score ?? 0
   const strong = narrowed.filter((candidate) => candidate.score >= topScore - SCORE_MARGIN).slice(0, MAX_FULL_CANDIDATES)
-  const sourceMarkdown = relevantSourceMarkdown(input.canonicalMarkdown, input.sections, proposals)
+  const sourceMarkdown = input.canonicalMarkdown
   const sourceTokens = tokenEstimate(sourceMarkdown)
   const dynamicCandidateBudget = Math.max(0, MODEL_CONTEXT_LIMIT - RESERVED_OUTPUT_TOKENS - PROMPT_OVERHEAD_TOKENS - sourceTokens)
   const candidateBudget = Math.min(MAX_CANDIDATE_MARKDOWN_TOKENS, dynamicCandidateBudget)
@@ -483,7 +457,6 @@ export async function runBackgroundIngest(input: {
       userId,
       summary,
       canonicalMarkdown,
-      sections: preExtractedText?.sections ?? [],
     })
     
     // 3. Extract final Knowledge actions with the narrowed full context.

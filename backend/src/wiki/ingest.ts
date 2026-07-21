@@ -4,7 +4,7 @@ import pdf from 'pdf-parse/lib/pdf-parse.js'
 import { getGeminiClient } from '../config/gemini.js'
 import { excerpt } from '../utils/text.js'
 import { getIngestSummaryPrompt, getIngestPagesPrompt } from '../prompts/index.js'
-import { defaultAiCustomization, geminiConfig, type AiCustomizationProfile } from '../modules/ai-customization/ai-customization.defaults.js'
+import { defaultAiCustomization, geminiConfig, ingestOutputLimits, type AiCustomizationProfile } from '../modules/ai-customization/ai-customization.defaults.js'
 
 export type IngestAction = 'create' | 'update' | 'merge' | 'replace' | 'link_only' | 'skip'
 
@@ -40,7 +40,6 @@ export interface IngestResult {
 }
 
 const supportedExtensions = new Set(['.pdf', '.docx', '.txt', '.md', '.markdown'])
-const SOURCE_WINDOW_TOKEN_LIMIT = 12000
 const SECTION_TARGET_TOKENS = 900
 const SECTION_OVERLAP_PARAGRAPHS = 1
 const INGEST_SUMMARY_RESPONSE_SCHEMA = {
@@ -183,14 +182,6 @@ function tokenEstimate(text: string) {
 
 function normalizeWhitespace(value: string) {
   return value.replace(/\r\n?/g, '\n').replace(/[ \t]+\n/g, '\n').replace(/\n{4,}/g, '\n\n\n').trim()
-}
-
-function sourceWindow(markdown: string, tokenLimit = SOURCE_WINDOW_TOKEN_LIMIT) {
-  if (tokenEstimate(markdown) <= tokenLimit) return markdown
-  const charLimit = tokenLimit * 4
-  const head = markdown.slice(0, Math.ceil(charLimit * 0.72)).trim()
-  const tail = markdown.slice(Math.max(0, markdown.length - Math.floor(charLimit * 0.18))).trim()
-  return `${head}\n\n[...source truncated for summary planning...]\n\n${tail}`.trim()
 }
 
 function outlineFromSections(sections: SourceSection[]) {
@@ -474,10 +465,11 @@ export async function generateIngestSummary(buffer: Buffer, options: IngestRawFi
     originalName,
     uploadedType: options.uploadedType ?? 'File',
     fileKind: extracted.fileKind,
-    sourceWindow: sourceWindow(extracted.canonicalMarkdown || extractedText),
+    sourceWindow: extracted.canonicalMarkdown || extractedText,
     sectionOutline: outlineFromSections(extracted.sections),
     knowledgeDefinition: customization.knowledgeDefinition,
     knowledgeExtractionInstructions: customization.knowledgeExtractionInstructions,
+    summaryBodyMaxWords: ingestOutputLimits.sourceSummaryBodyMaxWords,
   })
 
   const response = await getGeminiClient().models.generateContent({
@@ -489,6 +481,7 @@ export async function generateIngestSummary(buffer: Buffer, options: IngestRawFi
       reasoning: customization.ingestReasoning,
       temperature: customization.ingestTemperature,
       systemInstruction: prompt.systemInstruction,
+      maxOutputTokens: ingestOutputLimits.summaryMaxOutputTokens,
     }),
   })
   const responseText = response.text ? cleanJsonText(response.text) : ''
@@ -545,6 +538,8 @@ export async function extractKnowledgePages(
     proposal: options.proposal,
     knowledgeDefinition: customization.knowledgeDefinition,
     knowledgeExtractionInstructions: customization.knowledgeExtractionInstructions,
+    knowledgePageTargetWords: ingestOutputLimits.knowledgePageTargetWords,
+    knowledgePageMaxWords: ingestOutputLimits.knowledgePageMaxWords,
   })
 
   const response = await getGeminiClient().models.generateContent({
@@ -556,6 +551,7 @@ export async function extractKnowledgePages(
       reasoning: customization.ingestReasoning,
       temperature: customization.ingestTemperature,
       systemInstruction: prompt.systemInstruction,
+      maxOutputTokens: ingestOutputLimits.pagesMaxOutputTokens,
     }),
   })
   const responseText = response.text ? cleanJsonText(response.text) : ''

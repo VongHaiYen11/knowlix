@@ -585,14 +585,6 @@ Answer the user directly using the retrieved Knowledge and numbered references. 
 
 These values are mandatory user requirements in ingest summary, Knowledge extraction/merge, research answers, and research summaries. They cannot override protected JSON contracts, citation format, grounding rules, action enums, or safety constraints.
 
-### Cost Estimator
-
-`POST /api/v1/ai-customization/estimate-cost` estimates cost without creating `sources`, `knowledge_entries`, `uploaded_files`, `storage_objects`, `research_threads`, or `research_messages`.
-
-- `workflow=ingestion` accepts a multipart trial file, extracts text in memory, estimates ingest calls, output tokens, thinking tokens, and embedding tokens, then discards the file.
-- `workflow=research` accepts a question and estimates retrieval/selection/final-answer usage.
-- The result is relative. Real billing can vary with provider pricing, retries, cached tokens, and thinking tokens.
-
 ### Prompt Modules
 
 Prompts are centralized under `src/prompts`:
@@ -717,10 +709,9 @@ All protected endpoints require a valid session cookie unless noted.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/v1/ai-customization` | Return effective customization, defaults, model catalog, and pricing metadata |
+| `GET` | `/api/v1/ai-customization` | Return effective customization, defaults, and model catalog |
 | `PATCH` | `/api/v1/ai-customization` | Save partial user AI customization |
 | `DELETE` | `/api/v1/ai-customization` | Reset customization to defaults |
-| `POST` | `/api/v1/ai-customization/estimate-cost` | Estimate relative ingestion or research cost without persisting trial data |
 
 ### Maintenance and Inspiration
 
@@ -763,7 +754,7 @@ backend/
 │   ├── lib/                      # JWT, embeddings, storage integrations
 │   ├── middleware/               # auth-independent middleware utilities
 │   ├── modules/
-│   │   ├── ai-customization/     # AI profile, defaults, model catalog, cost estimates
+│   │   ├── ai-customization/     # AI profile, defaults, and model catalog
 │   │   ├── auth/                 # signup/login/logout
 │   │   ├── users/                # current user profile/password
 │   │   ├── sources/              # source CRUD, upload, ingest, file preview
@@ -927,4 +918,4 @@ These are suggestions based on current code shape, not implemented features:
 - Add observability around Gemini latency, storage failures, and retrieval quality.
 - Add an evaluation harness for retrieval ranking and answer citation quality.
 - Add admin or maintenance dashboards for failed ingests and low-confidence Knowledge pages.
-- Add usage capture from real Gemini responses to compare actual spend with estimator results.
+- Add usage capture from real Gemini responses for operational visibility.
