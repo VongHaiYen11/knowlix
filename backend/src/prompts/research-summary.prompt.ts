@@ -1,4 +1,5 @@
 import type { AiPrompt } from './prompt.types.js'
+import { MARKDOWN_MATH_RULES } from './markdown-format.js'
 
 export function getResearchSummaryPrompt(input: {
   title: string
@@ -45,7 +46,9 @@ REQUIRED MARKDOWN SHAPE
 
 ## Updated understanding
 
-## Open gaps`,
+## Open gaps
+
+${MARKDOWN_MATH_RULES}`,
     contents: `CONVERSATION TITLE
 ${input.title || 'Untitled'}
 

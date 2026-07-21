@@ -7,6 +7,12 @@ export interface KnowledgeSource {
   title: string
 }
 
+export interface KnowledgeTimelineItem {
+  date: string
+  occurredAt?: string
+  event: string
+}
+
 export interface KnowledgeEntry {
   slug: string
   title: string
@@ -26,7 +32,7 @@ export interface KnowledgeEntry {
   related: Array<{ slug: string; title: string }>
   references: Array<{ label: string; source: string }>
   sources: KnowledgeSource[]
-  timeline: Array<{ date: string; event: string }>
+  timeline: KnowledgeTimelineItem[]
 }
 
 export type KnowledgeMergeMode = 'automatic' | 'manual'
@@ -50,7 +56,7 @@ export interface KnowledgeMergeDraft {
   sources: KnowledgeSource[]
   related: Array<{ slug: string; title: string }>
   references: Array<{ label: string; source: string }>
-  timeline: Array<{ date: string; event: string }>
+  timeline: KnowledgeTimelineItem[]
   reason?: string
 }
 

@@ -1,4 +1,5 @@
 import type { AiPrompt } from './prompt.types.js'
+import { JSON_MARKDOWN_MATH_RULES } from './markdown-format.js'
 
 export function getIngestSummaryPrompt(params: {
   originalName: string
@@ -67,9 +68,7 @@ SUMMARY RULES
 - Do not copy a long outline and then truncate it. Select the source-level purpose, major topics, key durable concepts, and notable constraints that fit the length.
 - Explain the source in compact grounded prose so a user can understand what the uploaded material is about before opening the full source of truth.
 - H1 heading should not be used in the summary.
-- Put every mathematical formula or equation on its own centered display-math line using block double-dollar delimiters. Do not place formulas inside prose sentences.
-- Use inline dollar delimiters only for short standalone symbols such as variable names.
-- Because the response is JSON, every LaTeX backslash inside summary strings must be JSON-escaped, for example double-backslash frac, sum, bar, theta, and text commands.
+${JSON_MARKDOWN_MATH_RULES}
 - excerpt is newly written and contains at most four sentences.
 - category is concise; tags contain durable concepts or topics.
 - Do not turn opinions, proposals, estimates, or hypotheses into established facts.

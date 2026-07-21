@@ -1,4 +1,5 @@
 import type { AiPrompt } from './prompt.types.js'
+import { JSON_MARKDOWN_MATH_RULES } from './markdown-format.js'
 
 export interface IngestKnowledgeCandidate {
   slug: string
@@ -120,9 +121,7 @@ PAGE RULES
 - Use headings, short paragraphs, bullets, numbered steps, and lettered lists such as a), b), c) when they make the concept easier to scan or study.
 - Do not over-structure the article: avoid turning every sentence into a bullet or fragmenting one coherent explanation across too many tiny sections.
 - Keep an instructional, study-friendly lecture-notes tone: explain concepts clearly, add transitions between ideas, and preserve enough prose for the page to read naturally.
-- Put every mathematical formula or equation on its own centered display-math line using block double-dollar delimiters. Do not place formulas inside prose sentences.
-- Use inline dollar delimiters only for short standalone symbols such as variable names.
-- Because the response is JSON, every LaTeX backslash inside body strings must be JSON-escaped, for example double-backslash frac, sum, bar, theta, and text commands.
+${JSON_MARKDOWN_MATH_RULES}
 - Prefer fewer comprehensive pages over fragmented pages.
 - overview must be newly written and contain at most four sentences.
 - related contains only durable concepts useful as sidebar links, never filenames, source sections, citations, or generic terms.

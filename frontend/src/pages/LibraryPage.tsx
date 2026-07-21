@@ -1,10 +1,9 @@
 import { type ChangeEvent, useEffect, useMemo, useState } from 'react'
-import { ArrowRight, FileText, GitMerge, Plus, Upload, X } from 'lucide-react'
+import { ArrowRight, ChevronDown, FileText, GitMerge, Plus, SlidersHorizontal, Upload, X } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { PageHeader } from '@/components/common/PageHeader'
 import { PageShell } from '@/components/common/PageShell'
 import { Button } from '@/components/ui/Button'
-import { Dropdown } from '@/components/ui/Dropdown'
 import { SearchInput } from '@/components/ui/SearchInput'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { TabPanel, Tabs } from '@/components/ui/Tabs'
@@ -319,54 +318,170 @@ function LibraryControls({
 }) {
   return (
     <div className="mb-5 flex flex-wrap items-center gap-2">
-      {mode === 'sources' ? (
-        <>
-          <Link to={ROUTES.note('new')} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3.5 text-sm text-primary-foreground transition hover:opacity-90">
-            <Plus className="h-4 w-4" />New Note
-          </Link>
-          <label className={`inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-3.5 text-sm text-foreground transition hover:border-ring/40 ${uploading ? 'cursor-wait opacity-70' : 'cursor-pointer'}`}>
-            <Upload className="h-4 w-4" strokeWidth={1.75} />{uploading ? 'Ingesting...' : 'Upload'}
-            <input type="file" multiple accept=".pdf,.docx,.txt,.md,.markdown" className="hidden" aria-label="Upload source files" disabled={uploading} onChange={onUpload} />
-          </label>
-          {uploadError ? <span className="text-xs text-destructive">{uploadError}</span> : null}
-          <Dropdown label="Type" options={sourceTypes} selected={[sourceType]} onToggle={onSourceType} showSelectedCount={false} />
-        </>
-      ) : mode === 'knowledge' ? (
-        mergeSelectionMode ? (
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        {mode === 'sources' ? (
           <>
-            <div className="inline-flex h-10 items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3.5 text-sm text-primary">
-              <GitMerge className="h-4 w-4" />{selectedKnowledgeCount} selected
-            </div>
-            <Button size="sm" onClick={onOpenMerge} disabled={selectedKnowledgeCount < 2} icon={<GitMerge className="h-4 w-4" />}>Merge</Button>
-            <Button variant="ghost" size="sm" onClick={onCancelMerge} icon={<X className="h-4 w-4" />}>Cancel</Button>
+            <Link to={ROUTES.note('new')} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3.5 text-sm text-primary-foreground transition hover:opacity-90">
+              <Plus className="h-4 w-4" />New Note
+            </Link>
+            <label className={`inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-3.5 text-sm text-foreground transition hover:border-ring/40 ${uploading ? 'cursor-wait opacity-70' : 'cursor-pointer'}`}>
+              <Upload className="h-4 w-4" strokeWidth={1.75} />{uploading ? 'Ingesting...' : 'Upload'}
+              <input type="file" multiple accept=".pdf,.docx,.txt,.md,.markdown" className="hidden" aria-label="Upload source files" disabled={uploading} onChange={onUpload} />
+            </label>
+            {uploadError ? <span className="text-xs text-destructive">{uploadError}</span> : null}
           </>
+        ) : mode === 'knowledge' ? (
+          mergeSelectionMode ? (
+            <>
+              <div className="inline-flex h-10 items-center gap-2 rounded-lg border border-primary/30 bg-primary/10 px-3.5 text-sm text-primary">
+                <GitMerge className="h-4 w-4" />{selectedKnowledgeCount} selected
+              </div>
+              <Button size="sm" onClick={onOpenMerge} disabled={selectedKnowledgeCount < 2} icon={<GitMerge className="h-4 w-4" />}>Merge</Button>
+              <Button variant="ghost" size="sm" onClick={onCancelMerge} icon={<X className="h-4 w-4" />}>Cancel</Button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">Pages generated and maintained from your sources.</p>
+              <Button variant="outline" size="sm" onClick={onStartMerge} icon={<GitMerge className="h-4 w-4" />}>Select to merge</Button>
+            </>
+          )
         ) : (
           <>
-            <p className="text-sm text-muted-foreground">Pages generated and maintained from your sources.</p>
-            <Button variant="outline" size="sm" onClick={onStartMerge} icon={<GitMerge className="h-4 w-4" />}>Select to merge</Button>
-          </>
-        )
-      ) : (
-        <>
-          <Link to={ROUTES.note('new')} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3.5 text-sm text-primary-foreground transition hover:opacity-90">
-            <Plus className="h-4 w-4" />New Note
-          </Link>
-          <p className="text-sm text-muted-foreground">Private notes stay here until you add them as Source of Truth.</p>
-        </>
-      )}
-      <div className="ml-auto flex flex-wrap items-center gap-2">
-        {mode !== 'notes' && (
-          <>
-            <Dropdown label="Category" options={['All', ...categories]} selected={[category]} onToggle={onCategory} showSelectedCount={false} />
-            <Dropdown label="Tag" options={['All', ...tags]} selected={[tag]} onToggle={onTag} prefix={tag === 'All' ? '' : '#'} showSelectedCount={false} />
+            <Link to={ROUTES.note('new')} className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-3.5 text-sm text-primary-foreground transition hover:opacity-90">
+              <Plus className="h-4 w-4" />New Note
+            </Link>
+            <p className="text-sm text-muted-foreground">Private notes stay here until you add them as Source of Truth.</p>
           </>
         )}
-        <select value={sort} onChange={(event) => onSort(event.target.value as keyof typeof sortLabels)} className="h-8 rounded-lg border border-border bg-card px-3 text-xs text-muted-foreground focus:outline-none">
-          {Object.entries(sortLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </select>
-        <Button variant="ghost" size="sm" onClick={() => { onSourceType('All'); onCategory('All'); onTag('All'); onSort('updated-desc') }}>Reset</Button>
       </div>
+      <LibraryFilterMenu
+        mode={mode}
+        sourceType={sourceType}
+        category={category}
+        tag={tag}
+        sort={sort}
+        categories={categories}
+        tags={tags}
+        onSourceType={onSourceType}
+        onCategory={onCategory}
+        onTag={onTag}
+        onSort={onSort}
+      />
     </div>
+  )
+}
+
+function LibraryFilterMenu({
+  mode,
+  sourceType,
+  category,
+  tag,
+  sort,
+  categories,
+  tags,
+  onSourceType,
+  onCategory,
+  onTag,
+  onSort,
+}: {
+  mode: LibraryTab
+  sourceType: SourceType | 'All'
+  category: string
+  tag: string
+  sort: keyof typeof sortLabels
+  categories: string[]
+  tags: string[]
+  onSourceType: (value: string) => void
+  onCategory: (value: string) => void
+  onTag: (value: string) => void
+  onSort: (value: keyof typeof sortLabels) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const activeFilters = [
+    mode === 'sources' && sourceType !== 'All',
+    mode !== 'notes' && category !== 'All',
+    mode !== 'notes' && tag !== 'All',
+    sort !== 'updated-desc',
+  ].filter(Boolean).length
+
+  function resetFilters() {
+    onSourceType('All')
+    onCategory('All')
+    onTag('All')
+    onSort('updated-desc')
+  }
+
+  return (
+    <div className="relative ml-auto">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        className="inline-flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-3.5 text-sm text-foreground transition hover:border-ring/40"
+      >
+        <SlidersHorizontal className="h-4 w-4" strokeWidth={1.75} />
+        Filters
+        {activeFilters > 0 && <span className="rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">{activeFilters}</span>}
+        <ChevronDown className="h-3.5 w-3.5" />
+      </button>
+      {open && (
+        <>
+          <button className="fixed inset-0 z-40 cursor-default" aria-label="Close filters menu" onClick={() => setOpen(false)} />
+          <div className="elevated-raised absolute right-0 top-12 z-50 w-72 rounded-xl border border-border bg-popover p-3">
+            <div className="space-y-3">
+              {mode === 'sources' && (
+                <FilterSelect label="Type" value={sourceType} options={sourceTypes} onChange={onSourceType} />
+              )}
+              {mode !== 'notes' && (
+                <>
+                  <FilterSelect label="Category" value={category} options={['All', ...categories]} onChange={onCategory} />
+                  <FilterSelect label="Tag" value={tag} options={['All', ...tags]} prefix={tag === 'All' ? '' : '#'} onChange={onTag} />
+                </>
+              )}
+              <FilterSelect
+                label="Sort"
+                value={sort}
+                options={Object.keys(sortLabels)}
+                getLabel={(value) => sortLabels[value as keyof typeof sortLabels]}
+                onChange={(value) => onSort(value as keyof typeof sortLabels)}
+              />
+            </div>
+            <div className="mt-3 border-t border-border pt-3">
+              <Button variant="ghost" size="sm" className="w-full justify-center" onClick={resetFilters}>Reset filters</Button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function FilterSelect({
+  label,
+  value,
+  options,
+  prefix = '',
+  getLabel = (option) => option,
+  onChange,
+}: {
+  label: string
+  value: string
+  options: string[]
+  prefix?: string
+  getLabel?: (option: string) => string
+  onChange: (value: string) => void
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm text-foreground focus:outline-none"
+      >
+        {options.map((option) => <option key={option} value={option}>{prefix}{getLabel(option)}</option>)}
+      </select>
+    </label>
   )
 }
 

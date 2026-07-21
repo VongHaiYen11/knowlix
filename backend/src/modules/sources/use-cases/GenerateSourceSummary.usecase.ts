@@ -10,6 +10,7 @@ import {
 } from '../../../wiki/ingest.js'
 import { storageService } from '../../../lib/storage.js'
 import { embedText } from '../../../lib/embeddings.js'
+import { nowIsoTimestamp } from '../../../utils/date.js'
 import { defaultAiCustomization, type AiCustomizationProfile } from '../../ai-customization/ai-customization.defaults.js'
 
 const INITIAL_CANDIDATE_LIMIT = 15
@@ -347,7 +348,7 @@ async function collapseMergedKnowledge(input: {
     const knowledgeTags = uniqueCleanStrings(rows.flatMap((row) => row.knowledge_tags ?? []))
     const sources = uniqueJson(rows.flatMap((row) => jsonArray(row.source_list)), (value) => String(value?.id ?? value?.source ?? value?.title ?? ''))
     const references = uniqueJson(rows.flatMap((row) => jsonArray(row.reference_list)), (value) => `${String(value?.label ?? '')}::${String(value?.source ?? value?.id ?? '')}`)
-    const timeline = uniqueJson(rows.flatMap((row) => jsonArray(row.timeline)), (value) => `${String(value?.date ?? '')}::${String(value?.event ?? '')}`)
+    const timeline = uniqueJson(rows.flatMap((row) => jsonArray(row.timeline)), (value) => `${String(value?.occurredAt ?? value?.date ?? '')}::${String(value?.event ?? '')}`)
 
     await client.query(
       `UPDATE knowledge_entries
@@ -565,7 +566,7 @@ export class GenerateSourceSummaryUseCase {
              WHERE user_id=$4 AND slug=$5`,
             [
               JSON.stringify([sourceReference]),
-              JSON.stringify([{ date: created, event: timelineEvent(action, sourceTitle, page.reason) }]),
+              JSON.stringify([{ date: created, occurredAt: nowIsoTimestamp(), event: timelineEvent(action, sourceTitle, page.reason) }]),
               created,
               userId,
               slug,
@@ -589,7 +590,7 @@ export class GenerateSourceSummaryUseCase {
         })
         writtenObjects.push(markdownObject.url)
         const related = uniqueCleanStrings(page.related).map((item) => ({ slug: slugify(item), title: item })).filter((item) => item.slug)
-        const embedding = await embedText(`${page.title}\n${excerpt(page.body, 1000)}\n${sourceTags.join(' ')}`)
+        const embedding = await embedText(`${page.title}\n${excerpt(page.body, 6000)}\n${sourceTags.join(' ')}`)
         await pool.query(
           `INSERT INTO knowledge_entries
             (slug,user_id,title,content,overview,category,tags,created,updated,read_time,key_ideas,explanation,examples,related,reference_list,source_list,timeline,markdown_storage_object_id,knowledge_tags,search_vector,embedding)
@@ -641,10 +642,10 @@ export class GenerateSourceSummaryUseCase {
             JSON.stringify(related),
             JSON.stringify([{ label: sourceTitle, source: rawStorageUrl }]),
             JSON.stringify([sourceReference]),
-            JSON.stringify([{ date: created, event: timelineEvent(action, sourceTitle, page.reason) }]),
+            JSON.stringify([{ date: created, occurredAt: nowIsoTimestamp(), event: timelineEvent(action, sourceTitle, page.reason) }]),
             markdownObject.id,
             sourceTags,
-            `${page.title}\n${excerpt(page.body, 500)}\n${sourceTags.join(' ')}`,
+            `${page.title}\n${page.overview}\n${page.body}\n${sourceTags.join(' ')}`,
             JSON.stringify(embedding),
           ],
         )

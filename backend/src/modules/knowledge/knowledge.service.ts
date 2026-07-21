@@ -5,7 +5,7 @@ import { normalizeKnowledgeMarkdown } from '../../utils/markdown.js'
 import { parsePagination } from '../../utils/pagination.js'
 import { queryList } from '../../utils/query.js'
 import { excerpt, slugify, uniqueCleanStrings } from '../../utils/text.js'
-import { todayLabel } from '../../utils/date.js'
+import { nowIsoTimestamp, todayLabel } from '../../utils/date.js'
 import { storageService } from '../../lib/storage.js'
 import { embedText } from '../../lib/embeddings.js'
 import { env } from '../../config/env.js'
@@ -131,7 +131,8 @@ export const knowledgeService = {
       body: markdown,
       mimeType: 'text/markdown',
     })
-    const embedding = await embedText(`${body.title}\n${body.overview}\n${body.tags.join(' ')}`)
+    const searchText = `${body.title}\n${body.overview}\n${markdown}\n${body.tags.join(' ')}`
+    const embedding = await embedText(`${body.title}\n${body.overview}\n${excerpt(markdown, 6000)}\n${body.tags.join(' ')}`)
     try {
       const row = await knowledgeRepository.create({
         userId,
@@ -142,9 +143,10 @@ export const knowledgeService = {
         tags: body.tags,
         created,
         sources,
-        timeline: [{ date: created, event: 'Page created' }],
+        timeline: [{ date: created, occurredAt: nowIsoTimestamp(), event: 'Page created' }],
         markdownStorageObjectId: markdownObject.id,
         knowledgeTags: body.tags,
+        searchText,
         embedding,
       })
       await knowledgeRepository.createRevision({
@@ -177,7 +179,11 @@ export const knowledgeService = {
         mimeType: 'text/markdown',
       })
       : undefined
-    const embedding = await embedText(`${merged.title}\n${merged.overview}\n${(merged.knowledgeTags ?? merged.tags ?? []).join(' ')}`)
+    const currentMarkdown = body.content ?? (current.markdown_storage_object_id
+      ? await storageService.readText({ userId, storageObjectId: current.markdown_storage_object_id }).then((result) => result.text).catch(() => '')
+      : '')
+    const searchText = `${merged.title}\n${merged.overview}\n${currentMarkdown}\n${(merged.knowledgeTags ?? merged.tags ?? []).join(' ')}`
+    const embedding = await embedText(`${merged.title}\n${merged.overview}\n${excerpt(currentMarkdown, 6000)}\n${(merged.knowledgeTags ?? merged.tags ?? []).join(' ')}`)
     try {
       const row = await knowledgeRepository.update({
         ...merged,
@@ -186,6 +192,7 @@ export const knowledgeService = {
         nextSlug,
         markdownStorageObjectId: markdownObject?.id,
         knowledgeTags: merged.knowledgeTags ?? merged.tags,
+        searchText,
         embedding,
       })
       if (markdownObject) {
@@ -340,9 +347,10 @@ export const knowledgeService = {
       related: nextRelated,
       references: jsonArray(current.reference_list),
       sources: jsonArray(current.source_list),
-      timeline: [...jsonArray(current.timeline), { date: eventDate, event: `Regenerated from linked sources: ${page.reason || 'Knowledge refreshed'}` }],
+      timeline: [...jsonArray(current.timeline), { date: eventDate, occurredAt: nowIsoTimestamp(), event: `Regenerated from linked sources: ${page.reason || 'Knowledge refreshed'}` }],
       markdownStorageObjectId: markdownObject.id,
       knowledgeTags: nextTags,
+      searchText: `${nextTitle}\n${nextOverview}\n${page.body}\n${nextTags.join(' ')}`,
       embedding,
     })
     await knowledgeRepository.createRevision({
@@ -443,7 +451,7 @@ export const knowledgeService = {
       sources: sourceRefs,
       related: normalizeRelated(parsed.related),
       references,
-      timeline: [{ date: created, event: `Merged from ${orderedRows.map((row) => row.title).join(', ')}` }],
+      timeline: [{ date: created, occurredAt: nowIsoTimestamp(), event: `Merged from ${orderedRows.map((row) => row.title).join(', ')}` }],
       reason: String(parsed.reason || 'Merged related Knowledge pages into one broader page.').trim(),
     }
   },
@@ -477,7 +485,7 @@ export const knowledgeService = {
       uniqueBy(orderedRows.flatMap((row) => jsonArray(row.reference_list)), referenceKey),
     )
     const created = todayLabel()
-    const timeline = [{ date: created, event: `Merged from ${orderedRows.map((row) => row.title).join(', ')}` }]
+    const timeline = [{ date: created, occurredAt: nowIsoTimestamp(), event: `Merged from ${orderedRows.map((row) => row.title).join(', ')}` }]
     const customization = await aiCustomizationService.effectiveProfile(userId)
     const markdownObject = await storageService.upload({
       userId,
@@ -502,6 +510,7 @@ export const knowledgeService = {
         timeline,
         markdownStorageObjectId: markdownObject.id,
         knowledgeTags: tags,
+        searchText: `${body.draft.title}\n${body.draft.overview}\n${body.draft.content}\n${tags.join(' ')}`,
         related: normalizeRelated(body.draft.related),
         references,
         embedding,

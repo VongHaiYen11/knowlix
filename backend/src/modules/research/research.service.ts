@@ -7,6 +7,7 @@ import { storageService } from '../../lib/storage.js'
 import { embedText } from '../../lib/embeddings.js'
 import { parseModelJson } from '../../utils/json.js'
 import { getResearchSelectionPrompt, getResearchAnswerPrompt, getResearchSummaryPrompt } from '../../prompts/index.js'
+import { relevantMarkdownSnippet, researchTextMatchScore } from './research.query.js'
 import { aiCustomizationService } from '../ai-customization/ai-customization.service.js'
 import { geminiConfig } from '../ai-customization/ai-customization.defaults.js'
 
@@ -85,7 +86,7 @@ export const researchService = {
   async streamAnswer(userId: string, body: z.infer<typeof researchSchema>) {
     const customization = await aiCustomizationService.effectiveProfile(userId)
     const queryEmbedding = await embedText(body.question).catch(() => [])
-    const knowledge = (await researchRepository.retrieveCandidates(userId, {
+    const rankedKnowledge = (await researchRepository.retrieveCandidates(userId, {
       question: body.question,
       scope: { tags: [], categories: [] },
       queryEmbedding,
@@ -96,8 +97,17 @@ export const researchService = {
         hybrid_score: Math.max(Number(row.fts_score ?? 0), Number(row.vector_score ?? 0)),
       }))
       .sort((a: any, b: any) => b.hybrid_score - a.hybrid_score)
+    const knowledgeWithContent = await Promise.all(rankedKnowledge.map(async (row: any) => {
+      const content = row.markdown_storage_object_id
+        ? await storageService.readText({ userId, storageObjectId: row.markdown_storage_object_id }).then((result) => result.text).catch(() => '')
+        : ''
+      const searchableContent = `${row.title}\n${row.overview}\n${(row.tags ?? []).join(' ')}\n${content}`
+      return { ...row, markdown: content, body_score: researchTextMatchScore(searchableContent, body.question) }
+    }))
+    const knowledge = knowledgeWithContent
+      .sort((a: any, b: any) => b.body_score - a.body_score || b.hybrid_score - a.hybrid_score)
       .slice(0, 12)
-    const candidateList = knowledge.map((row: any) => `Slug: ${row.slug}\nTitle: ${row.title}\nCategory: ${row.category}\nTags: ${(row.tags ?? []).join(', ')}\nOverview: ${row.overview}`).join('\n\n---\n\n')
+    const candidateList = knowledge.map((row: any) => `Slug: ${row.slug}\nTitle: ${row.title}\nCategory: ${row.category}\nTags: ${(row.tags ?? []).join(', ')}\nOverview: ${row.overview}\nRelevant Markdown:\n${relevantMarkdownSnippet(row.markdown, body.question)}`).join('\n\n---\n\n')
     const selectionPrompt = getResearchSelectionPrompt(body.question, candidateList)
     let selectedSlugs = new Set<string>()
     if (knowledge.length) {
@@ -117,9 +127,7 @@ export const researchService = {
     const fallbackSelected = selected.length ? selected : knowledge.slice(0, 4)
     const fullPages: string[] = []
     for (const row of fallbackSelected) {
-      const storageObjectId = row.markdown_storage_object_id
-      const content = storageObjectId ? (await storageService.readText({ userId, storageObjectId })).text : ''
-      fullPages.push(`Knowledge Reference: [${fullPages.length + 1}]\nTitle: ${row.title}\nSlug: ${row.slug}\nOverview: ${row.overview}\nMarkdown:\n${content}`)
+      fullPages.push(`Knowledge Reference: [${fullPages.length + 1}]\nTitle: ${row.title}\nSlug: ${row.slug}\nOverview: ${row.overview}\nMarkdown:\n${row.markdown}`)
     }
     const context = fullPages.join('\n\n---\n\n')
     const references = fallbackSelected.map((row: any, index) => ({

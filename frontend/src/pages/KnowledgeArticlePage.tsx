@@ -56,7 +56,7 @@ export function KnowledgeArticlePage({ slug }: { slug: string }) {
           <div className="mt-4 flex flex-wrap gap-1.5">{entry.tags.map((tag) => <Badge key={tag}>#{tag}</Badge>)}</div>
           <p className="mt-6 border-l-2 border-primary/40 pl-5 font-serif text-xl italic leading-relaxed text-muted-foreground">{entry.overview}</p>
           {entry.content ? (
-            <div className="mt-10"><MarkdownPreview content={entry.content} hiddenTitle={entry.title} /></div>
+            <div className="mt-10"><MarkdownPreview content={entry.content} /></div>
           ) : (
             <>
               <ArticleSection title="Key ideas">

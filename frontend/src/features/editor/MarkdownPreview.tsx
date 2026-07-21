@@ -3,10 +3,10 @@ import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import { MermaidDiagram } from './MermaidDiagram'
-import { prepareMarkdownForPreview } from './markdown'
+import { prepareMarkdownForDisplay } from './markdownDisplay'
 
-export function MarkdownPreview({ content, hiddenTitle }: { content: string; hiddenTitle?: string }) {
-  const previewContent = prepareMarkdownForPreview(content, hiddenTitle)
+export function MarkdownPreview({ content }: { content: string }) {
+  const displayContent = prepareMarkdownForDisplay(content)
   return (
     <div className="max-w-none text-foreground [&_.katex-display]:my-6 [&_.katex-display]:overflow-x-auto [&_.katex-display]:text-center">
       <ReactMarkdown
@@ -33,7 +33,7 @@ export function MarkdownPreview({ content, hiddenTitle }: { content: string; hid
           img: ({ src, alt }) => <img src={typeof src === 'string' ? src : ''} alt={alt ?? ''} loading="lazy" className="my-5 w-full rounded-xl border border-border elevated" />,
         }}
       >
-        {previewContent}
+        {displayContent}
       </ReactMarkdown>
     </div>
   )

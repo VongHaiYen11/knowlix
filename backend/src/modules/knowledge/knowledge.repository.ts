@@ -60,7 +60,7 @@ export const knowledgeRepository = {
         JSON.stringify(input.timeline),
         input.markdownStorageObjectId,
         input.knowledgeTags ?? input.tags,
-        `${input.title}\n${input.overview}\n${(input.knowledgeTags ?? input.tags ?? []).join(' ')}`,
+        input.searchText ?? `${input.title}\n${input.overview}\n${(input.knowledgeTags ?? input.tags ?? []).join(' ')}`,
         JSON.stringify(input.embedding ?? []),
       ],
     )
@@ -90,7 +90,7 @@ export const knowledgeRepository = {
         JSON.stringify(input.timeline),
         input.markdownStorageObjectId ?? null,
         input.knowledgeTags ?? input.tags,
-        `${input.title}\n${input.overview}\n${(input.knowledgeTags ?? input.tags ?? []).join(' ')}`,
+        input.searchText ?? `${input.title}\n${input.overview}\n${(input.knowledgeTags ?? input.tags ?? []).join(' ')}`,
         JSON.stringify(input.embedding ?? []),
         input.userId,
         input.currentSlug,
@@ -160,7 +160,7 @@ export const knowledgeRepository = {
           JSON.stringify(input.timeline),
           input.markdownStorageObjectId,
           input.knowledgeTags ?? input.tags,
-          `${input.title}\n${input.overview}\n${(input.knowledgeTags ?? input.tags ?? []).join(' ')}`,
+          input.searchText ?? `${input.title}\n${input.overview}\n${(input.knowledgeTags ?? input.tags ?? []).join(' ')}`,
           JSON.stringify(input.embedding ?? []),
         ],
       )

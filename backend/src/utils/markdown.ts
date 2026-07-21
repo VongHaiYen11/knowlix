@@ -1,30 +1,5 @@
-const JSON_ESCAPED_LATEX_COMMANDS: ReadonlyArray<readonly [RegExp, string]> = [
-  [/\f\s*rac/g, '\\frac'],
-  [/\u0008\s*ar/g, '\\bar'],
-  [/\r\s*ight/g, '\\right'],
-  [/\n\s*abla/g, '\\nabla'],
-  [/\t\s*heta/g, '\\theta'],
-  [/\t\s*imes/g, '\\times'],
-  [/\t\s*ext/g, '\\text'],
-]
-
-function repairJsonEscapedLatex(content: string): string {
-  return content.replace(/\$\$[\s\S]*?\$\$|\$(?!\$)[^$]*\$/g, (math) => (
-    JSON_ESCAPED_LATEX_COMMANDS.reduce(
-      (markdown, [pattern, replacement]) => markdown.replace(pattern, replacement),
-      math,
-    )
-  ))
-}
-
-/**
- * Normalize Markdown returned by a model without rewriting its document
- * structure. The LaTeX repair is a compatibility boundary for JSON escape
- * sequences that are valid JSON (for example, `\f` in `\frac`) but decode to
- * control characters before the Markdown is available to the application.
- */
 export function normalizeGeneratedMarkdown(content: string): string {
-  return normalizeMarkdownWhitespace(repairJsonEscapedLatex(content))
+  return normalizeMarkdownWhitespace(content)
 }
 
 export function normalizeMarkdownWhitespace(content: string): string {

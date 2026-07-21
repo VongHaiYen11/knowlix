@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { MarkdownPreview } from '@/features/editor/MarkdownPreview'
+import { timelineTime } from '@/features/article/ArticleBlocks'
 import { libraryService } from '@/services/libraryService'
 import { cn } from '@/utils/cn'
 import type { KnowledgeEntry, KnowledgeMergeDraft, KnowledgeMergeMode, KnowledgeMergeStyle } from '@/types/knowledge'
@@ -182,7 +183,7 @@ export function KnowledgeMergeModal({
                   <Card className="p-4">
                     <h4 className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Timeline</h4>
                     <ul className="mt-3 space-y-1.5 text-sm text-foreground">
-                      {draft.timeline.map((item) => <li key={`${item.date}-${item.event}`}><span className="text-muted-foreground">{item.date}</span> — {item.event}</li>)}
+                      {draft.timeline.map((item) => <li key={`${item.occurredAt || item.date}-${item.event}`}><span className="text-muted-foreground">{item.date}{timelineTime(item.occurredAt) ? ` · ${timelineTime(item.occurredAt)}` : ''}</span> — {item.event}</li>)}
                     </ul>
                   </Card>
                 </div>

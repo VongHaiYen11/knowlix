@@ -1,4 +1,5 @@
 import type { AiPrompt } from './prompt.types.js'
+import { JSON_MARKDOWN_MATH_RULES } from './markdown-format.js'
 
 export function getKnowledgeMergePrompt(params: {
   mode: 'automatic' | 'manual'
@@ -64,7 +65,9 @@ MERGE RULES
 - Reconcile overlap and conflicts explicitly; never silently discard incompatible claims.
 - Preserve useful details from every selected page.
 - related contains only durable concepts mentioned by the selected pages.
-- overview is newly written and contains at most four sentences.`,
+- overview is newly written and contains at most four sentences.
+
+${JSON_MARKDOWN_MATH_RULES}`,
     contents: `MERGE MODE
 ${params.mode}
 

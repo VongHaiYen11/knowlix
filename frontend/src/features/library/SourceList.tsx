@@ -29,6 +29,8 @@ export function SourceList({ sources }: { sources: Source[] }) {
         const Icon = sourceTypeIcon[source.type]
         const StatusIcon = statusIcon[source.status].icon
         const isProcessing = source.status === 'Processing'
+        const visibleTags = source.tags.slice(0, 4)
+        const hasMoreTags = source.tags.length > visibleTags.length
         return (
           <li key={source.id}>
             <Card
@@ -70,14 +72,19 @@ export function SourceList({ sources }: { sources: Source[] }) {
                 </div>
                 <p className="mt-1 font-serif text-lg leading-snug tracking-tight">{source.title}</p>
                 <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{source.excerpt}</p>
-                <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                  {source.tags.map((tag) => <span key={tag} className="text-[11px] text-muted-foreground">#{tag}</span>)}
-                  <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-muted-foreground"><Clock className="h-3 w-3" />{source.created}</span>
-                  <span className={`inline-flex items-center gap-1 text-xs ${statusIcon[source.status].className}`}>
-                    <StatusIcon className="h-3.5 w-3.5" />
-                    <span className="text-muted-foreground">{source.status}</span>
-                  </span>
-                  <ArrowRight className={cn("h-4 w-4 text-muted-foreground transition", !isProcessing && "group-hover:translate-x-0.5 group-hover:text-primary")} />
+                <div className="mt-3 flex min-w-0 items-center gap-3">
+                  <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden whitespace-nowrap">
+                    {visibleTags.map((tag) => <span key={tag} className="truncate text-[11px] text-muted-foreground">#{tag}</span>)}
+                    {hasMoreTags && <span className="text-[11px] text-muted-foreground">...</span>}
+                  </div>
+                  <div className="ml-auto flex shrink-0 items-center gap-3">
+                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"><Clock className="h-3 w-3" />{source.created}</span>
+                    <span className={`inline-flex items-center gap-1 text-xs ${statusIcon[source.status].className}`}>
+                      <StatusIcon className="h-3.5 w-3.5" />
+                      <span className="text-muted-foreground">{source.status}</span>
+                    </span>
+                    <ArrowRight className={cn("h-4 w-4 text-muted-foreground transition", !isProcessing && "group-hover:translate-x-0.5 group-hover:text-primary")} />
+                  </div>
                 </div>
               </div>
             </Card>

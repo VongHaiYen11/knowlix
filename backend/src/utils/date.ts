@@ -22,3 +22,7 @@ export function todayIsoDate(): string {
 export function todayLabel(): string {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: VIETNAM_TIME_ZONE }).format(new Date())
 }
+
+export function nowIsoTimestamp(): string {
+  return new Date().toISOString()
+}

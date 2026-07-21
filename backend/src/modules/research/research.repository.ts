@@ -1,5 +1,6 @@
 import { pool } from '../../database/pool.js'
 import { uniqueCleanStrings } from '../../utils/text.js'
+import { researchTsQuery } from './research.query.js'
 
 export interface ResearchThreadInput {
   id: string
@@ -30,28 +31,28 @@ export const researchRepository = {
     const tags = uniqueCleanStrings(input.scope.tags)
     const categories = uniqueCleanStrings(input.scope.categories)
     const limit = input.limit ?? 12
-    const embeddingStr = `[${input.queryEmbedding.join(',')}]`
+    const embeddingStr = input.queryEmbedding.length === 768 ? `[${input.queryEmbedding.join(',')}]` : null
+    const lexicalQuery = researchTsQuery(input.question)
     const { rows } = await pool.query(
       `SELECT slug,title,overview,category,knowledge_tags AS tags,markdown_storage_object_id,
-        ts_rank_cd(COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))), plainto_tsquery('simple', $4)) AS fts_score,
-        1 - (embedding <=> $6::vector) AS vector_score
+        CASE WHEN $6 = '' THEN 0 ELSE ts_rank_cd(
+          COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))),
+          to_tsquery('simple', $6)
+        ) END AS fts_score,
+        CASE WHEN $5::text IS NULL OR embedding IS NULL THEN 0 ELSE 1 - (embedding <=> $5::vector) END AS vector_score
        FROM knowledge_entries
        WHERE user_id=$1
          AND ($2::text[] = '{}' OR knowledge_tags && $2::text[])
          AND ($3::text[] = '{}' OR category = ANY($3::text[]))
-         AND (
-          $4 = ''
-          OR COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))) @@ plainto_tsquery('simple', $4)
-          OR title ILIKE '%' || $4 || '%'
-          OR overview ILIKE '%' || $4 || '%'
-          OR embedding <=> $6::vector < 0.3
-         )
        ORDER BY GREATEST(
-          ts_rank_cd(COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))), plainto_tsquery('simple', $4)),
-          1 - (embedding <=> $6::vector)
+          CASE WHEN $6 = '' THEN 0 ELSE ts_rank_cd(
+            COALESCE(search_vector, to_tsvector('simple', title || ' ' || overview || ' ' || array_to_string(knowledge_tags, ' '))),
+            to_tsquery('simple', $6)
+          ) END,
+          CASE WHEN $5::text IS NULL OR embedding IS NULL THEN 0 ELSE 1 - (embedding <=> $5::vector) END
        ) DESC, updated_at DESC
-       LIMIT $5`,
-      [userId, tags, categories, input.question.trim(), limit, embeddingStr],
+       LIMIT $4`,
+      [userId, tags, categories, limit, embeddingStr, lexicalQuery],
     )
     return rows
   },

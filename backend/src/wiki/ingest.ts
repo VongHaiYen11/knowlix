@@ -3,7 +3,7 @@ import mammoth from 'mammoth'
 import pdf from 'pdf-parse/lib/pdf-parse.js'
 import { getGeminiClient } from '../config/gemini.js'
 import { parseModelJson } from '../utils/json.js'
-import { normalizeKnowledgeMarkdown, normalizeMarkdownWhitespace, normalizeSummaryMarkdown } from '../utils/markdown.js'
+import { normalizeMarkdownWhitespace } from '../utils/markdown.js'
 import { excerpt } from '../utils/text.js'
 import { getIngestSummaryPrompt, getIngestPagesPrompt } from '../prompts/index.js'
 import { defaultAiCustomization, geminiConfig, ingestOutputLimits, type AiCustomizationProfile } from '../modules/ai-customization/ai-customization.defaults.js'
@@ -319,7 +319,7 @@ function normalizePage(value: unknown, fallbackTitle: string): IngestPage | null
   const rawTitle = typeof page.title === 'string' && page.title.trim() ? page.title.trim() : fallbackTitle
   const title = rawTitle.trim()
   const overview = typeof page.overview === 'string' && page.overview.trim() ? page.overview.trim() : ''
-  const body = typeof page.body === 'string' ? normalizeKnowledgeMarkdown(page.body, title) : ''
+  const body = typeof page.body === 'string' ? page.body : ''
   const action = normalizeAction(page.action)
   if (!body && !['link_only', 'skip'].includes(action)) return null
   const filename = typeof page.filename === 'string' && page.filename.trim() ? page.filename.trim() : `${title}.md`
@@ -339,7 +339,8 @@ function normalizePage(value: unknown, fallbackTitle: string): IngestPage | null
 export function normalizeIngestSummary(input: unknown, fallback: { title: string; extractedText: string }): IngestSummary {
   const parsed = asRecord(input)
   const summaryRecord = asRecord(parsed.summary)
-  const rawSummaryBody = typeof summaryRecord.body === 'string' && summaryRecord.body.trim() ? summaryRecord.body.trim() : fallback.extractedText
+  const generatedBody = typeof summaryRecord.body === 'string' ? summaryRecord.body : ''
+  const rawSummaryBody = generatedBody.trim() ? generatedBody : fallback.extractedText
   
   const parsedTitle = (
     (typeof summaryRecord.title === 'string' ? summaryRecord.title.trim() : '')
@@ -347,7 +348,7 @@ export function normalizeIngestSummary(input: unknown, fallback: { title: string
     || ''
   ).trim()
   const summaryTitle = parsedTitle || fallback.title.trim()
-  const summaryBody = normalizeSummaryMarkdown(rawSummaryBody, summaryTitle)
+  const summaryBody = rawSummaryBody
   const parsedExcerpt = typeof summaryRecord.excerpt === 'string' && summaryRecord.excerpt.trim() ? summaryRecord.excerpt.trim() : ''
   const cleanExcerpt = excerpt(summaryBody)
 
@@ -425,33 +426,44 @@ export async function generateIngestSummary(buffer: Buffer, options: IngestRawFi
     originalName,
     uploadedType: options.uploadedType ?? 'File',
     fileKind: extracted.fileKind,
-    sourceWindow: extracted.canonicalMarkdown || extractedText,
+    sourceWindow: extension === '.md' || extension === '.markdown'
+      ? extracted.text
+      : extracted.canonicalMarkdown || extractedText,
     sectionOutline: outlineFromSections(extracted.sections),
     knowledgeDefinition: customization.knowledgeDefinition,
     knowledgeExtractionInstructions: customization.knowledgeExtractionInstructions,
     summaryBodyMaxWords: ingestOutputLimits.sourceSummaryBodyMaxWords,
   })
 
-  const response = await getGeminiClient().models.generateContent({
-    model: customization.ingestModel,
-    contents: prompt.contents,
-    config: geminiConfig({
-      responseMimeType: 'application/json',
-      responseJsonSchema: INGEST_SUMMARY_RESPONSE_SCHEMA,
-      reasoning: customization.ingestReasoning,
-      temperature: customization.ingestTemperature,
-      systemInstruction: prompt.systemInstruction,
-      maxOutputTokens: ingestOutputLimits.summaryMaxOutputTokens,
-    }),
-  })
-  const responseText = response.text?.trim() ?? ''
-  if (!responseText) throw new Error('Gemini returned an empty ingest summary response')
+  let lastParseError: unknown
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const response = await getGeminiClient().models.generateContent({
+      model: customization.ingestModel,
+      contents: prompt.contents,
+      config: geminiConfig({
+        responseMimeType: 'application/json',
+        responseJsonSchema: INGEST_SUMMARY_RESPONSE_SCHEMA,
+        reasoning: attempt === 1 ? customization.ingestReasoning : 'low',
+        temperature: customization.ingestTemperature,
+        systemInstruction: prompt.systemInstruction,
+        maxOutputTokens: ingestOutputLimits.summaryMaxOutputTokens * attempt,
+      }),
+    })
+    const responseText = response.text?.trim() ?? ''
+    if (!responseText) {
+      lastParseError = new Error('Gemini returned an empty ingest summary response')
+      continue
+    }
 
-  try {
-    return normalizeIngestSummary(parseModelJson(responseText), { title, extractedText })
-  } catch (error) {
-    throw new Error(`Failed to parse Gemini ingest summary JSON: ${error instanceof Error ? error.message : 'invalid JSON'}`)
+    try {
+      return normalizeIngestSummary(parseModelJson(responseText), { title, extractedText })
+    } catch (error) {
+      lastParseError = error
+      console.warn(`[Ingest] Invalid Gemini summary JSON (attempt ${attempt}/2):`, error)
+    }
   }
+
+  throw new Error(`Failed to parse Gemini ingest summary JSON: ${lastParseError instanceof Error ? lastParseError.message : 'invalid JSON'}`)
 }
 
 export async function extractKnowledgePages(
@@ -502,28 +514,37 @@ export async function extractKnowledgePages(
     knowledgePageMaxWords: ingestOutputLimits.knowledgePageMaxWords,
   })
 
-  const response = await getGeminiClient().models.generateContent({
-    model: customization.ingestModel,
-    contents: prompt.contents,
-    config: geminiConfig({
-      responseMimeType: 'application/json',
-      responseJsonSchema: INGEST_PAGES_RESPONSE_SCHEMA,
-      reasoning: customization.ingestReasoning,
-      temperature: customization.ingestTemperature,
-      systemInstruction: prompt.systemInstruction,
-      maxOutputTokens: ingestOutputLimits.pagesMaxOutputTokens,
-    }),
-  })
-  const responseText = response.text?.trim() ?? ''
-  if (!responseText) throw new Error('Gemini returned an empty ingest pages response')
+  let lastParseError: unknown
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const response = await getGeminiClient().models.generateContent({
+      model: customization.ingestModel,
+      contents: prompt.contents,
+      config: geminiConfig({
+        responseMimeType: 'application/json',
+        responseJsonSchema: INGEST_PAGES_RESPONSE_SCHEMA,
+        reasoning: attempt === 1 ? customization.ingestReasoning : 'low',
+        temperature: customization.ingestTemperature,
+        systemInstruction: prompt.systemInstruction,
+        maxOutputTokens: ingestOutputLimits.pagesMaxOutputTokens * attempt,
+      }),
+    })
+    const responseText = response.text?.trim() ?? ''
+    if (!responseText) {
+      lastParseError = new Error('Gemini returned an empty ingest pages response')
+      continue
+    }
 
-  try {
-    const pages = normalizeIngestPages(parseModelJson(responseText), summary)
-    const skipped = pages.every((page) => page.action === 'skip')
-      ? pages.map((page) => page.reason).filter(Boolean).join(' ') || 'No durable Knowledge contribution found.'
-      : undefined
-    return { sourcePath: options.rawStorageUrl ?? '', written: [], pages, summary, extractedText: canonicalMarkdown, fileKind: extracted.fileKind, skipped }
-  } catch (error) {
-    throw new Error(`Failed to parse Gemini ingest pages JSON: ${error instanceof Error ? error.message : 'invalid JSON'}`)
+    try {
+      const pages = normalizeIngestPages(parseModelJson(responseText), summary)
+      const skipped = pages.every((page) => page.action === 'skip')
+        ? pages.map((page) => page.reason).filter(Boolean).join(' ') || 'No durable Knowledge contribution found.'
+        : undefined
+      return { sourcePath: options.rawStorageUrl ?? '', written: [], pages, summary, extractedText: canonicalMarkdown, fileKind: extracted.fileKind, skipped }
+    } catch (error) {
+      lastParseError = error
+      console.warn(`[Ingest] Invalid Gemini pages JSON (attempt ${attempt}/2):`, error)
+    }
   }
+
+  throw new Error(`Failed to parse Gemini ingest pages JSON: ${lastParseError instanceof Error ? lastParseError.message : 'invalid JSON'}`)
 }
