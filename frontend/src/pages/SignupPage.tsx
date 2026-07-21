@@ -1,4 +1,4 @@
-import { Eye, EyeOff, Feather } from 'lucide-react'
+import { Eye, EyeOff, Feather, Mail } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useAuth } from '@/auth/useAuth'
@@ -17,6 +17,7 @@ export function SignupPage() {
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [isSuccess, setIsSuccess] = useState(false)
 
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -28,12 +29,39 @@ export function SignupPage() {
     setSubmitting(true)
     try {
       await auth.signup({ name, email, password })
-      navigate(ROUTES.home, { replace: true })
+      setIsSuccess(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign up failed')
     } finally {
       setSubmitting(false)
     }
+  }
+
+  if (isSuccess) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
+        <Card className="w-full max-w-md p-8 md:p-10 text-center relative overflow-hidden border border-border/80 bg-card/60 backdrop-blur-md shadow-2xl">
+          <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-primary/10 blur-3xl" />
+          <div className="absolute -left-10 -bottom-10 h-32 w-32 rounded-full bg-primary/5 blur-3xl" />
+
+          <div className="relative z-10 flex flex-col items-center">
+            <span className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-[0_0_20px_rgba(59,130,246,0.15)] animate-pulse">
+              <Mail className="h-6 w-6" strokeWidth={1.75} />
+            </span>
+            <h1 className="font-serif text-3xl tracking-tight mb-3">Verify your email</h1>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-6">
+              We have sent a verification link to <strong className="text-foreground">{email}</strong>. Please check your inbox and click the link to activate your account.
+            </p>
+            <div className="w-full h-[1px] bg-border/50 my-6" />
+            <Link to={ROUTES.login} className="w-full">
+              <Button className="w-full py-2.5 h-11 bg-primary text-primary-foreground font-medium rounded-lg shadow-md hover:shadow-lg transition-all duration-200">
+                Back to login
+              </Button>
+            </Link>
+          </div>
+        </Card>
+      </main>
+    )
   }
 
   return (

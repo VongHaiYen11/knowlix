@@ -1,6 +1,6 @@
-import { Feather } from 'lucide-react'
+import { AlertTriangle, CheckCircle, Feather } from 'lucide-react'
 import { useState, type FormEvent, type ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { useAuth } from '@/auth/useAuth'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -9,10 +9,14 @@ import { ROUTES } from '@/constants/routes'
 export function LoginPage() {
   const auth = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  const verified = searchParams.get('verified') === 'true'
+  const urlError = searchParams.get('error')
 
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -30,6 +34,28 @@ export function LoginPage() {
 
   return (
     <AuthFrame title="Welcome back" subtitle="Sign in to continue your private library.">
+      {verified && (
+        <div className="mb-6 p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-sm flex items-start gap-3">
+          <CheckCircle className="h-5 w-5 shrink-0 mt-0.5 text-emerald-500" />
+          <div className="text-left">
+            <p className="font-semibold text-emerald-800 dark:text-emerald-200">Verification successful!</p>
+            <p className="mt-0.5 text-emerald-700/80 dark:text-emerald-300/80">Your account has been activated. You can now log in.</p>
+          </div>
+        </div>
+      )}
+      {urlError && (
+        <div className="mb-6 p-4 rounded-xl border border-destructive/20 bg-destructive/10 text-destructive text-sm flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5 text-destructive" />
+          <div className="text-left">
+            <p className="font-semibold text-destructive/90">Verification failed!</p>
+            <p className="mt-0.5 text-destructive/80">
+              {urlError === 'expired_token'
+                ? 'The verification link has expired. Please sign up again.'
+                : 'The verification link is invalid or has already been used.'}
+            </p>
+          </div>
+        </div>
+      )}
       <form onSubmit={submit} className="space-y-4">
         <AuthInput label="Email" type="email" value={email} onChange={setEmail} autoComplete="email" />
         <AuthInput label="Password" type="password" value={password} onChange={setPassword} autoComplete="current-password" />

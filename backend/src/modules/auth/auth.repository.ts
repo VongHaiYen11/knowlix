@@ -49,4 +49,28 @@ export const authRepository = {
     )
     return userFromRow(rows[0])
   },
+
+  async deleteVerificationByEmail(email: string): Promise<void> {
+    await pool.query('DELETE FROM email_verifications WHERE email = $1', [email])
+  },
+
+  async createVerification(token: string, input: { email: string; passwordHash: string; name: string; initials: string; expiresAt: Date }): Promise<void> {
+    await pool.query(
+      `INSERT INTO email_verifications (token, email, password_hash, name, initials, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [token, input.email, input.passwordHash, input.name, input.initials, input.expiresAt],
+    )
+  },
+
+  async findVerificationByToken(token: string): Promise<any | undefined> {
+    const { rows } = await pool.query(
+      'SELECT token, email, password_hash, name, initials, expires_at FROM email_verifications WHERE token = $1',
+      [token],
+    )
+    return rows[0]
+  },
+
+  async deleteVerificationByToken(token: string): Promise<void> {
+    await pool.query('DELETE FROM email_verifications WHERE token = $1', [token])
+  },
 }

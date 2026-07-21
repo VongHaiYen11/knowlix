@@ -3,6 +3,7 @@ import { ConflictError, UnauthorizedError } from '../../errors/index.js'
 import { initialsFromName } from '../../utils/text.js'
 import { signSessionToken } from '../../lib/jwt.js'
 import { authRepository } from './auth.repository.js'
+import { sendVerificationEmail } from '../../utils/email.js'
 import type { loginSchema, signupSchema } from './auth.schemas.js'
 import type { z } from 'zod'
 import type { AuthResult } from './auth.types.js'
@@ -11,18 +12,53 @@ type SignupInput = z.infer<typeof signupSchema>
 type LoginInput = z.infer<typeof loginSchema>
 
 export const authService = {
-  async signup(input: SignupInput): Promise<AuthResult> {
+  async signup(input: SignupInput): Promise<void> {
     const existing = await authRepository.findByEmail(input.email)
-    if (existing) throw new ConflictError('Email is already registered')
+    if (existing) throw new ConflictError('This email is already in use')
 
-    const user = await authRepository.create({
-      id: `user_${crypto.randomUUID()}`,
+    const token = crypto.randomUUID()
+    const passwordHash = await bcrypt.hash(input.password, 12)
+    const initials = initialsFromName(input.name)
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+
+    await authRepository.deleteVerificationByEmail(input.email)
+    await authRepository.createVerification(token, {
       email: input.email,
-      passwordHash: await bcrypt.hash(input.password, 12),
+      passwordHash,
       name: input.name,
-      initials: initialsFromName(input.name),
+      initials,
+      expiresAt,
     })
-    return { user, token: signSessionToken(user.id) }
+
+    await sendVerificationEmail(input.email, input.name, token)
+  },
+
+  async verifyEmail(token: string): Promise<void> {
+    const verification = await authRepository.findVerificationByToken(token)
+    if (!verification) {
+      throw new Error('invalid_token')
+    }
+
+    if (new Date() > new Date(verification.expires_at)) {
+      await authRepository.deleteVerificationByToken(token)
+      throw new Error('expired_token')
+    }
+
+    const existing = await authRepository.findByEmail(verification.email)
+    if (existing) {
+      await authRepository.deleteVerificationByToken(token)
+      return
+    }
+
+    await authRepository.create({
+      id: `user_${crypto.randomUUID()}`,
+      email: verification.email,
+      passwordHash: verification.password_hash,
+      name: verification.name,
+      initials: verification.initials,
+    })
+
+    await authRepository.deleteVerificationByToken(token)
   },
 
   async login(input: LoginInput): Promise<AuthResult> {

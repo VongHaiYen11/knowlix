@@ -9,9 +9,8 @@ export const authService = {
     const response = await apiClient.post<AuthResponse>('/api/v1/auth/login', input)
     return response.user
   },
-  async signup(input: { name: string; email: string; password: string }): Promise<AuthUser> {
-    const response = await apiClient.post<AuthResponse>('/api/v1/auth/signup', input)
-    return response.user
+  async signup(input: { name: string; email: string; password: string }): Promise<{ ok: boolean; message: string }> {
+    return apiClient.post<{ ok: boolean; message: string }>('/api/v1/auth/signup', input)
   },
   async logout(): Promise<void> {
     await apiClient.post<{ ok: true }>('/api/v1/auth/logout', {})

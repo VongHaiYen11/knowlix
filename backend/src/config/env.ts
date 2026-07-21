@@ -20,4 +20,9 @@ export const env = {
   supabaseUrl: process.env.SUPABASE_URL,
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
   supabaseStorageBucket: process.env.SUPABASE_STORAGE_BUCKET ?? 'knowlix-files',
+  smtpHost: process.env.SMTP_HOST ?? 'smtp.resend.com',
+  smtpPort: Number(process.env.SMTP_PORT ?? 465),
+  smtpUser: process.env.SMTP_USER ?? 'resend',
+  smtpPass: process.env.SMTP_PASS,
+  smtpFrom: process.env.SMTP_FROM ?? 'Knowlix',
 }
