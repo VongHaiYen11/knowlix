@@ -41,7 +41,7 @@
 
 ## 🌱 Overview
 
-Knowlix helps researchers, students, and professionals upload source documents, extract durable knowledge, and search across a private knowledge base. The app accepts PDF, DOCX, TXT, and Markdown files, stores the original source of truth, generates source summaries and Knowledge pages with Google Gemini, and indexes Knowledge with PostgreSQL plus `pgvector`.
+Knowlix helps researchers, students, and professionals upload source documents, extract durable knowledge, and search across a private knowledge base. 
 
 Knowlix is inspired by Andrej Karpathy's LLM Wiki idea: raw sources stay preserved while an LLM incrementally maintains a durable, interlinked Knowledge layer. The local idea file is kept in [`docs/llm-wiki.md`](docs/llm-wiki.md).
 
