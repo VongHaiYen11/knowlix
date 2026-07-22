@@ -34,7 +34,7 @@
 - 🏠 Home dashboard with greeting, search entry point, recent notes, reading cards, daily inspiration, and latest journal note.
 - 📚 Library with Source of Truth, Knowledge, and Notes tabs.
 - 📄 Source viewer with upload support for PDF, DOCX, TXT, Markdown, editable tags, and DOCX preview support.
-- 🧠 Knowledge article viewer with Markdown rendering, source materials, timeline, related knowledge, and edit route.
+- 🧠 Knowledge article viewer with Markdown rendering, source materials, timeline, related knowledge, Markdown export, and edit route.
 - 📝 Note editor with split Markdown preview, explicit save/cancel controls, and “Add as source of truth”.
 - 🔎 Research workspace with chat history, cited Knowledge references, filters, and collapsible side panels.
 - 📓 Journal page for dated quick notes with optional tags.
