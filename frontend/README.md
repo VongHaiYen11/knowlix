@@ -25,7 +25,6 @@
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4.2-38BDF8?style=for-the-badge&logo=tailwindcss&logoColor=white)
 ![React Router](https://img.shields.io/badge/React_Router-7-CA4245?style=for-the-badge&logo=reactrouter&logoColor=white)
 ![Markdown](https://img.shields.io/badge/Markdown-GFM_%2B_Math_%2B_Mermaid-2D2A26?style=for-the-badge&logo=markdown&logoColor=white)
-![IndexedDB](https://img.shields.io/badge/Storage-IndexedDB-5E7D63?style=for-the-badge)
 
 </div>
 
@@ -74,7 +73,7 @@
 - **Icons:** lucide-react
 - **Markdown:** react-markdown, remark-gfm, remark-math, rehype-katex
 - **Diagrams:** Mermaid
-- **Local storage:** IndexedDB and localStorage
+- **Client storage:** localStorage for lightweight UI preferences
 
 ## 📁 Project Structure
 
@@ -89,7 +88,7 @@ frontend/
 │   ├── features/           # Feature-specific UI modules
 │   ├── hooks/              # Reusable React hooks
 │   ├── pages/              # Route-level pages
-│   ├── repositories/       # API and IndexedDB repository implementations
+│   ├── repositories/       # API client and repository implementations
 │   ├── services/           # App-level data and business logic
 │   ├── theme/              # Design token modules
 │   ├── types/              # Shared TypeScript types
@@ -158,13 +157,13 @@ Authenticated routes are wrapped by `AppShell`; unauthenticated users are redire
 - **Components** provide reusable layout and UI primitives.
 - **Hooks** manage shared state and async loading patterns.
 - **Services** coordinate app workflows such as library operations, note saving, journal creation, source upload, and research.
-- **Repositories** separate backend API access from IndexedDB fallback storage.
+- **Repositories** centralize backend API access behind domain interfaces.
 - **AuthProvider** centralizes session state, login, signup, logout, and profile updates.
 
 Data access follows this shape:
 
 ```text
-Page / Feature -> Hook or Service -> Repository / API Client -> API or IndexedDB
+Page / Feature -> Hook or Service -> Repository / API Client -> Backend API
 ```
 
 ### 🧱 Frontend Boundary Compass
@@ -175,7 +174,7 @@ Page / Feature -> Hook or Service -> Repository / API Client -> API or IndexedDB
 | 🧩 Features | domain UI modules and interaction surfaces | `GoogleDriveSettings`, `ResearchHistoryPanel`, `KnowledgeMergeModal` |
 | 🪝 Hooks | React state, async lifecycle, derived UI state | `useResearch`, `useLibrary`, `useDailyInspiration` |
 | 🧠 Services | app workflows and backend operations | `libraryService`, `researchService`, `googleDriveService` |
-| 🔌 Repositories/API client | HTTP, IndexedDB fallback, pagination helpers | `apiClient`, `apiLibraryRepository`, `libraryRepository` |
+| 🔌 Repositories/API client | HTTP access and pagination helpers | `apiClient`, `apiLibraryRepository`, `libraryRepository` |
 
 Hooks and feature components do not build backend URLs directly. HTTP requests are centralized in `src/repositories/apiClient.ts`, while services such as `researchService`, `inspirationService`, `libraryService`, and `googleDriveService` expose app-level operations to React code.
 
@@ -213,13 +212,6 @@ Implemented API-backed repositories cover:
 - Google Drive connection status, Google folder picking, immediate sync, and disconnect
 
 The Google Drive panel calls `googleDriveService`; it never receives provider tokens. Connect/Reconnect redirects through the authenticated backend OAuth start endpoint, where Google grants read-only Drive access. After connection, the panel opens a searchable hierarchical My Drive folder picker backed by the backend Drive folder list endpoint. The panel displays the connected Google email only for recognition, reports sync/error state, and offers Sync now, Choose another folder, and Disconnect. Folder polling imports only supported files directly inside that folder, not subfolders.
-
-IndexedDB fallback stores are declared in `src/repositories/indexedDbClient.ts`:
-
-- `knowledge`
-- `sources`
-- `notes`
-- `journal`
 
 ## 📜 Available Scripts
 

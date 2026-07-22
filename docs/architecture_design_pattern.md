@@ -20,7 +20,7 @@ Route ──► Controller ──► Service / Use Case ──► Repository ─
 ### Frontend
 
 ```text
-Page / Feature ──► Hook or Service ──► Repository / API Client ──► Backend or IndexedDB
+Page / Feature ──► Hook or Service ──► Repository / API Client ──► Backend API
 ```
 
 These are dependency boundaries, not a requirement that every operation pass through every possible layer. A simple page may call a service directly, while a stateful workflow may use a hook first.
@@ -95,14 +95,14 @@ The default composition uses production repositories, storage services, and prov
 
 Repositories encapsulate PostgreSQL operations, transactions, row locking, query construction, and persistence semantics. Services and use cases interact with repository methods instead of issuing SQL directly.
 
-Frontend library persistence follows the same principle through `LibraryRepository`, with API-backed and IndexedDB-backed implementations.
+Frontend library access follows the same principle through `LibraryRepository`, with the production implementation backed by the backend API.
 
 ### Benefits
 
 - Centralized persistence logic
 - Business code that is easier to read and test
 - Consistent ownership and query behavior
-- Replaceable frontend persistence implementations
+- Frontend data access stays aligned with backend-owned persistence
 
 ## 4. 🔄 Data Mapper Pattern
 

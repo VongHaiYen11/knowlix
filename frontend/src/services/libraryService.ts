@@ -1,4 +1,4 @@
-import { apiClient, apiUrl, isApiRepositoryEnabled } from '@/repositories/apiClient'
+import { apiClient, apiUrl } from '@/repositories/apiClient'
 import { libraryRepository, type LibraryRepository } from '@/repositories/libraryRepository'
 import type { JournalDay, KnowledgeEntry, KnowledgeMergeApplyInput, KnowledgeMergeDraft, KnowledgeMergePreviewInput, NoteItem, Source, SourceType } from '@/types/knowledge'
 import { vietnamDateString, vietnamTimeString } from '@/utils/vietnamTime'
@@ -217,10 +217,6 @@ ${entry.explanation.join('\n\n')}
   }
 
   async uploadSources(files: File[]): Promise<void> {
-    if (!isApiRepositoryEnabled) {
-      throw new Error('Upload requires API mode. Set VITE_API_URL in frontend/.env.local.')
-    }
-
     await Promise.all(
       files.map((file) => {
         const formData = new FormData()

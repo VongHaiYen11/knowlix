@@ -41,8 +41,8 @@ These rules describe the current Knowlix frontend. Keep them aligned with the ac
 - Keep API behavior in repositories/services, not inside presentational components.
 - `src/repositories/apiClient.ts` defaults `VITE_API_URL` to `http://127.0.0.1:4000` and sends credentials for cookie auth.
 - Library data goes through `libraryService` and the `LibraryRepository` interface.
-- `apiLibraryRepository` is the real app path when API mode is enabled; `indexedDbLibraryRepository` is fallback/offline/dev behavior only.
-- Merge, regenerate, upload ingest, and source promotion require API-backed behavior; do not make IndexedDB the canonical path for those workflows.
+- Library persistence is API-backed only; do not add browser database fallbacks for canonical app data.
+- Merge, regenerate, upload ingest, and source promotion require backend API behavior.
 - Use `getAllPages()` for paginated API lists that need complete collections.
 - Do not call `fetch` directly from pages or visual components. Add API behavior to a repository/service layer first.
 - Keep request/response TypeScript interfaces next to the service that owns the API call unless the type is shared across multiple domains.

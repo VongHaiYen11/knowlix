@@ -25,7 +25,7 @@ These rules describe the current Knowlix backend. Keep them grounded in the live
 
 ## Data and Persistence
 
-- `backend/migrations/001_init.sql` is the fresh-schema baseline; apply later numbered migrations in order for existing databases.
+- `backend/migrations/001_init.sql` is the fresh-schema baseline and currently contains the complete schema for new databases.
 - Keep SQL, repositories, Zod schemas, service inputs, route docs, and frontend types aligned when adding or removing fields.
 - SQL, transaction management, Pool/Client access, and dynamic SQL filter construction belong only in `*.repository.ts` or `src/database/`. Services and use cases pass typed filter objects, never SQL fragments.
 - Database records are mapped from `snake_case` to API `camelCase` in `*.mapper.ts`; do not hand-map database rows inside controllers or use cases.
