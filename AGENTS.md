@@ -9,6 +9,8 @@ These rules apply to the entire repository. More specific rules in `backend/AGEN
 - Prefer the existing module and feature patterns over creating parallel abstractions.
 - Keep frontend and backend request/response types, supported values, pagination behavior, and error behavior aligned.
 - A refactor is not behavior-preserving if it changes an HTTP shape, status code, redirect, persistence semantics, background-job behavior, model choice, storage ownership, or user-visible workflow.
+- Model account integrations as resources owned by the authenticated Knowlix `user_id`. Never infer Knowlix identity, create users, or merge users from an external provider email.
+- External sync workers must reuse domain inputs/use cases instead of constructing framework-specific upload objects. Keep provider adapters, durable tracking, leases, retries, and disconnect semantics explicit.
 
 ## Documentation Is Part of the Change
 

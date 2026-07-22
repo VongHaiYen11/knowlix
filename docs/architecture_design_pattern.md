@@ -1,87 +1,202 @@
-# 📐 Kiến trúc & Các Mẫu Thiết Kế (Architecture & Design Patterns) - Knowlix
+# Knowlix Architecture and Design Patterns
 
-Tài liệu này tóm tắt các nguyên tắc kiến trúc và mẫu thiết kế chính được áp dụng trong dự án Knowlix nhằm tối ưu hóa tính độc lập, dễ mở rộng, bảo trì và tăng độ tin cậy của mã nguồn.
+This document is the architecture source of truth for Knowlix. It explains the current system shape, the dependency rules that code must follow, and the design patterns used to keep ingestion, research, storage, and external integrations maintainable.
 
----
+When code, API contracts, persistence behavior, external-provider workflows, or user-visible flows change, update this document and the affected workspace README files in the same change.
 
-## 1. Clean Architecture (Use Cases / Interactors)
+## Product Architecture
 
-Dự án áp dụng **Clean Architecture** để phân tách rõ ràng các quy tắc nghiệp vụ (Business Rules) khỏi chi tiết kỹ thuật (Controllers, Express Routes, Databases).
+Knowlix is an LLM Wiki-inspired personal knowledge workspace. The product keeps three conceptual layers separate:
 
-*   **Vị trí**: `backend/src/modules/sources/use-cases/`
-*   **Mô tả**:
-    Các lớp nghiệp vụ nặng và phức tạp trước đây thuộc về `sources.service.ts` đã được chia nhỏ thành các **Use Cases** đơn chức năng (Single Responsibility):
-    *   `IngestSourceFileUseCase`: Đảm nhận việc tải tài liệu gốc lên storage, đăng ký file, tạo nguồn ở trạng thái "Processing" và kích hoạt quá trình xử lý ngầm.
-    *   `GenerateSourceSummaryUseCase`: Tiến hành trích xuất text, gọi Gemini tạo tóm tắt, liên kết dữ liệu và đồng bộ hóa trang tri thức ngầm (background job).
-    *   `DeleteSourceUseCase`: Thực hiện xóa nguồn tài liệu và xử lý ngắt liên kết (detach) các trang tri thức liên quan.
-    Các dependency kỹ thuật được truyền vào constructor dưới dạng port hẹp (`Pick<...>`). Production dùng dependency mặc định, còn test có thể truyền fake repository/storage/AI implementation mà không khởi động database.
-*   **Lợi ích**:
-    *   Mỗi lớp đảm nhận một use case cụ thể; phần truy vấn và transaction được chuyển sang repository chuyên trách.
-    *   Dễ dàng viết Unit Test độc lập cho từng nghiệp vụ mà không cần phụ thuộc vào toàn bộ hệ thống Service.
+1. **Source of Truth**: user-owned raw material such as uploaded files, promoted notes, and synced Google Drive files. These records are durable and inspectable.
+2. **Knowledge**: generated Markdown pages, summaries, tags, relationships, and embeddings derived from sources. The LLM can create, update, merge, replace, or link these pages, but every generated page remains grounded in source records.
+3. **Research**: question-answer workflows over Knowledge, with numbered references back to retrieved entries. Useful research threads can be preserved as part of the user's evolving workspace.
 
----
+This differs from plain query-time RAG. Knowlix does not only retrieve chunks when the user asks a question; it also compiles and maintains a durable Knowledge layer during ingestion.
 
-## 2. Proxy Pattern (Mẫu thiết kế ủy quyền / bọc ngoài)
+## Backend Boundary
 
-Được áp dụng để xây dựng cơ chế **Tự động thử lại (Retry)** cho tất cả các cuộc gọi API Gemini.
+Backend modules follow this dependency direction:
 
-*   **Vị trí**: `backend/src/config/gemini.ts`
-*   **Mô tả**:
-    Thay vì sửa trực tiếp method trên client Gemini, hàm `getGeminiClient()` trả về một JavaScript `Proxy`. Proxy ngoài bọc client và Proxy trong bọc `client.models`, chặn trong suốt 3 phương thức quan trọng của SDK `@google/genai`:
-    *   `models.generateContent`
-    *   `models.generateContentStream`
-    *   `models.embedContent`
-    Proxy tự động bắt các lỗi do lời gọi SDK/API ném ra, tiến hành chờ lũy tiến (1s, 2s) và gọi lại tối đa **3 lần** trước khi ném lỗi cuối cùng. Mỗi lần gọi đều log operation, model, attempt; khi response hoặc stream hoàn tất sẽ log `status=finished` và thời gian xử lý. Lỗi parse/validate JSON xảy ra sau khi SDK đã trả response thuộc trách nhiệm của workflow gọi LLM, không thuộc Proxy này.
-*   **Lợi ích**:
-    *   Tăng độ ổn định và khả năng phục hồi của các tác vụ AI trước lỗi mạng tạm thời.
-    *   Hoàn toàn trong suốt (Transparent): Không cần sửa đổi bất kỳ dòng mã nào đang sử dụng client Gemini ở các module khác.
+```text
+route -> controller -> service/use case -> repository or infrastructure adapter
+```
 
----
+Dependencies should only move inward. Routes do not own business logic. Controllers do not query the database. Services and use cases do not depend on Express request objects. Repositories and adapters hide provider-specific or persistence-specific details.
 
-## 3. Repository Pattern (Mẫu thiết kế kho lưu trữ)
+### Routes
 
-Tách biệt hoàn toàn tầng truy cập dữ liệu (Data Access Layer) khỏi tầng nghiệp vụ (Business Logic).
+Files named `*.routes.ts` own Express routing, route-level middleware, authentication requirements, and Zod validation middleware. Routes call controllers and should not import repositories, external SDK clients, or password hashing libraries.
 
-*   **Vị trí**: Các file `*.repository.ts` trong module và infrastructure, ví dụ `sources.repository.ts`, `source-ingestion.repository.ts`, `notes.repository.ts`, `auth.repository.ts`, `storage.repository.ts`.
-*   **Mô tả**:
-    Mọi truy vấn SQL, kết nối PostgreSQL (qua Pool hoặc Client), xây dựng điều kiện query và xử lý transaction đều nằm trong Repository. Services và Use Cases truyền filter có kiểu dữ liệu, không truyền SQL fragment hoặc trực tiếp sử dụng Pool.
-*   **Lợi ích**:
-    *   Dễ dàng thay đổi hệ quản trị cơ sở dữ liệu hoặc cấu trúc bảng mà không làm ảnh hưởng đến tầng logic nghiệp vụ.
-    *   Dễ dàng giả lập (Mocking) cơ sở dữ liệu khi chạy kiểm thử (Unit Testing).
+### Controllers
 
----
+Files named `*.controller.ts` translate HTTP requests into service or use-case calls and translate results into HTTP responses. Controllers may handle HTTP-specific streaming details, such as Server-Sent Events, but the business decision-making still belongs in services or use cases.
 
-## 4. Data Mapper Pattern (Mẫu thiết kế ánh xạ dữ liệu)
+Controllers must not:
 
-Giải quyết sự khác biệt về quy chuẩn đặt tên giữa Cơ sở dữ liệu và Client.
+- import `*.repository.ts`
+- access `pool.query` or `pool.connect`
+- hash or compare passwords directly
+- instantiate external provider SDK clients
 
-*   **Vị trí**: Các file `*.mapper.ts`, ví dụ `backend/src/modules/sources/sources.mapper.ts`.
-*   **Mô tả**:
-    Cơ sở dữ liệu PostgreSQL sử dụng `snake_case` (ví dụ: `user_id`, `raw_storage_object_id`), trong khi API/Frontend sử dụng `camelCase` (ví dụ: `userId`, `rawStorageObjectId`). Mapper chịu trách nhiệm chuyển đổi record database trước khi trả khỏi tầng nghiệp vụ, bao gồm cả source đang ở trạng thái ingestion nền.
-*   **Lợi ích**:
-    *   Giữ cho chuẩn đặt tên đồng nhất ở cả Frontend và cơ sở dữ liệu DB.
-    *   Ẩn bớt các trường nhạy cảm hoặc không cần thiết trước khi gửi phản hồi về client.
+### Services and Use Cases
 
----
+Services own ordinary domain workflows. Focused use-case classes own multi-step workflows that coordinate storage, AI, database writes, provider adapters, or background status.
 
-## 5. Layered Architecture (Kiến trúc phân tầng)
+Use cases are preferred when a workflow has one or more of these traits:
 
-Kiến trúc tổng thể của hệ thống đi theo luồng dữ liệu 4 tầng cơ bản:
-1.  **Routing Layer** (`*.routes.ts`): Nhận HTTP request, kiểm tra xác thực (`requireAuth`), validate body/query bằng Zod middleware trước khi controller chạy.
-2.  **Controller Layer** (`*.controller.ts`): Điều hướng request, gọi tầng nghiệp vụ (Use Cases / Services) tương ứng và trả về HTTP response phù hợp.
-3.  **Service/Use Case Layer** (`use-cases/*`): Thực hiện logic nghiệp vụ cốt lõi, tương tác với AI và Storage.
-4.  **Repository Layer** (`*.repository.ts`): Trực tiếp thao tác đọc/ghi vào cơ sở dữ liệu PostgreSQL.
+- it spans multiple repositories or infrastructure providers
+- it has durable status, retries, leases, or idempotency concerns
+- it is reused by manual upload and provider sync
+- it needs narrow constructor-injected ports for tests
 
-Dependency chỉ đi từ tầng ngoài vào tầng trong: route gọi controller, controller gọi service/use case, service/use case gọi repository hoặc infrastructure port. Controller không import repository và không tự xử lý password hashing.
+Examples:
 
----
+- `IngestSourceFileUseCase` stores raw bytes, creates or updates source records, and starts processing.
+- `GenerateSourceSummaryUseCase` extracts text, asks Gemini for source and Knowledge outputs, stores generated artifacts, and updates Knowledge metadata.
+- `ScanGoogleDriveUseCase` leases a Drive connection, compares direct folder children against tracked files, and queues processing jobs.
+- `ProcessGoogleDriveFileUseCase` downloads or exports one Drive file and feeds the shared source ingestion use case.
 
-## 6. Architecture Guard Tests
+### Repositories
 
-*   **Vị trí**: `backend/test/architecture-boundaries.test.ts`, `backend/test/source-use-cases.test.ts`
-*   **Mô tả**:
-    *   Phát hiện truy cập Pool nằm ngoài repository/database infrastructure.
-    *   Ngăn controller import repository hoặc thư viện hash mật khẩu.
-    *   Xác nhận Gemini dùng Proxy thay vì mutate SDK methods.
-    *   Kiểm tra mapper và khả năng inject repository fake vào use case.
-*   **Chạy kiểm tra**: `cd backend && npm test && npm run build`.
+Files named `*.repository.ts` own SQL, transactions, PostgreSQL `Pool`/`Client` access, row locks, `FOR UPDATE SKIP LOCKED`, query filter construction, and row persistence.
+
+Services and use cases pass typed filters and domain inputs to repositories. They must not assemble SQL fragments or access `database/pool` directly.
+
+### Mappers
+
+Files named `*.mapper.ts` translate persistence rows into API/domain shapes. PostgreSQL uses `snake_case`; API and frontend contracts use `camelCase`. Mappers also hide sensitive fields and persistence-only metadata.
+
+### Infrastructure Adapters
+
+Adapters own external SDKs and provider protocols. They translate provider concepts into narrow domain-facing methods.
+
+Current adapters include:
+
+- Gemini configuration in `backend/src/config/gemini.ts`
+- Supabase storage service/repository infrastructure
+- Google Drive OAuth and Drive v3 access in `backend/src/modules/google-drive/google-drive.adapter.ts`
+
+External SDK objects should not leak into controllers or frontend-facing response contracts.
+
+## Google Drive Integration Pattern
+
+Google Drive is modeled as an account integration owned by the authenticated Knowlix `user_id`. The Google account email is display metadata only; it must never create, infer, merge, or replace the Knowlix user identity.
+
+The current Drive contract is:
+
+- OAuth uses read-only Drive access.
+- OAuth state is random, hashed before persistence, single-use, expires after 10 minutes, and is tied to the authenticated Knowlix user.
+- Refresh tokens are encrypted with AES-256-GCM before storage and are never returned to the frontend or logs.
+- Folder selection is backend-owned. The frontend asks Knowlix for readable folders, then saves one selected folder through Knowlix APIs.
+- Folder listing is restricted to folders in **My Drive** owned by the Google user.
+- Sync imports supported files that are direct children of the selected folder. Subfolders are intentionally ignored.
+- Durable tracking, modified-file detection, retry status, and leases live in PostgreSQL.
+- Disconnect removes the Drive connection and tracking records. Existing Source of Truth and Knowledge records remain preserved.
+
+The Drive worker must reuse source ingestion use cases. It should pass domain file input to `IngestSourceFileUseCase`; it must not fabricate Express or Multer objects.
+
+## Gemini Proxy Pattern
+
+Gemini calls go through `getGeminiClient()` in `backend/src/config/gemini.ts`. The client and `client.models` are wrapped with JavaScript `Proxy` objects so these methods receive automatic retry logging and backoff:
+
+- `models.generateContent`
+- `models.generateContentStream`
+- `models.embedContent`
+
+The wrapper retries transient SDK/API failures up to three attempts. JSON parsing, schema validation, and prompt-specific recovery remain the responsibility of the calling workflow.
+
+SDK methods must not be monkey-patched directly.
+
+## Frontend Boundary
+
+Frontend data flow follows this shape:
+
+```text
+Page -> Hook -> Service -> Repository/API Client
+```
+
+Pages compose route-level UI. Feature components own domain-specific UI surfaces. Hooks manage React state and asynchronous lifecycle concerns. Services coordinate application workflows. Repositories and `apiClient` own persistence and HTTP details.
+
+Frontend rules:
+
+- Browser requests must go through `src/repositories/apiClient.ts` or a repository built on top of it.
+- Feature components and hooks call services instead of building API URLs.
+- API response types live next to the service or repository that consumes them.
+- `VITE_API_URL` is centralized in `apiClient`.
+- Cookie credentials are included by the API client, not repeated in feature code.
+- IndexedDB fallback remains behind the library repository interface.
+
+Google Drive UI must communicate that the user is connecting to Drive, but it must not expose tokens, OAuth state, raw provider errors, or provider-owned identity as Knowlix identity.
+
+## API and Data Contracts
+
+The backend and frontend must stay aligned on:
+
+- request and response field names
+- allowed file extensions and MIME variants
+- pagination shape: `items`, `page`, `pageSize`, `total`
+- status values such as source ingest status and Drive sync status
+- error status codes and user-facing messages
+- storage object ownership and preservation semantics
+
+Database fields use `snake_case`. API responses use `camelCase`. Contract changes require updates to backend schemas/controllers, frontend services/repositories/types, and affected README files.
+
+## Background Work and Durability
+
+Manual source uploads may start background processing after the initial HTTP response. Provider integrations require durable tracking because they run outside the immediate user request.
+
+Durable workers should:
+
+- claim work through repository-owned leases or row locks
+- record success, retryable failure, terminal failure, and next attempt times
+- deduplicate by provider file id or stable source id
+- reuse domain use cases instead of duplicating ingestion logic
+- keep provider-specific metadata in integration tables or source metadata, not in frontend-only state
+
+## Security and Ownership
+
+All user data is scoped by Knowlix `user_id`.
+
+Rules:
+
+- Do not infer Knowlix identity from external provider email.
+- Do not expose refresh tokens, password hashes, OAuth state hashes, or storage service credentials.
+- Use bcrypt hashing only in auth/user services.
+- Use HttpOnly cookies for sessions.
+- Validate route bodies and query strings with Zod before controllers run.
+- Keep raw files, extracted text, and generated Markdown owned by the authenticated user.
+
+## Architecture Guard Tests
+
+Backend guard tests live in `backend/test/architecture-boundaries.test.ts` and related module tests.
+
+They currently enforce:
+
+- database access stays inside repositories and database infrastructure
+- controllers do not import repositories or password hashing
+- Gemini retry behavior uses `Proxy` without mutating SDK methods
+
+Use-case tests cover dependency injection and workflow behavior. Google Drive tests cover OAuth state ownership, direct-folder sync contracts, supported Drive formats, retry backoff, and read-only folder behavior.
+
+Run:
+
+```bash
+cd backend
+npm test
+npm run build
+
+cd ../frontend
+npm run build
+```
+
+## Change Checklist
+
+Before finishing a change, verify:
+
+- new backend behavior respects `route -> controller -> service/use case -> repository/adapter`
+- new frontend behavior respects `Page -> Hook -> Service -> Repository/API Client`
+- persistence, provider, and storage logic are not hidden in controllers or UI components
+- backend and frontend contracts match
+- user-visible docs and workspace README files are updated
+- tests/builds required by the changed workspaces pass

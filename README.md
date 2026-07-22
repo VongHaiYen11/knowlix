@@ -34,6 +34,8 @@
 
 Knowlix helps researchers, students, and professionals upload source documents, extract durable knowledge, and search across a private knowledge base. The app accepts PDF, DOCX, TXT, and Markdown files, stores the original source of truth, generates source summaries and Knowledge pages with Google Gemini, and indexes Knowledge with PostgreSQL plus `pgvector`.
 
+Knowlix is inspired by Andrej Karpathy's LLM Wiki idea: raw sources stay preserved while an LLM incrementally maintains a durable, interlinked Knowledge layer. The local idea file is kept in [`docs/llm-wiki.md`](docs/llm-wiki.md). Related references: [Karpathy Wiki Guide](https://karpathy-wiki.lol/en/wiki/llm-wiki-guide) and [Karpathy's LLM Wiki Pattern](https://ronancodes.github.io/llm-wiki/docs/research/karpathy/).
+
 The root README is the project landing page. Detailed implementation notes live in [`frontend/README.md`](frontend/README.md) and [`backend/README.md`](backend/README.md).
 
 ## Features
@@ -41,6 +43,7 @@ The root README is the project landing page. Detailed implementation notes live 
 | Area | What Knowlix Does |
 | --- | --- |
 | **Document ingestion** | Upload PDF, DOCX, TXT, and Markdown sources for AI-assisted processing. |
+| **Google Drive sync** | Grant Knowlix access to one picked Drive folder per account, import direct child files every 6 hours, or run Sync now. |
 | **Source of truth** | Store raw uploads and extracted text so users can inspect the original material. |
 | **Knowledge generation** | Generate grounded source summaries and durable Knowledge pages from uploaded material. |
 | **AI customization** | Tune ingest prompts, research behavior, model choice, and temperature. |
@@ -63,6 +66,7 @@ React + Vite frontend
 Node.js / Express API
         |
         +--> Google Gemini API        # summaries, Knowledge extraction, research answers, embeddings
+        +--> Google Drive API         # read-only folder polling and source imports
         +--> Supabase Storage         # raw files, extracted text, generated markdown
         +--> PostgreSQL + pgvector    # users, sources, Knowledge metadata, vectors, research threads
 ```
@@ -74,7 +78,7 @@ Backend code follows route -> controller -> service/use case -> repository bound
 | Layer | Tools |
 | --- | --- |
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, React Router, React Markdown |
-| Backend | Node.js, Express, TypeScript, Zod, Multer |
+| Backend | Node.js, Express, TypeScript, Zod, Multer, Google APIs |
 | Database | PostgreSQL, `pgvector`, raw SQL migrations |
 | AI | Google Gemini via `@google/genai` |
 | Storage | Supabase Storage |
@@ -90,6 +94,8 @@ Backend code follows route -> controller -> service/use case -> repository bound
 5. **Generate** Knowledge pages, update existing pages, merge when appropriate, or link-only when the source adds no new durable detail.
 6. **Embed** Knowledge metadata/content for semantic retrieval with `pgvector`.
 7. **Research** by asking questions over retrieved Knowledge with grounded references.
+
+Google Drive follows the same ingestion pipeline. An authenticated Knowlix user connects Drive with read-only Drive access, chooses one folder, and a leased worker imports supported direct children every six hours. Subfolders are ignored; modified files update their existing source and removed files remain preserved in Knowlix.
 
 ## Project Structure
 
@@ -138,6 +144,8 @@ SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 ```
 
+For Drive sync, also create a Google OAuth web client, register the backend callback URL, enable Drive API access for the project, and configure `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_DRIVE_REDIRECT_URI`, and a 32-byte `GOOGLE_TOKEN_ENCRYPTION_KEY`. Drive OAuth is separate from Knowlix email/password authentication.
+
 ### 4. Start Database
 
 ```bash
@@ -164,10 +172,15 @@ npm run dev
 | --- | --- |
 | [`frontend/README.md`](frontend/README.md) | Frontend routes, UI behavior, local development, and rendering stack. |
 | [`backend/README.md`](backend/README.md) | API routes, database schema, ingest pipeline, research flow, storage, and AI customization. |
-| [`docs/architecture_design_pattern.md`](docs/architecture_design_pattern.md) | Clean Architecture boundaries, repositories, mappers, Gemini Proxy behavior, and architecture guard tests. |
+| [`docs/architecture_design_pattern.md`](docs/architecture_design_pattern.md) | Architecture boundaries, product layers, integration patterns, and guard tests. |
+| [`docs/product_concept.md`](docs/product_concept.md) | Product model, LLM Wiki mapping, core workflows, and non-goals. |
+| [`docs/google_drive_integration.md`](docs/google_drive_integration.md) | Google Drive OAuth setup, sync behavior, security model, and troubleshooting. |
+| [`docs/development_workflow.md`](docs/development_workflow.md) | Local setup, verification commands, architecture review, and documentation checklist. |
+| [`docs/llm-wiki.md`](docs/llm-wiki.md) | Preserved source idea file for the LLM Wiki pattern that inspired Knowlix. |
 
 ## Design Notes
 
+- **LLM Wiki-inspired layering** keeps raw Source of Truth records separate from generated Knowledge and research conversations.
 - **PostgreSQL + pgvector** keeps relational metadata and vector search in one database.
 - **Supabase Storage** stores large file and Markdown assets outside relational rows.
 - **Gemini** powers source summarization, Knowledge extraction, grounded research answers, and embeddings.

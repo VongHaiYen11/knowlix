@@ -41,6 +41,13 @@ export interface ResearchThread {
 }
 
 export class ResearchService {
+  async streamMessage(question: string, scope: ResearchScope): Promise<Response> {
+    return apiClient.stream('/api/v1/research/messages', {
+      method: 'POST',
+      body: JSON.stringify({ question, scope }),
+    })
+  }
+
   async getThreads(): Promise<ResearchThread[]> {
     return apiClient.get<ResearchThread[]>('/api/v1/research/threads')
   }

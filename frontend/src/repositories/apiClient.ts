@@ -34,11 +34,28 @@ async function requestText(path: string): Promise<string> {
   return response.text()
 }
 
+async function requestStream(path: string, init: RequestInit = {}): Promise<Response> {
+  if (!apiBaseUrl) throw new Error('VITE_API_URL is not configured')
+
+  const headers = new Headers(init.headers)
+  if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json')
+
+  const response = await fetch(`${apiBaseUrl}${path}`, { ...init, headers, credentials: 'include' })
+  if (!response.ok) {
+    const payload = await response.json().catch(() => undefined)
+    const message = payload?.error?.message ?? `API request failed with status ${response.status}`
+    throw new Error(message)
+  }
+  return response
+}
+
 export const apiClient = {
   get: <T>(path: string) => request<T>(path),
   text: (path: string) => requestText(path),
+  stream: (path: string, init: RequestInit = {}) => requestStream(path, init),
   post: <T>(path: string, body: unknown) => request<T>(path, { method: 'POST', body: JSON.stringify(body) }),
   postForm: <T>(path: string, body: FormData) => request<T>(path, { method: 'POST', body }),
+  put: <T>(path: string, body: unknown) => request<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
   patch: <T>(path: string, body: unknown) => request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
 }

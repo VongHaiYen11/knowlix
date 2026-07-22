@@ -25,7 +25,7 @@
 - 🔎 Research workspace with chat history, cited Knowledge references, filters, and collapsible side panels.
 - 📓 Journal page for dated quick notes with optional tags.
 - 🎛️ Customization tab for Knowledge ingestion prompts, research behavior, model choice, and temperature.
-- ⚙️ Settings for account profile, password, and theme.
+- ⚙️ Settings for account profile, password, theme, and Google Drive folder integration.
 - 🌗 Light/dark theme support.
 - 🇻🇳 Vietnam-time date helpers for user-facing daily behavior.
 
@@ -141,6 +141,8 @@ Data access follows this shape:
 Page -> Hook -> Service -> Repository -> API or IndexedDB
 ```
 
+Hooks and feature components do not build backend URLs directly. HTTP requests are centralized in `src/repositories/apiClient.ts`, while services such as `researchService`, `inspirationService`, `libraryService`, and `googleDriveService` expose app-level operations to React code.
+
 Request/response types, status behavior, pagination metadata, and supported values are treated as backend contracts. Contract changes must update the frontend repository/service adapter and both workspace READMEs in the same change.
 
 ## 🎨 Styling
@@ -158,6 +160,7 @@ API access is centralized in `src/repositories/apiClient.ts`.
 
 - Requests use `VITE_API_URL`, defaulting to `http://127.0.0.1:4000`.
 - Requests include credentials for cookie-based auth.
+- JSON, form, text, and streaming requests all flow through `apiClient`.
 - AI defaults, model catalog, and user customization are loaded from `/api/v1/ai-customization`.
 - Paginated API lists are collected with `getAllPages`.
 
@@ -171,6 +174,9 @@ Implemented API-backed repositories cover:
 - Research threads and chat
 - AI customization
 - Daily inspiration
+- Google Drive connection status, Google folder picking, immediate sync, and disconnect
+
+The Google Drive panel calls `googleDriveService`; it never receives provider tokens. Connect/Reconnect redirects through the authenticated backend OAuth start endpoint, where Google grants read-only Drive access. After connection, the panel opens a searchable hierarchical My Drive folder picker backed by the backend Drive folder list endpoint. The panel displays the connected Google email only for recognition, reports sync/error state, and offers Sync now, Choose another folder, and Disconnect. Folder polling imports only supported files directly inside that folder, not subfolders.
 
 IndexedDB fallback stores are declared in `src/repositories/indexedDbClient.ts`:
 

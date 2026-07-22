@@ -81,6 +81,23 @@ export const sourcesRepository = {
     )
     return rows[0]
   },
+  async prepareReingest(input: {
+    userId: string
+    sourceId: string
+    type: string
+    fileId: string
+    rawStorageObjectId: string
+    meta: string
+  }) {
+    const { rows } = await pool.query(
+      `UPDATE sources
+       SET type=$1,status='Processing',file_id=$2,raw_storage_object_id=$3,meta=$4,updated_at=now()
+       WHERE user_id=$5 AND id=$6
+       RETURNING *`,
+      [input.type, input.fileId, input.rawStorageObjectId, input.meta, input.userId, input.sourceId],
+    )
+    return rows[0]
+  },
   async createUploadedFile(input: any) {
     await pool.query(
       'INSERT INTO uploaded_files (id,user_id,name,mime_type,size_bytes,raw_path,storage_object_id,ingest_status,ingest_outputs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)',

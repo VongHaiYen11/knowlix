@@ -7,6 +7,7 @@ import { PageShell } from '@/components/common/PageShell'
 import { useThemeContext } from '@/components/layout/ThemeProvider'
 import { Button } from '@/components/ui/Button'
 import { SettingsGroup, SettingsRow } from '@/features/settings/SettingsGroup'
+import { GoogleDriveSettings } from '@/features/settings/GoogleDriveSettings'
 import { cn } from '@/utils/cn'
 
 export function SettingsPage() {
@@ -197,6 +198,8 @@ export function SettingsPage() {
             <IconSegmented value={theme} onChange={setTheme} />
           </SettingsRow>
         </SettingsGroup>
+
+        <GoogleDriveSettings />
       </div>
 
       <ChangePasswordModal

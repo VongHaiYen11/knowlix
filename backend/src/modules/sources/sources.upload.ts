@@ -5,7 +5,7 @@ const allowedUploadExtensions = new Set(['.pdf', '.docx', '.txt', '.md', '.markd
 const genericUploadMimeTypes = new Set(['', 'application/octet-stream'])
 
 const allowedMimeTypesByExtension: Record<string, Set<string>> = {
-  '.pdf': new Set(['application/pdf']),
+  '.pdf': new Set(['application/pdf', 'application/x-pdf', 'application/acrobat', 'applications/vnd.pdf', 'text/pdf', 'text/x-pdf']),
   '.docx': new Set(['application/vnd.openxmlformats-officedocument.wordprocessingml.document']),
   '.txt': new Set(['text/plain']),
   '.md': new Set(['text/markdown', 'text/plain']),

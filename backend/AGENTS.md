@@ -7,6 +7,7 @@ These rules describe the current Knowlix backend. Keep them grounded in the live
 - Node.js, Express, TypeScript ESM, Zod, `pg`, Multer, cookie-parser, CORS.
 - PostgreSQL is accessed with raw SQL through `src/database/pool.ts`; there is no ORM.
 - Gemini integration uses `@google/genai`; Supabase Storage is used for raw files and generated text/Markdown assets.
+- Google Drive uses `googleapis` with read-only OAuth, folder selection, and encrypted refresh-token persistence. It is an account integration, not an authentication provider.
 - Build command: `npm run build`.
 - Test command: `npm test`.
 - Migration command: `npm run db:migrate`.
@@ -31,16 +32,27 @@ These rules describe the current Knowlix backend. Keep them grounded in the live
 - Scope user-owned rows by `user_id`; do not add cross-user queries unless the feature explicitly requires sharing.
 - Knowledge slugs are user-scoped; do not assume global slug uniqueness.
 - Store large Markdown/text assets in storage objects and keep relational rows focused on metadata, search vectors, references, and storage object ids.
+- For external integrations, bind OAuth callbacks to a short-lived, single-use state owned by an authenticated `user_id`; provider email is display metadata only. Never expose or log access/refresh tokens.
+- Encrypt durable provider credentials at rest with authenticated encryption. Revocation changes only integration state and must not invalidate the Knowlix JWT session or modify `app_users`.
 
 ## Upload and Ingest
 
 - Supported uploads are PDF, DOCX, TXT, Markdown (`.md`, `.markdown`). Keep `sources.upload.ts`, frontend accept lists, source type unions, icons, and DB constraints synchronized.
 - Upload ingest is app-facing through source upload/background processing; do not restore removed manual ingest CLI behavior.
 - `IngestSourceFileUseCase` registers uploads and starts background work. `GenerateSourceSummaryUseCase` orchestrates extraction, Gemini calls, candidate context, generated assets, and completion status.
+- Keep ingestion input framework-neutral. Controllers/services may adapt `Express.Multer.File` into the domain file object, while workers pass the same domain object directly and may await `GenerateSourceSummaryUseCase` completion.
 - `source-ingestion.repository.ts` owns ingestion SQL and transactions; `storage.repository.ts` owns storage-object metadata SQL. Keep Supabase byte transfer in `storageService`.
 - Source of truth content should be preserved for display/audit. Do not truncate uploaded source text merely to control generated Knowledge length.
 - Candidate Knowledge context may be budgeted for prompt size; uploaded source content and generated output policies are separate concerns.
 - Ingest-time candidate retrieval and Research retrieval both query `knowledge_entries`, but they are different flows. Be explicit about which one a change touches.
+
+## External Sync Workers
+
+- Follow `route -> controller -> service/use case -> repository -> provider adapter` for OAuth-backed integrations.
+- Schedulers claim durable database work with expiring leases and `FOR UPDATE SKIP LOCKED`; do not rely on process memory for ownership or deduplication.
+- Google Drive V1 tracks exactly one picked folder per user, lists only direct children, skips subfolders, and supports PDF, DOCX, TXT, Markdown, and Google Docs exported as DOCX.
+- Modified provider files update the existing source; removed provider files retain Source of Truth and Knowledge data. Disconnect removes credentials/tracking only.
+- Keep worker concurrency at one unless the product contract, database leases, provider quotas, and ingestion safety are deliberately revised together.
 
 ## AI Prompt Contracts
 

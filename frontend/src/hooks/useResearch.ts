@@ -139,25 +139,11 @@ export function useResearch(initialQuestion: string) {
     setInput('')
     
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:4000'}/api/v1/research/messages`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          question,
-          scope: {
-            tags: [],
-            categories: [],
-            dateRange: defaultDateRange,
-          }
-        }),
+      const response = await researchService.streamMessage(question, {
+        tags: [],
+        categories: [],
+        dateRange: defaultDateRange,
       })
-
-      if (!response.ok) {
-        throw new Error(`API error: ${response.statusText}`)
-      }
 
       const reader = response.body?.getReader()
       const decoder = new TextDecoder()

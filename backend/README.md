@@ -4,7 +4,7 @@
 
 **Express + PostgreSQL backend for a private AI-assisted knowledge workspace.**
 
-Inspired by Andrej Karpathy’s idea of building personal knowledge systems around files, context, and LLM-assisted workflows: [karpathy/442a6bf555914893e9891c11519de94f](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f).
+Inspired by Andrej Karpathy's LLM Wiki idea of keeping raw sources separate from an LLM-maintained knowledge layer. The preserved local idea file lives at [`../docs/llm-wiki.md`](../docs/llm-wiki.md).
 
 ![Node.js](https://img.shields.io/badge/Node.js-ES2022-339933?logo=nodedotjs&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white)
@@ -29,12 +29,14 @@ The backend is responsible for:
 - generating source summaries and Knowledge pages with Gemini
 - creating embeddings for semantic retrieval with pgvector
 - streaming research answers from Gemini with cited Knowledge references
+- synchronizing supported direct-child files from one picked Google Drive folder per user
 - isolating all user data by `user_id`
 
 ## ✨ Core Features
 
 - 🔐 Signup, login, logout, session validation, and profile/password updates.
 - 📥 Source upload for PDF, DOCX, TXT, Markdown, and note promotion to Source of Truth.
+- ☁️ Read-only Google Drive folder sync every six hours with Sync now, dedupe, update, removal tracking, and retry leases.
 - 🧾 Storage-backed raw files, extracted text, source summaries, Knowledge Markdown, revisions, and notes.
 - 🧠 AI ingest pipeline that extracts source-level summaries and canonical Knowledge pages.
 - 🔄 Ingest actions for `create`, `update`, `merge`, `replace`, `link_only`, and `skip`.
@@ -71,6 +73,7 @@ The backend is responsible for:
 - **Text extraction:** pdf-parse, mammoth, UTF-8 text reading
 - **LLM and embeddings:** `@google/genai`
 - **Object storage:** Supabase Storage
+- **Drive integration:** `googleapis` OAuth2 and Drive v3
 - **Container support:** Docker Compose for local PostgreSQL + pgvector
 
 ## 🏗 Architecture Overview
@@ -79,7 +82,7 @@ The backend follows layered boundaries, with focused use cases for workflows tha
 
 ```text
 HTTP route -> controller -> service/use case -> repository or infrastructure port
-                                              -> PostgreSQL / Supabase / Gemini
+                                              -> PostgreSQL / Supabase / Gemini / Google Drive
 ```
 
 SQL, transactions, Pool/Client access, and SQL filter construction stay in `*.repository.ts` or `src/database/`. Database rows are converted to API-facing shapes by `*.mapper.ts`. The architecture rules and guard tests are documented in [`../docs/architecture_design_pattern.md`](../docs/architecture_design_pattern.md).
@@ -124,6 +127,7 @@ SQL, transactions, Pool/Client access, and SQL filter construction stay in `*.re
 
 - **Gemini:** used for embeddings, source/Knowledge generation, research answer generation, inspiration, and maintenance contradiction checks.
 - **Supabase Storage:** stores raw uploads and generated text/Markdown files.
+- **Google Drive:** provides read-only folder metadata/file bytes for the My Drive folder the user picked; Google Docs are exported to DOCX before entering the shared ingestion use case.
 - **PostgreSQL:** stores metadata, relational ownership, JSON provenance, vectors, search vectors, and chat history.
 
 ### Middleware
@@ -528,6 +532,9 @@ The database is PostgreSQL with the `vector` extension enabled.
 | `journal_entries` | Dated quick journal notes |
 | `research_threads` | Saved research chat thread metadata |
 | `research_messages` | Ordered chat messages and reference lists |
+| `google_drive_connections` | Per-user encrypted refresh token, selected folder, schedule, status, and sync lease |
+| `google_drive_files` | Durable Drive version/checksum, source mapping, ingest state, retry, removal, and file lease |
+| `google_drive_oauth_states` | Hashed single-use OAuth state with user ownership and ten-minute expiry |
 
 ### Important Indexes
 
@@ -631,6 +638,9 @@ Prompts are centralized under `src/prompts`:
 - Most data access methods include `user_id` in SQL conditions.
 - Knowledge slugs are unique per user via `PRIMARY KEY (user_id, slug)`.
 - Research thread upserts include an ownership check; if an ID belongs to another user, the write is rejected.
+- Google Drive OAuth starts only from an authenticated session and requests read-only Drive access for folder synchronization. Callback ownership comes exclusively from the single-use state; Google email is display metadata and never creates or merges a Knowlix user.
+- Drive refresh tokens are encrypted with AES-256-GCM. Tokens are never returned to the frontend or written to logs.
+- Revoked Drive authorization sets `reauthorization_required`; it does not affect password login, SMTP flows, JWT cookies, or `app_users`.
 
 ## 📡 API Documentation
 
@@ -727,6 +737,20 @@ All protected endpoints require a valid session cookie unless noted.
 | `POST` | `/api/v1/maintenance/lint` | Generate Knowledge maintenance report |
 | `GET` | `/api/v1/inspiration/today` | Generate or return daily inspiration payload |
 
+### Google Drive Integration
+
+| Method | Path | Purpose | Auth |
+|---|---|---|---|
+| `POST` | `/api/v1/integrations/google-drive/oauth/start` | Create ten-minute OAuth state and return Google authorization URL | Yes |
+| `GET` | `/api/v1/integrations/google-drive/oauth/callback` | Consume OAuth state and redirect to Settings | OAuth callback |
+| `GET` | `/api/v1/integrations/google-drive` | Return connection, folder, sync state, errors, and file counts | Yes |
+| `GET` | `/api/v1/integrations/google-drive/folders` | List readable My Drive folders with parent ids for the in-app tree picker | Yes |
+| `PUT` | `/api/v1/integrations/google-drive/folder` | Validate and select one readable My Drive folder by `folderId` | Yes |
+| `POST` | `/api/v1/integrations/google-drive/sync` | Schedule immediate scan while respecting leases | Yes |
+| `DELETE` | `/api/v1/integrations/google-drive` | Revoke/delete token and tracking, preserving Knowlix content | Yes |
+
+The scanner lists only files whose direct parent is the selected folder. It never traverses or queues folders. Supported files are PDF, DOCX, TXT, Markdown, and Google Docs; Sheets and Slides are recorded as unsupported. Changed files reuse `source_id`, unchanged version/checksum metadata is skipped, and files removed from the folder are marked `removed` without deleting Source of Truth or Knowledge.
+
 ## ⚙️ Environment Variables
 
 | Variable | Purpose | Required |
@@ -745,6 +769,12 @@ All protected endpoints require a valid session cookie unless noted.
 | `SUPABASE_URL` | Supabase project URL | Yes for storage operations |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key | Yes for storage operations |
 | `SUPABASE_STORAGE_BUCKET` | Storage bucket name | No, defaults to `knowlix-files` |
+| `GOOGLE_CLIENT_ID` | Google OAuth web client ID with Drive API enabled | Yes for Drive integration |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth web client secret | Yes for Drive integration |
+| `GOOGLE_DRIVE_REDIRECT_URI` | Exact registered OAuth callback | No, defaults to local backend callback |
+| `GOOGLE_TOKEN_ENCRYPTION_KEY` | 32-byte hex/base64 AES key for refresh tokens | Yes for Drive integration |
+| `GOOGLE_DRIVE_SYNC_INTERVAL_MS` | Folder scan interval | No, defaults to `21600000` (6 hours) |
+| `GOOGLE_DRIVE_SYNC_ENABLED` | Enables in-process Drive scheduler | No, defaults to `true` |
 
 ## 📁 Project Structure
 
@@ -763,6 +793,7 @@ backend/
 │   ├── modules/
 │   │   ├── ai-customization/     # AI profile, defaults, and model catalog
 │   │   ├── auth/                 # signup/login/logout
+│   │   ├── google-drive/         # OAuth, adapter, repository, scheduler, sync use cases
 │   │   ├── users/                # current user profile/password
 │   │   ├── sources/              # source CRUD, use cases, ingest repository, preview
 │   │   ├── knowledge/            # Knowledge CRUD and proposals
@@ -912,6 +943,8 @@ Typed app errors return:
 - **What problem it solves:** improves upload responsiveness while keeping the codebase small.
 - **Trade-off:** no durable retry queue, concurrency control, or worker scaling is implemented.
 
+Manual uploads retain this fire-and-forget behavior. Google Drive jobs are the deliberate exception: they are persisted in PostgreSQL, claimed with expiring leases and `FOR UPDATE SKIP LOCKED`, processed sequentially, and retried after 1, 5, and 15 minutes. The Drive worker awaits the shared `GenerateSourceSummaryUseCase` result so tracking reflects completed, skipped, or failed ingestion.
+
 ### Modular Route/Service/Repository Boundaries
 
 - **What was chosen:** each domain has routes, controllers, services, repositories, and schemas.
@@ -925,7 +958,7 @@ Architecture guard tests enforce that database access stays in repositories/data
 
 These are suggestions based on current code shape, not implemented features:
 
-- Add a durable background job queue for ingest retries and worker isolation.
+- Move manual upload ingestion onto a durable job queue; Drive imports already have database-backed leases and retries.
 - Add structured logging and request correlation IDs.
 - Add OpenAPI/Swagger documentation generated from route schemas.
 - Expand automated tests for auth, ingest failure cases, retrieval, and thread persistence beyond the current architecture/use-case guards.

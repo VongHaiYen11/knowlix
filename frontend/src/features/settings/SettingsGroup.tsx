@@ -18,11 +18,11 @@ export function SettingsGroup({ icon: Icon, title, children }: SettingsGroupProp
   )
 }
 
-export function SettingsRow({ label, hint, children }: { label: string; hint: string; children: ReactNode }) {
+export function SettingsRow({ label, hint, children }: { label: ReactNode; hint: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
       <div className="min-w-0">
-        <p className="text-[15px] font-semibold text-foreground">{label}</p>
+        <div className="text-[15px] font-semibold text-foreground">{label}</div>
         <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">{hint}</p>
       </div>
       <div className="shrink-0">{children}</div>

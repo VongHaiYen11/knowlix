@@ -25,4 +25,10 @@ export const env = {
   smtpUser: process.env.SMTP_USER,
   smtpPass: process.env.SMTP_PASS,
   smtpFrom: process.env.SMTP_FROM ?? 'Knowlix',
+  googleClientId: process.env.GOOGLE_CLIENT_ID,
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  googleDriveRedirectUri: process.env.GOOGLE_DRIVE_REDIRECT_URI ?? `http://127.0.0.1:${Number(process.env.PORT ?? 4000)}/api/v1/integrations/google-drive/oauth/callback`,
+  googleTokenEncryptionKey: process.env.GOOGLE_TOKEN_ENCRYPTION_KEY,
+  googleDriveSyncIntervalMs: Number(process.env.GOOGLE_DRIVE_SYNC_INTERVAL_MS ?? 6 * 60 * 60 * 1000),
+  googleDriveSyncEnabled: bool(process.env.GOOGLE_DRIVE_SYNC_ENABLED, true),
 }

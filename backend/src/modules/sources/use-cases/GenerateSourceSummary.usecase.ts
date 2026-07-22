@@ -23,6 +23,11 @@ export type GenerateSourceSummaryDependencies = {
   extractPages: typeof extractKnowledgePages
 }
 
+export type GenerateSourceSummaryResult = {
+  status: 'completed' | 'skipped' | 'failed'
+  message?: string
+}
+
 const defaultDependencies: GenerateSourceSummaryDependencies = {
   ingestionRepository: sourceIngestionRepository,
   sourceRepository: sourcesRepository,
@@ -319,7 +324,7 @@ export class GenerateSourceSummaryUseCase {
     created: string
     uploadedType: string
     customization?: AiCustomizationProfile
-  }) {
+  }): Promise<GenerateSourceSummaryResult> {
     const { userId, fileId, sourceId, rawStorageObjectId, rawStorageUrl, originalName, created, uploadedType } = input
     const customization = input.customization ?? defaultAiCustomization()
     const dependencies = this.dependencies
@@ -502,10 +507,13 @@ export class GenerateSourceSummaryUseCase {
 
       await dependencies.sourceRepository.updateUploadedFileStatus(fileId, ingest.skipped ? 'skipped' : 'completed', writtenObjects)
       console.log(`[Ingest] Ingest finished for "${originalName}" (${sourceId}). Title: "${sourceTitle}", Excerpt: "${sourceExcerpt}". Ingested ${ingest.pages.length} pages: ${ingest.pages.map(p => `[${p.action || 'create'}] ${p.title}`).join(', ')}`)
+      return { status: ingest.skipped ? 'skipped' : 'completed' }
     } catch (error) {
       console.error(`[Ingest] Failed for "${originalName}":`, error)
       await dependencies.sourceRepository.failUploadedFile(fileId).catch(console.error)
-      await dependencies.ingestionRepository.markSourceFailed(sourceId, `Ingestion failed: ${error instanceof Error ? error.message : 'Gemini ingest failed'}`).catch(console.error)
+      const message = `Ingestion failed: ${error instanceof Error ? error.message : 'Gemini ingest failed'}`
+      await dependencies.ingestionRepository.markSourceFailed(sourceId, message).catch(console.error)
+      return { status: 'failed', message }
     }
   }
 }

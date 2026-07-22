@@ -1,11 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { AuthUser } from '@/auth/authTypes'
+import { inspirationService } from '@/services/inspirationService'
 import { vietnamDateString } from '@/utils/vietnamTime'
-
-interface DailyInspiration {
-  date: string
-  quote: string
-}
 
 const fallbackQuote = 'Tiny notes become bright paths when you return to them with curiosity.'
 
@@ -31,13 +27,7 @@ export function useDailyInspiration(user: AuthUser | null) {
 
     let cancelled = false
     setStatus('loading')
-    fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:4000'}/api/v1/inspiration/today`, {
-      credentials: 'include',
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error('Could not load inspiration')
-        return response.json() as Promise<DailyInspiration>
-      })
+    inspirationService.today()
       .then((data) => {
         if (cancelled) return
         const nextQuote = data.quote || fallbackQuote

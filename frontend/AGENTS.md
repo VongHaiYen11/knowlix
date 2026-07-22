@@ -48,6 +48,7 @@ These rules describe the current Knowlix frontend. Keep them aligned with the ac
 - Keep request/response TypeScript interfaces next to the service that owns the API call unless the type is shared across multiple domains.
 - Treat route strings as constants from `src/constants/routes.ts`; avoid hardcoded internal route strings inside components.
 - Treat backend request/response shapes, status codes, pagination metadata, supported enum values, and redirects as contracts. Update frontend types and repository adapters in the same change when those contracts move.
+- OAuth integration UI starts from an authenticated API call and follows the returned authorization URL. Google Drive folder selection happens through backend-owned Drive folder APIs after OAuth. Never accept, store, render, or log provider access/refresh tokens in the frontend.
 
 ## Product Behavior
 
@@ -58,6 +59,7 @@ These rules describe the current Knowlix frontend. Keep them aligned with the ac
 - Research summaries are thread-scoped modal previews. Do not turn them into Knowledge, Notes, or Library artifacts.
 - Hide Research summary actions until the thread is eligible; do not show unusable disabled controls for ineligible short chats.
 - Customization visibly exposes model, temperature, and prompt requirement controls. Reasoning-budget controls and the cost/token estimator are not part of the current UI and should not be reintroduced without an explicit product decision.
+- Settings owns account integrations. Google Drive account email is identification metadata only; the selected folder comes from backend-owned Drive folder APIs; the existing Knowlix email/password and JWT cookie remain the authentication identity.
 
 ## Editing Standards
 

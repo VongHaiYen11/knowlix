@@ -150,7 +150,12 @@ export const sourcesService = {
   },
 
   async upload(userId: string, file: Express.Multer.File) {
-    return ingestSourceFile.execute(userId, file)
+    return ingestSourceFile.execute(userId, {
+      originalName: file.originalname,
+      mimeType: file.mimetype,
+      size: file.size,
+      buffer: file.buffer,
+    })
   },
 
   async file(userId: string, id: string) {
