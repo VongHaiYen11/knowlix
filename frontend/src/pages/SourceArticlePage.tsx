@@ -14,7 +14,6 @@ import { sourceTypeIcon, statusIcon } from '@/features/library/SourceIcon'
 import boredGreenImage from '@/assets/bored_green.png'
 import { ROUTES } from '@/constants/routes'
 import { useSourceArticle, useTaxonomy } from '@/hooks/useLibrary'
-import { apiClient, apiUrl } from '@/repositories/apiClient'
 import { libraryService } from '@/services/libraryService'
 
 export function SourceArticlePage({ id }: { id: string }) {
@@ -35,8 +34,8 @@ export function SourceArticlePage({ id }: { id: string }) {
     setNewTag('')
     if (source && source.type === 'Markdown' && source.fileId) {
       setLoadingMarkdown(true)
-      apiClient
-        .text(`/api/v1/files/${source.fileId}`)
+      libraryService
+        .getSourceFileText(source.fileId)
         .then((text) => {
           setOriginalMarkdown(text)
         })
@@ -142,14 +141,14 @@ export function SourceArticlePage({ id }: { id: string }) {
                 )
               ) : source.type === 'DOCX' ? (
                 <iframe
-                  src={apiUrl(`/api/v1/files/${source.fileId}/preview`)}
+                  src={libraryService.getSourceFileUrl(source.fileId, true)}
                   className="h-[88vh] w-full rounded-xl border border-border bg-card shadow-sm"
                   title={`${source.title} preview`}
                   sandbox=""
                 />
               ) : (
                 <iframe
-                  src={apiUrl(`/api/v1/files/${source.fileId}`)}
+                  src={libraryService.getSourceFileUrl(source.fileId)}
                   className="h-[88vh] w-full rounded-xl border border-border bg-card shadow-sm"
                   title={source.title}
                 />

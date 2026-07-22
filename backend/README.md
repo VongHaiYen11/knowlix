@@ -4,15 +4,31 @@
 
 **Express + PostgreSQL backend for a private AI-assisted knowledge workspace.**
 
+<br />
+
+<strong>Auth</strong> · <strong>Ingestion</strong> · <strong>Knowledge</strong> · <strong>Research</strong> · <strong>Drive Sync</strong>
+
+<br />
+
 Inspired by Andrej Karpathy's LLM Wiki idea of keeping raw sources separate from an LLM-maintained knowledge layer. The preserved local idea file lives at [`../docs/llm-wiki.md`](../docs/llm-wiki.md).
 
-![Node.js](https://img.shields.io/badge/Node.js-ES2022-339933?logo=nodedotjs&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white)
-![Express](https://img.shields.io/badge/Express-4.21-000000?logo=express&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-pgvector-4169E1?logo=postgresql&logoColor=white)
-![Gemini](https://img.shields.io/badge/Google_Gemini-LLM_%2B_Embeddings-4285F4?logo=google&logoColor=white)
-![Supabase](https://img.shields.io/badge/Supabase-Storage-3FCF8E?logo=supabase&logoColor=white)
-![Zod](https://img.shields.io/badge/Zod-Validation-3E67B1)
+<p>
+  <a href="#-system-overview">🧭 Overview</a> •
+  <a href="#-core-features">✨ Features</a> •
+  <a href="#-architecture-overview">🏗️ Architecture</a> •
+  <a href="#-main-processing-flows">🔄 Flows</a> •
+  <a href="#-api-documentation">📡 API</a> •
+  <a href="#-environment-variables">⚙️ Env</a>
+</p>
+
+![Node.js](https://img.shields.io/badge/Node.js-ES2022-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![Express](https://img.shields.io/badge/Express-4.21-000000?style=for-the-badge&logo=express&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-pgvector-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+![Gemini](https://img.shields.io/badge/Google_Gemini-LLM_%2B_Embeddings-4285F4?style=for-the-badge&logo=google&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-Storage-3FCF8E?style=for-the-badge&logo=supabase&logoColor=111827)
+![Drive](https://img.shields.io/badge/Google_Drive-Read--only_Sync-4285F4?style=for-the-badge&logo=googledrive&logoColor=white)
+![Zod](https://img.shields.io/badge/Zod-Validation-3E67B1?style=for-the-badge)
 
 </div>
 
@@ -32,6 +48,17 @@ The backend is responsible for:
 - synchronizing supported direct-child files from one picked Google Drive folder per user
 - isolating all user data by `user_id`
 
+## 🧩 Backend at a Glance
+
+| Capability | Main Modules | Durable Store / Provider |
+|---|---|---|
+| 🔐 Sessions and accounts | `auth`, `users` | PostgreSQL, JWT cookie, bcrypt |
+| 📥 Source ingestion | `sources`, `sources/use-cases` | Supabase Storage, PostgreSQL, Gemini |
+| 🧠 Knowledge pages | `knowledge`, `maintenance` | PostgreSQL, Supabase Storage, pgvector |
+| 💬 Research chat | `research` | PostgreSQL, Gemini streaming |
+| ☁️ Drive imports | `google-drive` | Google Drive API, encrypted tokens, PostgreSQL leases |
+| 🎛️ AI customization | `ai-customization` | PostgreSQL, Gemini model config |
+
 ## ✨ Core Features
 
 - 🔐 Signup, login, logout, session validation, and profile/password updates.
@@ -50,17 +77,17 @@ The backend is responsible for:
 
 ## 🛠 Tech Stack
 
-![Node.js](https://img.shields.io/badge/Runtime-Node.js-339933?logo=nodedotjs&logoColor=white)
-![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178C6?logo=typescript&logoColor=white)
-![Express](https://img.shields.io/badge/API-Express-000000?logo=express&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-4169E1?logo=postgresql&logoColor=white)
-![pgvector](https://img.shields.io/badge/Vector_Search-pgvector-4169E1)
-![Zod](https://img.shields.io/badge/Validation-Zod-3E67B1)
-![JWT](https://img.shields.io/badge/Auth-JWT_Cookie-2D2A26)
-![bcrypt](https://img.shields.io/badge/Passwords-bcrypt-5E7D63)
-![Gemini](https://img.shields.io/badge/AI-Google_Gemini-4285F4?logo=google&logoColor=white)
-![Supabase](https://img.shields.io/badge/Object_Storage-Supabase-3FCF8E?logo=supabase&logoColor=white)
-![Docker](https://img.shields.io/badge/Local_DB-Docker_Compose-2496ED?logo=docker&logoColor=white)
+![Runtime](https://img.shields.io/badge/Runtime-Node.js-339933?style=flat-square&logo=nodedotjs&logoColor=white)
+![Language](https://img.shields.io/badge/Language-TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![API](https://img.shields.io/badge/API-Express-000000?style=flat-square&logo=express&logoColor=white)
+![Database](https://img.shields.io/badge/Database-PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white)
+![Vector Search](https://img.shields.io/badge/Vector_Search-pgvector-4169E1?style=flat-square)
+![Validation](https://img.shields.io/badge/Validation-Zod-3E67B1?style=flat-square)
+![Auth](https://img.shields.io/badge/Auth-JWT_Cookie-2D2A26?style=flat-square)
+![Passwords](https://img.shields.io/badge/Passwords-bcrypt-5E7D63?style=flat-square)
+![Gemini](https://img.shields.io/badge/AI-Google_Gemini-4285F4?style=flat-square&logo=google&logoColor=white)
+![Supabase](https://img.shields.io/badge/Object_Storage-Supabase-3FCF8E?style=flat-square&logo=supabase&logoColor=111827)
+![Docker](https://img.shields.io/badge/Local_DB-Docker_Compose-2496ED?style=flat-square&logo=docker&logoColor=white)
 
 - **Runtime / language:** Node.js, TypeScript, ES modules
 - **HTTP framework:** Express
@@ -86,6 +113,16 @@ HTTP route -> controller -> service/use case -> repository or infrastructure por
 ```
 
 SQL, transactions, Pool/Client access, and SQL filter construction stay in `*.repository.ts` or `src/database/`. Database rows are converted to API-facing shapes by `*.mapper.ts`. The architecture rules and guard tests are documented in [`../docs/architecture_design_pattern.md`](../docs/architecture_design_pattern.md).
+
+### 🧱 Boundary Compass
+
+| Layer | Owns | Must Avoid |
+|---|---|---|
+| 🛣️ Routes | auth middleware, Zod validation, URL shape | business logic, SQL, SDK clients |
+| 🎮 Controllers | HTTP response shape, SSE plumbing | repositories, password hashing, provider SDKs |
+| ⚙️ Services / use cases | business workflows, orchestration, retries | Express request objects, SQL fragments |
+| 🗄️ Repositories | SQL, transactions, row locks, persistence mapping | HTTP concerns, provider tokens in responses |
+| 🔌 Adapters | external SDKs and provider protocols | leaking SDK objects into API contracts |
 
 ### Routing Layer
 

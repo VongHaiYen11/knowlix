@@ -1,4 +1,4 @@
-import { apiClient, isApiRepositoryEnabled } from '@/repositories/apiClient'
+import { apiClient, apiUrl, isApiRepositoryEnabled } from '@/repositories/apiClient'
 import { libraryRepository, type LibraryRepository } from '@/repositories/libraryRepository'
 import type { JournalDay, KnowledgeEntry, KnowledgeMergeApplyInput, KnowledgeMergeDraft, KnowledgeMergePreviewInput, NoteItem, Source, SourceType } from '@/types/knowledge'
 import { vietnamDateString, vietnamTimeString } from '@/utils/vietnamTime'
@@ -89,6 +89,15 @@ export class LibraryService {
 
   getSourceById(id: string): Promise<Source | undefined> {
     return this.repository.getSourceById(id)
+  }
+
+  getSourceFileText(fileId: string): Promise<string> {
+    return apiClient.text(`/api/v1/files/${encodeURIComponent(fileId)}`)
+  }
+
+  getSourceFileUrl(fileId: string, preview = false): string {
+    const suffix = preview ? '/preview' : ''
+    return apiUrl(`/api/v1/files/${encodeURIComponent(fileId)}${suffix}`)
   }
 
   sourceToMarkdown(source: Source): string {

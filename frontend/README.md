@@ -4,13 +4,28 @@
 
 **A private knowledge workspace for sources, notes, research chat, and journal capture.**
 
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=061a23)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white)
-![Vite](https://img.shields.io/badge/Vite-5.4-646CFF?logo=vite&logoColor=white)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4.2-38BDF8?logo=tailwindcss&logoColor=white)
-![React Router](https://img.shields.io/badge/React_Router-7-CA4245?logo=reactrouter&logoColor=white)
-![Markdown](https://img.shields.io/badge/Markdown-GFM_%2B_Math_%2B_Mermaid-2D2A26?logo=markdown&logoColor=white)
-![IndexedDB](https://img.shields.io/badge/Storage-IndexedDB-5E7D63)
+<br />
+
+<strong>Library</strong> · <strong>Research</strong> · <strong>Journal</strong> · <strong>Settings</strong> · <strong>Drive Folder Picker</strong>
+
+<br />
+
+<p>
+  <a href="#-features">✨ Features</a> •
+  <a href="#-project-structure">🗂️ Structure</a> •
+  <a href="#-routing">🧭 Routes</a> •
+  <a href="#-architecture">🏗️ Architecture</a> •
+  <a href="#-api-integration">📡 API</a> •
+  <a href="#-available-scripts">📜 Scripts</a>
+</p>
+
+![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=061a23)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-5.4-646CFF?style=for-the-badge&logo=vite&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4.2-38BDF8?style=for-the-badge&logo=tailwindcss&logoColor=white)
+![React Router](https://img.shields.io/badge/React_Router-7-CA4245?style=for-the-badge&logo=reactrouter&logoColor=white)
+![Markdown](https://img.shields.io/badge/Markdown-GFM_%2B_Math_%2B_Mermaid-2D2A26?style=for-the-badge&logo=markdown&logoColor=white)
+![IndexedDB](https://img.shields.io/badge/Storage-IndexedDB-5E7D63?style=for-the-badge)
 
 </div>
 
@@ -29,16 +44,27 @@
 - 🌗 Light/dark theme support.
 - 🇻🇳 Vietnam-time date helpers for user-facing daily behavior.
 
+## 🖼️ Experience Map
+
+| Surface | What the UI Does | Key Code |
+|---|---|---|
+| 🏠 Home | Greeting, search entry, reading cards, inspiration, journal preview | `pages/HomePage.tsx`, `features/home/*` |
+| 📚 Library | Source of Truth, Knowledge, Notes, upload, pagination, filters | `pages/LibraryPage.tsx`, `features/library/*` |
+| 📖 Reader | Source and Knowledge article rendering with markdown/math/diagrams | `pages/SourceArticlePage.tsx`, `pages/KnowledgeArticlePage.tsx` |
+| 💬 Research | Chat, streaming answers, references, history, summaries | `pages/ResearchPage.tsx`, `features/research/*` |
+| 📝 Notes & journal | Markdown note editor, note promotion, dated journal capture | `pages/NoteEditorPage.tsx`, `pages/JournalPage.tsx` |
+| ☁️ Settings / Drive | Account settings, theme, Drive connect, hierarchical folder picker | `pages/SettingsPage.tsx`, `features/settings/*` |
+
 ## 🛠 Tech Stack
 
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=061a23)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white)
-![Vite](https://img.shields.io/badge/Vite-5.4-646CFF?logo=vite&logoColor=white)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4.2-38BDF8?logo=tailwindcss&logoColor=white)
-![React Router](https://img.shields.io/badge/React_Router-7-CA4245?logo=reactrouter&logoColor=white)
-![Lucide](https://img.shields.io/badge/Icons-lucide--react-5E7D63)
-![KaTeX](https://img.shields.io/badge/Math-KaTeX-2D2A26)
-![Mermaid](https://img.shields.io/badge/Diagrams-Mermaid-ff3670)
+![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=061a23)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-5.4-646CFF?style=flat-square&logo=vite&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4.2-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)
+![React Router](https://img.shields.io/badge/React_Router-7-CA4245?style=flat-square&logo=reactrouter&logoColor=white)
+![Lucide](https://img.shields.io/badge/Icons-lucide--react-5E7D63?style=flat-square)
+![KaTeX](https://img.shields.io/badge/Math-KaTeX-2D2A26?style=flat-square)
+![Mermaid](https://img.shields.io/badge/Diagrams-Mermaid-ff3670?style=flat-square)
 
 - **Framework:** React
 - **Language:** TypeScript
@@ -138,8 +164,18 @@ Authenticated routes are wrapped by `AppShell`; unauthenticated users are redire
 Data access follows this shape:
 
 ```text
-Page -> Hook -> Service -> Repository -> API or IndexedDB
+Page / Feature -> Hook or Service -> Repository / API Client -> API or IndexedDB
 ```
+
+### 🧱 Frontend Boundary Compass
+
+| Layer | Owns | Examples |
+|---|---|---|
+| 🧭 Pages | route composition and screen-level layout | `LibraryPage`, `SettingsPage`, `ResearchPage` |
+| 🧩 Features | domain UI modules and interaction surfaces | `GoogleDriveSettings`, `ResearchHistoryPanel`, `KnowledgeMergeModal` |
+| 🪝 Hooks | React state, async lifecycle, derived UI state | `useResearch`, `useLibrary`, `useDailyInspiration` |
+| 🧠 Services | app workflows and backend operations | `libraryService`, `researchService`, `googleDriveService` |
+| 🔌 Repositories/API client | HTTP, IndexedDB fallback, pagination helpers | `apiClient`, `apiLibraryRepository`, `libraryRepository` |
 
 Hooks and feature components do not build backend URLs directly. HTTP requests are centralized in `src/repositories/apiClient.ts`, while services such as `researchService`, `inspirationService`, `libraryService`, and `googleDriveService` expose app-level operations to React code.
 

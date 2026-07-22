@@ -1,202 +1,168 @@
-# Knowlix Architecture and Design Patterns
+# 📐 Architecture & Design Patterns
 
-This document is the architecture source of truth for Knowlix. It explains the current system shape, the dependency rules that code must follow, and the design patterns used to keep ingestion, research, storage, and external integrations maintainable.
+> A concise catalog of the recognized software architectures and design patterns used by **Knowlix**.
 
-When code, API contracts, persistence behavior, external-provider workflows, or user-visible flows change, update this document and the affected workspace README files in the same change.
+This document describes the patterns that are visible in the current codebase. Product-specific choices are kept in [Architectural Decisions](#architectural-decisions) so they are not presented as general design patterns.
 
-## Product Architecture
+## 🧭 Architecture at a Glance
 
-Knowlix is an LLM Wiki-inspired personal knowledge workspace. The product keeps three conceptual layers separate:
-
-1. **Source of Truth**: user-owned raw material such as uploaded files, promoted notes, and synced Google Drive files. These records are durable and inspectable.
-2. **Knowledge**: generated Markdown pages, summaries, tags, relationships, and embeddings derived from sources. The LLM can create, update, merge, replace, or link these pages, but every generated page remains grounded in source records.
-3. **Research**: question-answer workflows over Knowledge, with numbered references back to retrieved entries. Useful research threads can be preserved as part of the user's evolving workspace.
-
-This differs from plain query-time RAG. Knowlix does not only retrieve chunks when the user asks a question; it also compiles and maintains a durable Knowledge layer during ingestion.
-
-## Backend Boundary
-
-Backend modules follow this dependency direction:
+### Backend
 
 ```text
-route -> controller -> service/use case -> repository or infrastructure adapter
+HTTP Request
+    │
+    ▼
+Route ──► Controller ──► Service / Use Case ──► Repository ──► PostgreSQL
+                                   │
+                                   └──────────► Adapter ─────► External Provider
 ```
 
-Dependencies should only move inward. Routes do not own business logic. Controllers do not query the database. Services and use cases do not depend on Express request objects. Repositories and adapters hide provider-specific or persistence-specific details.
-
-### Routes
-
-Files named `*.routes.ts` own Express routing, route-level middleware, authentication requirements, and Zod validation middleware. Routes call controllers and should not import repositories, external SDK clients, or password hashing libraries.
-
-### Controllers
-
-Files named `*.controller.ts` translate HTTP requests into service or use-case calls and translate results into HTTP responses. Controllers may handle HTTP-specific streaming details, such as Server-Sent Events, but the business decision-making still belongs in services or use cases.
-
-Controllers must not:
-
-- import `*.repository.ts`
-- access `pool.query` or `pool.connect`
-- hash or compare passwords directly
-- instantiate external provider SDK clients
-
-### Services and Use Cases
-
-Services own ordinary domain workflows. Focused use-case classes own multi-step workflows that coordinate storage, AI, database writes, provider adapters, or background status.
-
-Use cases are preferred when a workflow has one or more of these traits:
-
-- it spans multiple repositories or infrastructure providers
-- it has durable status, retries, leases, or idempotency concerns
-- it is reused by manual upload and provider sync
-- it needs narrow constructor-injected ports for tests
-
-Examples:
-
-- `IngestSourceFileUseCase` stores raw bytes, creates or updates source records, and starts processing.
-- `GenerateSourceSummaryUseCase` extracts text, asks Gemini for source and Knowledge outputs, stores generated artifacts, and updates Knowledge metadata.
-- `ScanGoogleDriveUseCase` leases a Drive connection, compares direct folder children against tracked files, and queues processing jobs.
-- `ProcessGoogleDriveFileUseCase` downloads or exports one Drive file and feeds the shared source ingestion use case.
-
-### Repositories
-
-Files named `*.repository.ts` own SQL, transactions, PostgreSQL `Pool`/`Client` access, row locks, `FOR UPDATE SKIP LOCKED`, query filter construction, and row persistence.
-
-Services and use cases pass typed filters and domain inputs to repositories. They must not assemble SQL fragments or access `database/pool` directly.
-
-### Mappers
-
-Files named `*.mapper.ts` translate persistence rows into API/domain shapes. PostgreSQL uses `snake_case`; API and frontend contracts use `camelCase`. Mappers also hide sensitive fields and persistence-only metadata.
-
-### Infrastructure Adapters
-
-Adapters own external SDKs and provider protocols. They translate provider concepts into narrow domain-facing methods.
-
-Current adapters include:
-
-- Gemini configuration in `backend/src/config/gemini.ts`
-- Supabase storage service/repository infrastructure
-- Google Drive OAuth and Drive v3 access in `backend/src/modules/google-drive/google-drive.adapter.ts`
-
-External SDK objects should not leak into controllers or frontend-facing response contracts.
-
-## Google Drive Integration Pattern
-
-Google Drive is modeled as an account integration owned by the authenticated Knowlix `user_id`. The Google account email is display metadata only; it must never create, infer, merge, or replace the Knowlix user identity.
-
-The current Drive contract is:
-
-- OAuth uses read-only Drive access.
-- OAuth state is random, hashed before persistence, single-use, expires after 10 minutes, and is tied to the authenticated Knowlix user.
-- Refresh tokens are encrypted with AES-256-GCM before storage and are never returned to the frontend or logs.
-- Folder selection is backend-owned. The frontend asks Knowlix for readable folders, then saves one selected folder through Knowlix APIs.
-- Folder listing is restricted to folders in **My Drive** owned by the Google user.
-- Sync imports supported files that are direct children of the selected folder. Subfolders are intentionally ignored.
-- Durable tracking, modified-file detection, retry status, and leases live in PostgreSQL.
-- Disconnect removes the Drive connection and tracking records. Existing Source of Truth and Knowledge records remain preserved.
-
-The Drive worker must reuse source ingestion use cases. It should pass domain file input to `IngestSourceFileUseCase`; it must not fabricate Express or Multer objects.
-
-## Gemini Proxy Pattern
-
-Gemini calls go through `getGeminiClient()` in `backend/src/config/gemini.ts`. The client and `client.models` are wrapped with JavaScript `Proxy` objects so these methods receive automatic retry logging and backoff:
-
-- `models.generateContent`
-- `models.generateContentStream`
-- `models.embedContent`
-
-The wrapper retries transient SDK/API failures up to three attempts. JSON parsing, schema validation, and prompt-specific recovery remain the responsibility of the calling workflow.
-
-SDK methods must not be monkey-patched directly.
-
-## Frontend Boundary
-
-Frontend data flow follows this shape:
+### Frontend
 
 ```text
-Page -> Hook -> Service -> Repository/API Client
+Page / Feature ──► Hook or Service ──► Repository / API Client ──► Backend or IndexedDB
 ```
 
-Pages compose route-level UI. Feature components own domain-specific UI surfaces. Hooks manage React state and asynchronous lifecycle concerns. Services coordinate application workflows. Repositories and `apiClient` own persistence and HTTP details.
+These are dependency boundaries, not a requirement that every operation pass through every possible layer. A simple page may call a service directly, while a stateful workflow may use a hook first.
 
-Frontend rules:
+## 1. 🧱 Layered Architecture
 
-- Browser requests must go through `src/repositories/apiClient.ts` or a repository built on top of it.
-- Feature components and hooks call services instead of building API URLs.
-- API response types live next to the service or repository that consumes them.
-- `VITE_API_URL` is centralized in `apiClient`.
-- Cookie credentials are included by the API client, not repeated in feature code.
-- IndexedDB fallback remains behind the library repository interface.
+| | |
+| --- | --- |
+| **Category** | Architectural pattern |
+| **Backend locations** | `backend/src/modules/**/{*.routes,*.controller,*.service,*.repository}.ts`, `backend/src/modules/*/use-cases/` |
+| **Frontend locations** | `frontend/src/pages/`, `frontend/src/features/`, `frontend/src/hooks/`, `frontend/src/services/`, `frontend/src/repositories/` |
 
-Google Drive UI must communicate that the user is connecting to Drive, but it must not expose tokens, OAuth state, raw provider errors, or provider-owned identity as Knowlix identity.
+### Intent
 
-## API and Data Contracts
+The application is divided into layers with distinct responsibilities:
 
-The backend and frontend must stay aligned on:
+- **Routes** define endpoints, authentication, middleware, and request validation.
+- **Controllers** translate HTTP input and output.
+- **Services and use cases** coordinate application and business workflows.
+- **Repositories** own persistence access.
+- **Adapters** isolate external providers and SDKs.
+- **Frontend pages and features** compose the user experience, while hooks, services, and repositories own stateful workflows and data access.
 
-- request and response field names
-- allowed file extensions and MIME variants
-- pagination shape: `items`, `page`, `pageSize`, `total`
-- status values such as source ingest status and Drive sync status
-- error status codes and user-facing messages
-- storage object ownership and preservation semantics
+Dependencies move toward the persistence or provider boundary through the layer immediately responsible for that concern. HTTP details do not belong in backend business workflows, and browser request details do not belong in visual components.
 
-Database fields use `snake_case`. API responses use `camelCase`. Contract changes require updates to backend schemas/controllers, frontend services/repositories/types, and affected README files.
+### Benefits
 
-## Background Work and Durability
+- Clear separation of concerns
+- Lower coupling between delivery, business, and infrastructure code
+- Smaller units for testing and maintenance
+- Easier replacement of persistence and provider implementations
 
-Manual source uploads may start background processing after the initial HTTP response. Provider integrations require durable tracking because they run outside the immediate user request.
+## 2. 🎯 Clean Architecture: Use Case Layer
 
-Durable workers should:
+| | |
+| --- | --- |
+| **Category** | Architectural style applied to complex workflows |
+| **Locations** | `backend/src/modules/sources/use-cases/`, `backend/src/modules/google-drive/use-cases/` |
 
-- claim work through repository-owned leases or row locks
-- record success, retryable failure, terminal failure, and next attempt times
-- deduplicate by provider file id or stable source id
-- reuse domain use cases instead of duplicating ingestion logic
-- keep provider-specific metadata in integration tables or source metadata, not in frontend-only state
+### Intent
 
-## Security and Ownership
+Multi-step business workflows are represented by focused use case classes instead of being embedded in controllers. Their dependencies are constructor-injected through narrow TypeScript ports, commonly expressed with `Pick<...>` structural types.
 
-All user data is scoped by Knowlix `user_id`.
+Current examples include:
 
-Rules:
+- `IngestSourceFileUseCase`
+- `GenerateSourceSummaryUseCase`
+- `DeleteSourceUseCase`
+- `ScanGoogleDriveUseCase`
+- `ProcessGoogleDriveFileUseCase`
 
-- Do not infer Knowlix identity from external provider email.
-- Do not expose refresh tokens, password hashes, OAuth state hashes, or storage service credentials.
-- Use bcrypt hashing only in auth/user services.
-- Use HttpOnly cookies for sessions.
-- Validate route bodies and query strings with Zod before controllers run.
-- Keep raw files, extracted text, and generated Markdown owned by the authenticated user.
+The default composition uses production repositories, storage services, and provider adapters. Tests can replace those dependencies with small in-memory fakes.
 
-## Architecture Guard Tests
+### Benefits
 
-Backend guard tests live in `backend/test/architecture-boundaries.test.ts` and related module tests.
+- Business workflows remain independent of Express request objects
+- Complex orchestration is explicit and individually testable
+- Manual uploads and provider sync can reuse the same ingestion behavior
+- Infrastructure dependencies can be substituted in tests
 
-They currently enforce:
+> Knowlix applies the use case and dependency-injection ideas of Clean Architecture. It does not claim that every module follows a complete concentric Clean Architecture implementation.
 
-- database access stays inside repositories and database infrastructure
-- controllers do not import repositories or password hashing
-- Gemini retry behavior uses `Proxy` without mutating SDK methods
+## 3. 🗄️ Repository Pattern
 
-Use-case tests cover dependency injection and workflow behavior. Google Drive tests cover OAuth state ownership, direct-folder sync contracts, supported Drive formats, retry backoff, and read-only folder behavior.
+| | |
+| --- | --- |
+| **Category** | Data access pattern |
+| **Locations** | `backend/src/modules/**/*.repository.ts`, `backend/src/lib/storage.repository.ts` |
+| **Examples** | `sources.repository.ts`, `knowledge.repository.ts`, `google-drive.repository.ts` |
 
-Run:
+### Intent
 
-```bash
-cd backend
-npm test
-npm run build
+Repositories encapsulate PostgreSQL operations, transactions, row locking, query construction, and persistence semantics. Services and use cases interact with repository methods instead of issuing SQL directly.
 
-cd ../frontend
-npm run build
-```
+Frontend library persistence follows the same principle through `LibraryRepository`, with API-backed and IndexedDB-backed implementations.
 
-## Change Checklist
+### Benefits
 
-Before finishing a change, verify:
+- Centralized persistence logic
+- Business code that is easier to read and test
+- Consistent ownership and query behavior
+- Replaceable frontend persistence implementations
 
-- new backend behavior respects `route -> controller -> service/use case -> repository/adapter`
-- new frontend behavior respects `Page -> Hook -> Service -> Repository/API Client`
-- persistence, provider, and storage logic are not hidden in controllers or UI components
-- backend and frontend contracts match
-- user-visible docs and workspace README files are updated
-- tests/builds required by the changed workspaces pass
+## 4. 🔄 Data Mapper Pattern
+
+| | |
+| --- | --- |
+| **Category** | Data transformation pattern |
+| **Locations** | `backend/src/modules/**/*.mapper.ts` |
+| **Examples** | `sources.mapper.ts`, `knowledge.mapper.ts`, `google-drive.mapper.ts` |
+
+### Intent
+
+Mapper functions translate persistence rows into domain or API-facing objects. They convert PostgreSQL `snake_case` fields to frontend-friendly `camelCase`, remove persistence-only details, and keep response shaping out of controllers.
+
+### Benefits
+
+- Database rows do not leak directly into API contracts
+- Mapping rules have one recognizable home
+- Persistence and response models can evolve independently
+- Sensitive or internal fields can be omitted consistently
+
+## 5. 🔌 Adapter Pattern
+
+| | |
+| --- | --- |
+| **Category** | Structural design pattern |
+| **Locations** | `backend/src/modules/google-drive/google-drive.adapter.ts`, `backend/src/lib/storage.ts`, `backend/src/config/gemini.ts` |
+| **Providers** | Google Drive, Supabase Storage, Gemini |
+
+### Intent
+
+Provider SDKs are contained behind application-facing methods. Google Drive metadata and downloads are normalized by `googleDriveAdapter`; Supabase object operations are exposed by `storageService`; Gemini client creation and cross-cutting behavior are centralized in `getGeminiClient()`.
+
+### Benefits
+
+- Provider-specific objects stay out of controllers and API responses
+- External calls are easier to mock
+- Authentication, normalization, and error handling remain centralized
+- Provider changes have a smaller impact on business workflows
+
+## 6. 🛡️ Proxy Pattern
+
+| | |
+| --- | --- |
+| **Category** | Structural design pattern |
+| **Location** | `backend/src/config/gemini.ts` |
+
+### Intent
+
+JavaScript `Proxy` objects wrap the Gemini client and its `models` interface. Calls to `generateContent`, `generateContentStream`, and `embedContent` are intercepted transparently to add:
+
+- Retry behavior
+- Backoff between attempts
+- Structured call logging
+- Execution timing
+
+Other SDK properties and methods are forwarded to the original client without modifying the SDK instance.
+
+### Benefits
+
+- Cross-cutting behavior is implemented once
+- Calling modules use the normal Gemini SDK interface
+- Retry and observability behavior remain consistent
+- The provider SDK is not monkey-patched
